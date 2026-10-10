@@ -1,0 +1,25 @@
+:root {
+  /* PRD 14.5: M (14px) is the default text size. Size preferences are a later card. */
+  font-size: 14px;
+}
+
+body {
+  margin: 0;
+  font-family: system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+  line-height: 1.5;
+  color: #1a1a1a;
+  background: #ffffff;
+}
+
+main {
+  max-width: 40rem;
+  margin: 0 auto;
+  padding: 2rem 1rem;
+}
+
+/* Focus must be visible without relying on color alone (PRD 14.2). */
+:focus-visible {
+  outline: 3px solid #1a1a1a;
+  outline-offset: 2px;
+  background: #e6e6e6;
+}
