@@ -27,7 +27,7 @@ Then open <http://localhost:3000>. The page should say "Server is available." an
 | Command | What it does |
 |---|---|
 | `npm install` | Install dependencies |
-| `npm run dev` | Start with auto-reload, loading `.env` (requires step `cp .env.example .env`) |
+| `npm run dev` | Start with auto-reload, loading `.env` (run `cp .env.example .env` first) |
 | `npm start` | Start once, reading configuration from the real environment (how a hosted environment runs it; no `.env` is loaded) |
 | `npm test` | Run the test suite (Node's built-in test runner) |
 
