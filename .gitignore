@@ -20,3 +20,8 @@ build/
 # OS files
 .DS_Store
 Thumbs.db
+
+# QCH internal-use-only data: never commit
+data/private/
+*.xlsx
+Program_Directory*.pdf
