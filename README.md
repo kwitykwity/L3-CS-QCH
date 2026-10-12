@@ -15,4 +15,4 @@ Database implementation is **not part of the application scaffold**. The scaffol
 Status:
 
 - Proposed Azure SQL schema and migration work has been produced by Lebert and is being reviewed separately. It is not in this repository yet.
-- Production Azure SQL will be QCH-owned and configured/provided through QCH IT. Connection details and resource names come from QCH IT and must never be committed here.
+- Production Azure SQL will be QCH-owned and configured/provided through QCH IT. Database connection details, credentials, and secrets must never be committed to the repository.
