@@ -1,0 +1,14 @@
+{
+  "name": "qch-connect-runtime",
+  "version": "0.1.0",
+  "description": "Card 3 Node runtime scaffold",
+  "main": "scripts/check-runtime.js",
+  "scripts": {
+    "check-runtime": "node scripts/check-runtime.js",
+    "test:runtime": "node tests/runtime.test.js"
+  },
+  "engines": {
+    "node": ">=24.15.0 <25.0.0"
+  },
+  "private": true
+}
