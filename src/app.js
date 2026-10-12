@@ -1,6 +1,7 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
+import { errorHandler } from './errorHandler.js';
 
 const publicDir = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -22,12 +23,9 @@ export function createApp() {
 
   app.use(express.static(publicDir));
 
-  // Generic error response. Per PRD 15.4, errors must never leak stack traces;
-  // Express's default handler includes them when NODE_ENV is not 'production'.
-  app.use((err, req, res, next) => {
-    console.error(err);
-    res.status(500).json({ error: 'Internal Server Error' });
-  });
+  // Must be registered last. Express's default handler includes stack
+  // traces when NODE_ENV is not 'production' (PRD 15.4), so we replace it.
+  app.use(errorHandler);
 
   return app;
 }

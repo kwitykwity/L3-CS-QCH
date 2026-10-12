@@ -39,6 +39,10 @@ npm run dev        # same, restarts on file change
 
 `PORT` and `NODE_ENV` are the only environment variables this scaffold reads.
 
+`NODE_ENV` is **required** and must be exactly `development`, `test`, or
+`production`. There is no default: if it is missing or unrecognized, the server
+refuses to start (fails closed). `.env.example` sets it to `development`.
+
 ## Test
 
 ```bash
@@ -52,6 +56,10 @@ The suite covers:
 - the `/health` body carries no secrets, config values, connection strings, or
   error details
 - the server does not send an `X-Powered-By` header
+- configuration fails closed: a missing or invalid `NODE_ENV` stops startup
+- the error handler returns no stack traces or internal details, keeps valid
+  4xx statuses, logs only safe metadata (never the error object or message),
+  and closes the connection if a response had already started
 
 ## Endpoints
 

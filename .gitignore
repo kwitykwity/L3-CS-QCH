@@ -4,10 +4,15 @@
 # Dependencies
 node_modules/
 
-# Environment variables
+# Environment variables: ignore every .env variant, keep only the example
 .env
-.env.local
-.env.*.local
+.env.*
+!.env.example
+
+# Credentials and certificates
+*.pem
+*.key
+*.pfx
 
 # Build outputs
 dist/
@@ -24,4 +29,5 @@ Thumbs.db
 # QCH internal-use-only data: never commit
 data/private/
 *.xlsx
-Program_Directory*.pdf
+*Program_Directory*
+*Program Directory*
