@@ -10,11 +10,13 @@ QCH Internal Referral System - L3 Capstone Project
 
 ## Requirements
 
-Node.js 24, pinned in `.nvmrc` and in `package.json` under `"engines"`.
+Node.js **24.15.0** exactly, pinned in `.nvmrc`, in `package.json` under
+`"engines"`, and in `package-lock.json`. This is the team's settled development
+policy (decided Oct 11). `npm run check-runtime` verifies the running version.
 
-> **QCH's production Node version is unconfirmed.** Node 24 is the team's agreed
-> local development version. The version QCH runs in production remains
-> unconfirmed until QCH's Azure App Service configuration is confirmed.
+> **QCH's production Node version is unconfirmed.** 24.15.0 is the team's agreed
+> local development version only. The version QCH runs in production remains
+> pending QCH IT confirmation of the Azure App Service configuration.
 
 ## Setup
 

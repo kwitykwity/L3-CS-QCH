@@ -1,12 +1,11 @@
 import { pathToFileURL } from 'node:url';
 
-// Team development baseline (Oct 11 team decision, as stated in PR #5).
+// Team development baseline: exactly Node 24.15.0 (Oct 11 team decision).
+// This is settled development policy and matches .nvmrc, package.json
+// "engines", and package-lock.json.
 //
-// OPEN: this exact-version check is stricter than package.json "engines"
-// ("24.x") and .nvmrc ("24") inherited from PR #2. The team must decide
-// whether the repository pins exactly 24.15.0 everywhere or accepts 24.x.
-// Production Node version on Azure App Service is a separate, still-open
-// dependency pending QCH IT.
+// The production Node version on Azure App Service is a separate item and
+// remains pending QCH IT confirmation.
 export const EXPECTED_VERSION = 'v24.15.0';
 
 export function validateRuntime(version = process.version) {
