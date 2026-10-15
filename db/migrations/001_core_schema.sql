@@ -1,6 +1,8 @@
 /* =====================================================================
    QCH Connect - Migration 001: Core schema
-   Target: Azure SQL Database (T-SQL). Matches Mini PRD v4 (Oct 10, 2026).
+   Target: Azure SQL Database (T-SQL).
+   Matches the Final Technical PRD (Oct 14, 2026), which supersedes
+   Mini PRD v4 and the Working Draft.
 
    Conventions
    - All timestamps are stored in UTC (DATETIME2(3), SYSUTCDATETIME()).
@@ -54,8 +56,6 @@ CREATE TABLE dbo.programs (
     -- enforced until QCH confirms how it describes enrollment and referral paths.
     enrollment_type         NVARCHAR(20)   NULL,
     referral_path           NVARCHAR(40)   NULL,
-    gateway_program_id      INT            NULL CONSTRAINT fk_programs_gateway REFERENCES dbo.programs(program_id),
-    accepting_referrals     BIT            NOT NULL CONSTRAINT df_programs_accepting DEFAULT 1,
     notification_email      NVARCHAR(320)  NULL,   -- receiving destination; server-side only (PRD 11.3)
     lifecycle_status        NVARCHAR(20)   NOT NULL CONSTRAINT df_programs_status DEFAULT 'ACTIVE',
     created_at              DATETIME2(3)   NOT NULL CONSTRAINT df_programs_created DEFAULT SYSUTCDATETIME(),
@@ -63,8 +63,7 @@ CREATE TABLE dbo.programs (
     row_version             ROWVERSION     NOT NULL,
     CONSTRAINT uq_programs_name_site UNIQUE (name, site),
     CONSTRAINT ck_programs_status CHECK (lifecycle_status IN ('ACTIVE','DISCONTINUED','RETIRED')),
-    CONSTRAINT ck_programs_ages CHECK (age_min IS NULL OR age_max IS NULL OR age_min <= age_max),
-    CONSTRAINT ck_programs_gateway_not_self CHECK (gateway_program_id IS NULL OR gateway_program_id <> program_id)
+    CONSTRAINT ck_programs_ages CHECK (age_min IS NULL OR age_max IS NULL OR age_min <= age_max)
 );
 GO
 
@@ -169,16 +168,23 @@ CREATE TABLE dbo.program_field_values (
 GO
 
 /* ---------------------------------------------------------------------
-   4. Users and authorization grants  (PRD 3.1 to 3.5, 9.1)
-   The exact QCH authorization matrix is an OPEN DEPENDENCY. Grants are
-   configurable (action + scope) so no QCH policy is hard-coded here.
-   Later, grants with source ENTRA_GROUP are synced from security groups.
+   4. Users and authorization grants  (PRD 3.4, 3.6, 3.8, 3.9, 9.1)
+   Entra provides identity and app access only. Action permissions are
+   stored here in QCH Connect and granted or removed in the app by
+   designated QCH administrators (PRD 3.4, 3.8). Who the administrators
+   are is configuration, not hard-coded or seeded here.
    --------------------------------------------------------------------- */
 CREATE TABLE dbo.users (
     user_id          INT IDENTITY(1,1) NOT NULL CONSTRAINT pk_users PRIMARY KEY,
     entra_object_id  UNIQUEIDENTIFIER NULL,
     display_name     NVARCHAR(200)    NOT NULL,
     email            NVARCHAR(320)    NOT NULL CONSTRAINT uq_users_email UNIQUE,
+    -- The staff member's stored current Program affiliation, chosen by the
+    -- staff member (PRD 3.9, 9.1). NULL until chosen; referral submission
+    -- fails closed while it is NULL (enforced by the backend). Changing it
+    -- never changes past referrals, which keep referrals.referring_program_id.
+    -- Changes are audited (audit_events entity USER).
+    current_program_id INT            NULL CONSTRAINT fk_users_current_program REFERENCES dbo.programs(program_id),
     is_demo_user     BIT              NOT NULL CONSTRAINT df_users_demo DEFAULT 0,   -- must be rejected in production (PRD 16.1)
     is_active        BIT              NOT NULL CONSTRAINT df_users_active DEFAULT 1,
     created_at       DATETIME2(3)     NOT NULL CONSTRAINT df_users_created DEFAULT SYSUTCDATETIME(),
@@ -198,18 +204,23 @@ CREATE TABLE dbo.user_grants (
     department_id    INT           NULL CONSTRAINT fk_user_grants_department REFERENCES dbo.departments(department_id),
     program_id       INT           NULL CONSTRAINT fk_user_grants_program REFERENCES dbo.programs(program_id),
     grant_source     NVARCHAR(20)  NOT NULL,
-    entra_group_id   NVARCHAR(100) NULL,
     granted_at       DATETIME2(3)  NOT NULL CONSTRAINT df_user_grants_granted DEFAULT SYSUTCDATETIME(),
     revoked_at       DATETIME2(3)  NULL,
-    -- TECHNICAL action vocabulary: the actions the app can check, taken from
-    -- PRD 3.3/3.4 (view does not imply export or drill-down). WHO receives which
-    -- grant is the QCH authorization matrix, an OPEN DEPENDENCY, not set here.
+    -- Capability names are the PRD 3.6 list, word for word. Notes:
+    -- - UPDATE_RECEIVED_REFERRAL includes authorized correction of the
+    --   Response/Decision. CORRECT_OUTCOME covers the Service Outcome only.
+    -- - ADMINISTER_PERMISSIONS authorizes permission administration only.
+    -- - CREATE_REFERRAL and VIEW_AGGREGATE_REPORTING are NOT grantable:
+    --   every user with app access has them, so they never depend on a row
+    --   in this table (PRD 3.6). The backend checks app access for those two.
     CONSTRAINT ck_user_grants_permission CHECK (permission IN
-        ('REFERRAL_ORIGINATE','REFERRAL_RECEIVE','REFERRAL_CORRECT','PROGRAM_MANAGE',
-         'REPORT_VIEW','REPORT_EXPORT','REPORT_DRILLDOWN')),
-    -- Production grants come only from QCH-approved Entra groups (PRD 3.1).
-    -- DEMO grants are for non-production and must be rejected in production (PRD 16.1).
-    CONSTRAINT ck_user_grants_source CHECK (grant_source IN ('ENTRA_GROUP','DEMO')),
+        ('VIEW_CREATED_REFERRAL','VIEW_RECEIVED_REFERRAL','RESPOND_TO_REFERRAL',
+         'UPDATE_RECEIVED_REFERRAL','RECORD_OUTCOME','CORRECT_OUTCOME',
+         'MANAGE_PROGRAM','MANAGE_ORGANIZATION','VIEW_UNDERLYING_REFERRAL',
+         'ADMINISTER_PERMISSIONS')),
+    -- IN_APP: granted or removed in QCH Connect by a QCH administrator (PRD 3.8).
+    -- DEMO: non-production only; must be rejected in production (PRD 16.1).
+    CONSTRAINT ck_user_grants_source CHECK (grant_source IN ('IN_APP','DEMO')),
     CONSTRAINT ck_user_grants_scope CHECK (
            (scope_type = 'ORG'        AND department_id IS NULL     AND program_id IS NULL)
         OR (scope_type = 'DEPARTMENT' AND department_id IS NOT NULL AND program_id IS NULL)
@@ -222,9 +233,10 @@ GO
 
 /* ---------------------------------------------------------------------
    5. Not Appropriate reasons  (PRD 9.1)
-   Controlled vocabulary. QCH has NOT supplied an approved list yet.
-   Production reference data must not be seeded until QCH approves the
-   controlled vocabulary.
+   Controlled vocabulary. A standard reason is required for Not
+   Appropriate; the free-text explanation is separate and optional
+   (requires_explanation defaults to 0) unless QCH later directs
+   otherwise. The initial values are seeded in 002.
    --------------------------------------------------------------------- */
 CREATE TABLE dbo.not_appropriate_reasons (
     reason_id             INT IDENTITY(1,1) NOT NULL CONSTRAINT pk_not_appropriate_reasons PRIMARY KEY,
@@ -319,7 +331,6 @@ CREATE TABLE dbo.referrals (
     CONSTRAINT ck_referrals_source_gpme CHECK (
            (source = 'DIRECT'        AND gpme_evaluation_id IS NULL)
         OR (source = 'GPME_ASSISTED' AND gpme_evaluation_id IS NOT NULL)),
-    CONSTRAINT ck_referrals_not_self CHECK (referring_program_id <> receiving_program_id),
     CONSTRAINT ck_referrals_contact_method CHECK (contact_method IN ('PHONE_CALL','PHONE_TEXT','EMAIL','NOT_AVAILABLE')),
     CONSTRAINT ck_referrals_contact_value CHECK (
            (contact_method = 'NOT_AVAILABLE'  AND contact_value IS NULL)
@@ -334,7 +345,7 @@ CREATE TABLE dbo.referrals (
         OR (response_status = 'RESPONDED'         AND decision IS NOT NULL AND first_responded_at IS NOT NULL)),
     -- NOTE: a CHECK passes when it evaluates to NULL, so every comparison
     -- on the nullable "decision" column is guarded with IS NOT NULL.
-    -- Not Appropriate requires an approved reason; other decisions have none
+    -- Not Appropriate requires a standard reason; other decisions have none
     CONSTRAINT ck_referrals_reason CHECK (
            (decision IS NOT NULL AND decision = 'NOT_APPROPRIATE' AND not_appropriate_reason_id IS NOT NULL)
         OR ((decision IS NULL OR decision <> 'NOT_APPROPRIATE') AND not_appropriate_reason_id IS NULL AND not_appropriate_explanation IS NULL)),
@@ -439,7 +450,7 @@ CREATE TABLE dbo.audit_events (
     after_json      NVARCHAR(MAX) NULL,
     correlation_id  NVARCHAR(64)  NULL,
     CONSTRAINT ck_audit_entity CHECK (entity_type IN
-        ('REFERRAL','PROGRAM','DEPARTMENT','FIELD','FIELD_OPTION','PROGRAM_FIELD','USER_GRANT','REASON','GPME_RULE')),
+        ('REFERRAL','PROGRAM','DEPARTMENT','FIELD','FIELD_OPTION','PROGRAM_FIELD','USER','USER_GRANT','REASON','GPME_RULE')),
     CONSTRAINT ck_audit_action CHECK (action IN
         ('CREATED','UPDATED','RENAMED','ACCEPTED','NOT_APPROPRIATE','SERVICE_OUTCOME_RECORDED','CORRECTED',
          'DISCONTINUED','REACTIVATED','RETIRED','REPLACED','GRANTED','REVOKED','ACTIVATED')),

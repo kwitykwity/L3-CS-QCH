@@ -1,5 +1,5 @@
 /* =====================================================================
-   QCH Connect - DEV / DEMO SYNTHETIC SEED   (PROPOSED, NEW FILE)
+   QCH Connect - DEV / DEMO SYNTHETIC SEED
 
    NON-PRODUCTION ONLY. Never run against production (PRD 16.2, 17.4).
    The dev reset script that runs this file must check the environment
@@ -39,18 +39,8 @@ FROM (VALUES
 WHERE NOT EXISTS (SELECT 1 FROM dbo.service_categories s WHERE s.name = v.name);
 GO
 
-/* Not Appropriate reasons - TEAM PROPOSAL, NOT CLIENT CONFIRMED.
-   Lets dev/demo exercise the decline flow until QCH supplies the
-   approved vocabulary. Replace when QCH provides its list. */
-INSERT INTO dbo.not_appropriate_reasons (code, label, requires_explanation, display_order)
-SELECT v.code, v.label, v.requires_explanation, v.display_order
-FROM (VALUES
-    (N'AT_CAPACITY',  N'Program is at capacity',               CAST(0 AS BIT), 1),
-    (N'NOT_ELIGIBLE', N'Participant does not meet eligibility', CAST(0 AS BIT), 2),
-    (N'OTHER',        N'Other',                                 CAST(1 AS BIT), 3)
-) AS v(code, label, requires_explanation, display_order)
-WHERE NOT EXISTS (SELECT 1 FROM dbo.not_appropriate_reasons r WHERE r.code = v.code);
-GO
+/* Not Appropriate reasons are NOT seeded here. QCH's initial list is
+   real reference data and is loaded by migration 002. */
 
 /* No GPME rule version is seeded. Add one only when a real rule set
    and its regression tests exist. */
