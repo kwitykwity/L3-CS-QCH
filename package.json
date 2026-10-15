@@ -1,14 +1,24 @@
 {
-  "name": "qch-connect-runtime",
+  "name": "qch-connect",
   "version": "0.1.0",
-  "description": "Card 3 Node runtime scaffold",
-  "main": "scripts/check-runtime.js",
-  "scripts": {
-    "check-runtime": "node scripts/check-runtime.js",
-    "test:runtime": "node tests/runtime.test.js"
-  },
+  "private": true,
+  "description": "QCH Connect — internal referral system (foundation scaffold)",
+  "type": "module",
   "engines": {
     "node": ">=24.15.0 <25.0.0"
   },
-  "private": true
+  "scripts": {
+    "start": "node src/server.js",
+    "dev": "node --watch src/server.js",
+    "test": "node --test",
+    "check-runtime": "node scripts/check-runtime.js",
+    "test:runtime": "node --test test/runtime.test.js"
+  },
+  "dependencies": {
+    "dotenv": "^18.0.7",
+    "express": "^5.3.0"
+  },
+  "devDependencies": {
+    "supertest": "^7.3.1"
+  }
 }
