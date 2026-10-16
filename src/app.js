@@ -3,6 +3,7 @@ import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { errorHandler } from './errorHandler.js';
 import { createAffiliationRouter } from './affiliation/routes.js';
+import { createReferralRouter } from './referrals/routes.js';
 
 const publicDir = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -14,9 +15,12 @@ const publicDir = path.join(
 // - affiliationStore: the Program/affiliation data store (see
 //   src/affiliation/memoryStore.js for the contract). No Azure SQL store
 //   exists yet; without one, /api routes answer 503.
+// - referralStore: the referral data store (see
+//   src/referrals/memoryReferralStore.js for the contract). In production
+//   one Azure SQL store will serve as both stores.
 // - resolveIdentity(req) -> { userId } | null: supplied by the future Entra
 //   sign-in. Without one, /api routes answer 401 (fail closed).
-export function createApp({ affiliationStore, resolveIdentity } = {}) {
+export function createApp({ affiliationStore, referralStore, resolveIdentity } = {}) {
   const app = express();
 
   // Don't advertise the framework or its version.
@@ -27,6 +31,11 @@ export function createApp({ affiliationStore, resolveIdentity } = {}) {
     res.set('Cache-Control', 'no-store');
     res.status(200).json({ status: 'ok' });
   });
+
+  app.use(
+    '/api/referrals',
+    createReferralRouter({ store: referralStore, resolveIdentity }),
+  );
 
   app.use(
     '/api',

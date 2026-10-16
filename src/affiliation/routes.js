@@ -17,13 +17,18 @@ export function createAffiliationRouter({ store, resolveIdentity }) {
   const router = express.Router();
   const service = store ? createAffiliationService({ store }) : null;
 
+  // This router is mounted at /api alongside other routers, so its
+  // middleware is limited to its own paths. Otherwise its sign-in check
+  // and 1kb body limit would run on every /api request.
+  const OWN_PATHS = ['/programs', '/me/affiliation'];
+
   // Protected responses must not be cached (PRD 5.5).
-  router.use((req, res, next) => {
+  router.use(OWN_PATHS, (req, res, next) => {
     res.set('Cache-Control', 'no-store');
     next();
   });
 
-  router.use((req, res, next) => {
+  router.use(OWN_PATHS, (req, res, next) => {
     const identity = resolveIdentity ? resolveIdentity(req) : null;
     if (!identity || !Number.isSafeInteger(identity.userId)) {
       return next(errors.notAuthenticated());
@@ -34,7 +39,7 @@ export function createAffiliationRouter({ store, resolveIdentity }) {
   });
 
   // Small bound: the only accepted body is { programId } (PRD 10.7).
-  router.use(express.json({ limit: '1kb' }));
+  router.use(OWN_PATHS, express.json({ limit: '1kb' }));
 
   router.get('/programs', async (req, res) => {
     res.json({ programs: await service.listActivePrograms() });
