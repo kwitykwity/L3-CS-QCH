@@ -5,11 +5,14 @@
 // request values, names, or other data (PRD 10.4, 15.4).
 
 export class AffiliationError extends Error {
-  constructor(status, code, message) {
+  constructor(status, code, message, { current } = {}) {
     super(message);
     this.name = 'AffiliationError';
     this.status = status;
     this.code = code;
+    // For a stale-update conflict: the user's own current affiliation, so
+    // the UI can show the authoritative state before another try (PRD 13.4).
+    if (current) this.current = current;
   }
 }
 
@@ -22,6 +25,13 @@ export const errors = Object.freeze({
     new AffiliationError(403, 'USER_NOT_ACTIVE', 'This account does not have access.'),
   programNotSelectable: () =>
     new AffiliationError(422, 'PROGRAM_NOT_SELECTABLE', 'That Program cannot be selected.'),
+  affiliationChanged: (current) =>
+    new AffiliationError(
+      409,
+      'AFFILIATION_CHANGED',
+      'Your Program affiliation was changed elsewhere. Review the current affiliation and try again.',
+      { current },
+    ),
   affiliationRequired: () =>
     new AffiliationError(409, 'AFFILIATION_REQUIRED', 'Choose your Program affiliation first.'),
   affiliationProgramNotActive: () =>
