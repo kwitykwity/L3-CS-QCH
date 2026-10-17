@@ -89,6 +89,13 @@ The suite covers:
 `/health` reports availability and nothing else. Per PRD 15.3 and 9.12 it must
 never return secrets, connection strings, config values, or error details.
 
+## Deployment and handoff
+
+[`docs/`](docs/README.md) holds the production deployment runbook, the list
+of everything QCH IT needs to provide, the handoff checklist, and dependency
+licenses (PRD 18, 19). `npm run licenses` lists every installed package's
+license.
+
 ## Scope of this scaffold
 
 Deliberately **not** built here: database code, schema, or migrations; Azure

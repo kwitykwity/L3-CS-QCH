@@ -12,7 +12,8 @@
     "dev": "node --watch src/server.js",
     "test": "node --test",
     "check-runtime": "node scripts/check-runtime.js",
-    "test:runtime": "node --test test/runtime.test.js"
+    "test:runtime": "node --test test/runtime.test.js",
+    "licenses": "node scripts/list-licenses.js"
   },
   "dependencies": {
     "dotenv": "^18.0.7",
