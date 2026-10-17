@@ -349,7 +349,8 @@ describe('local synthetic dev server', () => {
       .send(toRequestBody(validForm(), { submissionId: randomUUID(), receivingProgramId: 3 }));
     assert.equal(before.body.code, 'AFFILIATION_REQUIRED', 'first use requires choosing an affiliation');
 
-    await request(app).put('/api/me/affiliation').send({ programId: 1 }).expect(200);
+    const { body: current } = await request(app).get('/api/me/affiliation');
+    await request(app).put('/api/me/affiliation').send({ programId: 1, version: current.version }).expect(200);
     const sent = await request(app).post('/api/referrals')
       .send(toRequestBody(validForm(), { submissionId: randomUUID(), receivingProgramId: 3 }));
     assert.equal(sent.status, 201);

@@ -141,7 +141,7 @@ async function saveAffiliation(event) {
   }
   const button = $('affiliation-save');
   button.disabled = true;
-  const res = await api.setAffiliation(Number(value));
+  const res = await api.setAffiliation(Number(value), state.affiliation?.version);
   button.disabled = false;
 
   if (!res.networkError && res.status === 200) {
@@ -150,6 +150,19 @@ async function saveAffiliation(event) {
     renderAffiliation();
     showStatus(`Your Program affiliation is saved: ${res.body.program.name}.`, 'success', { focus: false });
     $('affiliation-heading').focus();
+    return;
+  }
+  if (!res.networkError && res.status === 409 && res.body?.code === 'AFFILIATION_CHANGED') {
+    // Changed elsewhere (e.g. another tab). Show the current affiliation
+    // and let the worker decide again; nothing was saved (PRD 13.4).
+    state.affiliation = res.body.current;
+    renderAffiliation();
+    const now = res.body.current?.program?.name;
+    setFieldError('affiliation-select', 'affiliation-error', now
+      ? `Your affiliation was changed elsewhere and is now ${now}. Choose again if you want to change it.`
+      : 'Your affiliation was changed elsewhere. Choose again.');
+    if (!$('affiliation-form').hidden) $('affiliation-select').focus();
+    else showStatus(`Your affiliation was changed elsewhere and is now ${now}.`, 'info');
     return;
   }
   const message = res.body?.code === 'PROGRAM_NOT_SELECTABLE'

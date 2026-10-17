@@ -46,7 +46,8 @@ async function call(method, url, body) {
 export const api = Object.freeze({
   listPrograms: () => call('GET', '/api/programs'),
   getAffiliation: () => call('GET', '/api/me/affiliation'),
-  setAffiliation: (programId) => call('PUT', '/api/me/affiliation', { programId }),
+  // `version` is the one GET /api/me/affiliation returned (PRD 9.4).
+  setAffiliation: (programId, version) => call('PUT', '/api/me/affiliation', { programId, version }),
   submitReferral: (body) => call('POST', '/api/referrals', body),
   checkSubmission: (submissionId) =>
     call('GET', `/api/referrals/submissions/${encodeURIComponent(submissionId)}`),
