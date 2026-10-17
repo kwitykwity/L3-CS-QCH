@@ -39,8 +39,9 @@ FROM (VALUES
 WHERE NOT EXISTS (SELECT 1 FROM dbo.service_categories s WHERE s.name = v.name);
 GO
 
-/* Not Appropriate reasons are NOT seeded here. QCH's initial list is
-   real reference data and is loaded by migration 002. */
+/* Not Appropriate reasons are NOT seeded here. The initial list
+   (team-created with Kyle's authorization) is real reference data and
+   is loaded by migration 002. */
 
 /* No GPME rule version is seeded. Add one only when a real rule set
    and its regression tests exist. */

@@ -7,9 +7,9 @@
    It is NOT rerunnable by design; the migration process must record
    that 002 has been applied and never run it twice (PRD 9.8, 18.3).
 
-   CONTENTS: QCH-sourced reference data ONLY.
-   - Team-proposed and synthetic values live in
-     seeds/dev_synthetic_seed.sql (non-production only).
+   CONTENTS: reference data that QCH provided or authorized ONLY.
+   - Team-proposed values that QCH has not authorized, and synthetic
+     values, live in seeds/dev_synthetic_seed.sql (non-production only).
    - No programs, people, or referrals live here. Programs are loaded
      separately from the internal QCH Program Directory, which must
      NEVER be committed to a public repository (PRD 4.5).
@@ -30,9 +30,9 @@ INSERT INTO dbo.departments (name) VALUES
 GO
 
 /* Initial Not Appropriate reasons.
-   SOURCE: QCH (Kyle) gave the team this initial list; the Final Technical
-   PRD lists the same five values. Labels are QCH's wording, unchanged.
-   Codes are team-chosen technical keys.
+   SOURCE: team-created with Kyle's authorization. The team wrote this
+   initial list and Kyle (QCH) authorized it; the Final Technical PRD
+   lists the same five values. Labels and codes are team-written.
    The explanation is optional for every reason (requires_explanation = 0)
    unless QCH later directs otherwise. */
 INSERT INTO dbo.not_appropriate_reasons (code, label, requires_explanation, display_order) VALUES

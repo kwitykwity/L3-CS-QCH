@@ -17,7 +17,9 @@
    - The database enforces structural rules (CHECK / FK / UNIQUE).
      Workflow transitions (who may change what, and when) are enforced
      by the Node.js backend (PRD 9.5, 6.4).
-   - Run with sqlcmd or Azure Data Studio; "GO" separates batches.
+   - Run with sqlcmd using -I and -b; "GO" separates batches.
+     See db/README.md for run order, why -I is required, and what to
+     do if a run fails partway.
    ===================================================================== */
 
 /* ---------------------------------------------------------------------
