@@ -34,12 +34,17 @@ function isUsable(grant, { allowDemoGrants }) {
   return grant.grantSource === 'DEMO' && allowDemoGrants === true;
 }
 
-// Program IDs whose received referrals this user may view.
-export function receivingProgramIds(grants, { allowDemoGrants = false } = {}) {
+// Respond to a received referral: Accepted or Not Appropriate (PRD 3.6).
+// A separate capability from viewing: view never implies modify (PRD 3.3).
+export const RESPOND = 'RESPOND_TO_REFERRAL';
+
+// Program IDs for which this user holds `permission` as an active,
+// usable, PROGRAM-scope grant.
+export function programIdsWithCapability(grants, permission, { allowDemoGrants = false } = {}) {
   const ids = new Set();
   for (const grant of grants ?? []) {
     if (
-      grant.permission === RECEIVING_VIEW &&
+      grant.permission === permission &&
       grant.scopeType === 'PROGRAM' &&
       Number.isSafeInteger(grant.programId) &&
       isUsable(grant, { allowDemoGrants })
@@ -48,6 +53,11 @@ export function receivingProgramIds(grants, { allowDemoGrants = false } = {}) {
     }
   }
   return ids;
+}
+
+// Program IDs whose received referrals this user may view.
+export function receivingProgramIds(grants, options = {}) {
+  return programIdsWithCapability(grants, RECEIVING_VIEW, options);
 }
 
 // How (if at all) this user may view this referral.

@@ -28,6 +28,21 @@
 //       `limit` rows, filtered by stage when given (see stage.js for the
 //       exact conditions). Uses ix_referrals_inbox / ix_referrals_my_sent.
 //
+// Response lifecycle (card 7):
+//   listActiveNotAppropriateReasons() -> [{ reasonId, code, label,
+//       requiresExplanation, displayOrder }] from dbo.not_appropriate_reasons
+//       where lifecycle_status = 'ACTIVE', ordered by display_order.
+//   getNotAppropriateReason(reasonId) -> reason (any lifecycle) | null
+//   tx.getReferralById(referralId)
+//   tx.recordFirstResponse({ referralId, decision, notAppropriateReasonId,
+//       notAppropriateExplanation, respondedByUserId })
+//       -> updated row, or null if the referral is no longer
+//          AWAITING_RESPONSE. Must be ONE conditional update:
+//          UPDATE ... SET response_status='RESPONDED', decision=...,
+//          first_responded_at=SYSUTCDATETIME(), ...
+//          WHERE referral_id=@id AND response_status='AWAITING_RESPONSE'
+//          so two concurrent responses can never both succeed.
+//
 // Columns map to dbo.referrals and dbo.audit_events in
 // db/migrations/001_core_schema.sql (PR #4).
 
@@ -44,6 +59,8 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   // ends (true = committed, false = rolled back). Mimics how a SQL unique
   // index makes a second insert wait for the first transaction to finish.
   const inFlight = new Map();
+  // referral ID -> in-flight first response (same waiting rule as above).
+  const responseInFlight = new Map();
   let nextReferralId = 1;
   let failNextAudit = false;
 
@@ -54,7 +71,17 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   }
 
   async function withTransaction(fn) {
-    const staged = { referrals: [], audit: [], locks: [] };
+    const staged = { referrals: [], audit: [], locks: [], updates: [], responseLocks: [] };
+
+    // Committed row with this transaction's own staged changes applied.
+    const currentRow = (referralId) => {
+      const committed = referrals.find((r) => r.referralId === referralId)
+        ?? staged.referrals.find((r) => r.referralId === referralId);
+      if (!committed) return null;
+      const row = { ...committed };
+      for (const u of staged.updates) if (u.referralId === referralId) Object.assign(row, u.fields);
+      return row;
+    };
 
     const tx = {
       getUser: base.getUser,
@@ -85,6 +112,37 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
         return { ...saved };
       },
 
+      async getReferralById(referralId) {
+        return currentRow(referralId);
+      },
+
+      async recordFirstResponse({ referralId, decision, notAppropriateReasonId = null, notAppropriateExplanation = null, respondedByUserId }) {
+        // Like UPDATE ... WHERE response_status = 'AWAITING_RESPONSE': a
+        // second responder waits for the first transaction, then finds the
+        // row already RESPONDED (0 rows updated) unless the first rolled back.
+        while (responseInFlight.has(referralId)) {
+          await responseInFlight.get(referralId).promise;
+        }
+        const row = currentRow(referralId);
+        if (!row || row.responseStatus !== 'AWAITING_RESPONSE') return null;
+
+        let settle;
+        const promise = new Promise((resolve) => { settle = resolve; });
+        responseInFlight.set(referralId, { promise });
+        staged.responseLocks.push({ referralId, settle });
+
+        const fields = {
+          responseStatus: 'RESPONDED',
+          decision,
+          notAppropriateReasonId,
+          notAppropriateExplanation,
+          respondedByUserId,
+          firstRespondedAt: now().toISOString(),
+        };
+        staged.updates.push({ referralId, fields });
+        return { ...row, ...fields };
+      },
+
       async appendAuditEvent(event) {
         if (failNextAudit) {
           failNextAudit = false;
@@ -101,11 +159,18 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
         inFlight.delete(submissionId);
         settle();
       }
+      for (const { referralId, settle } of staged.responseLocks) {
+        responseInFlight.delete(referralId);
+        settle();
+      }
     };
 
     try {
       const result = await fn(tx);
       referrals.push(...staged.referrals);
+      for (const { referralId, fields } of staged.updates) {
+        Object.assign(referrals.find((r) => r.referralId === referralId), fields);
+      }
       auditEvents.push(...staged.audit);
       for (const r of staged.referrals) committedIds.add(r.submissionId);
       release();
@@ -117,6 +182,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   }
 
   const grants = (seed.grants ?? []).map((g) => ({ revokedAt: null, ...g }));
+  const reasons = (seed.notAppropriateReasons ?? []).map((r) => ({ requiresExplanation: false, lifecycleStatus: 'ACTIVE', ...r }));
 
   function newestFirst(rows, { stage, limit }) {
     return rows
@@ -146,6 +212,18 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
 
     async listReferralsByCreator(userId, options = {}) {
       return newestFirst(referrals.filter((r) => r.createdByUserId === userId), options);
+    },
+
+    async listActiveNotAppropriateReasons() {
+      return reasons
+        .filter((r) => r.lifecycleStatus === 'ACTIVE')
+        .sort((a, b) => a.displayOrder - b.displayOrder || a.reasonId - b.reasonId)
+        .map(({ reasonId, code, label, requiresExplanation, displayOrder }) => ({ reasonId, code, label, requiresExplanation, displayOrder }));
+    },
+
+    async getNotAppropriateReason(reasonId) {
+      const r = reasons.find((x) => x.reasonId === reasonId);
+      return r ? { ...r } : null;
     },
 
     // Test helpers. Not part of the store contract.
