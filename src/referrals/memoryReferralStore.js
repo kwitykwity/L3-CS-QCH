@@ -14,6 +14,8 @@
 //       constraint rejects the insert.
 //   appendAuditEvent({ entityType, entityId, action, actorUserId,
 //                      before, after, correlationId })
+//       Written in the same transaction as the change it records. The store
+//       adds occurredAt (UTC) itself; callers never supply the timestamp.
 //
 // Columns map to dbo.referrals and dbo.audit_events in
 // db/migrations/001_core_schema.sql (PR #4).
@@ -76,7 +78,9 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
           failNextAudit = false;
           throw new Error('simulated audit failure');
         }
-        staged.audit.push(structuredClone(event));
+        // The store sets the authoritative timestamp (PRD 9.6, 9.7); in SQL
+        // this is audit_events.occurred_at DEFAULT SYSUTCDATETIME().
+        staged.audit.push({ ...structuredClone(event), occurredAt: now().toISOString() });
       },
     };
 

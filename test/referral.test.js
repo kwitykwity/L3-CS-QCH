@@ -91,7 +91,9 @@ describe('creating a Direct Referral', () => {
     const store = seed();
     await createReferralService({ store }).createDirectReferral(100, validBody());
 
-    await createAffiliationService({ store }).setAffiliation(100, { programId: 11 });
+    const affiliation = createAffiliationService({ store });
+    const { version } = await affiliation.getAffiliation(100);
+    await affiliation.setAffiliation(100, { programId: 11, version });
 
     assert.equal(store._referrals[0].referringProgramId, 10);
     assert.equal(store._referrals[0].referringDepartmentId, 1);
@@ -115,6 +117,7 @@ describe('creating a Direct Referral', () => {
     assert.equal(event.entityType, 'REFERRAL');
     assert.equal(event.action, 'CREATED');
     assert.equal(event.actorUserId, 100);
+    assert.match(event.occurredAt, /^\d{4}-\d{2}-\d{2}T.*Z$/, 'store-set UTC timestamp');
     assert.equal(event.correlationId, 'c-9');
     const text = JSON.stringify(event);
     for (const value of [NAME, CONTEXT, NOTE, '010-0147', '11375']) {
