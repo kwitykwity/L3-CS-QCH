@@ -33,6 +33,11 @@ export const referralErrors = Object.freeze({
       'SUBMISSION_ID_CONFLICT',
       'This submission ID was already used for a different referral. Start a new referral.',
     ),
+  // Used both for "does not exist" and "you may not see it" (PRD 3.3).
+  referralNotFound: () =>
+    new ReferralError(404, 'REFERRAL_NOT_FOUND', 'Referral not found.'),
+  notAuthorizedForProgram: () =>
+    new ReferralError(403, 'NOT_AUTHORIZED', 'You do not have access to referrals for that Program.'),
   storeUnavailable: () =>
     new ReferralError(503, 'NOT_CONFIGURED', 'This service is not available.'),
 });
