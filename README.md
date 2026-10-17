@@ -79,6 +79,52 @@ The suite covers:
 - the error handler returns no stack traces or internal details, keeps valid
   4xx statuses, logs only safe metadata (never the error object or message),
   and closes the connection if a response had already started
+- new-referral notifications (card 15): see Notifications below
+
+## Notifications (card 15)
+
+`src/notifications/` sends the "new referral" email to the receiving Program
+(PRD 11.2 to 11.6). It is built and tested on its own and is **not wired in
+yet**: no route, server start-up, or referral code calls it.
+
+How it behaves:
+
+- `notifyReferralCommitted({ referralId, correlationId })` runs only after the
+  referral transaction commits (PRD 11.4). It never throws, and nothing it does
+  can change or roll back the referral (PRD 11.6).
+- The recipient is the receiving Program's `notification_email`, read
+  server-side. Callers cannot pass a recipient (PRD 11.3). A Program with no
+  email ends `FAILED` with category `NO_RECIPIENT`.
+- The message is fixed generic text with no participant data (PRD 11.2),
+  in `content.js`.
+- Each delivery is one `notification_deliveries` row: `PENDING`, then `SENT`
+  or `FAILED`, with IDs, counts, timestamps, a failure category, and a
+  correlation ID only (PRD 11.5).
+- `THROTTLED` and `UNAVAILABLE` failures stay `PENDING` and are retried by
+  `retryPendingDeliveries()`, at least `retryAfterMs` apart (default 60s), up
+  to `maxAttempts` (default 3). Every other failure ends `FAILED` at once.
+  A claim step stops two workers from sending the same delivery.
+- Logs hold IDs, outcome, attempt, category, and correlation ID. Never the
+  recipient, subject, body, or provider error text (PRD 15.3). Final failures
+  log at `warn` for monitoring.
+- `simulatedOutbox.js` keeps messages in memory for development, tests, and
+  demos (PRD 16.4). It refuses to start unless `NODE_ENV` is `development` or
+  `test`.
+
+Known limit: if the process stops after the mail provider accepts a message
+but before the row is marked `SENT`, a retry can send it a second time.
+
+Remaining tasks, not done here:
+
+- Call `notifyReferralCommitted()` from the Direct Referral transaction once
+  PR #8 merges.
+- The Microsoft Graph sender, once QCH IT provides the shared mailbox and app
+  registration (`NOTIFICATION_MAILBOX` and the `AZURE_*` values). It will use
+  `categoryForHttpStatus()` to classify failures.
+- The Azure SQL store, meeting the contract documented in
+  `memoryDeliveryStore.js`.
+- A timer that runs `retryPendingDeliveries()` in the hosted app.
+- Azure Monitor / Application Insights alerts on final failures (PRD 11.6).
 
 ## Endpoints
 
@@ -92,5 +138,6 @@ never return secrets, connection strings, config values, or error details.
 ## Scope of this scaffold
 
 Deliberately **not** built here: database code, schema, or migrations; Azure
-resource provisioning; referrals; matching; reporting; notifications; Entra
-sign-in; roles and permissions. Any data used for demos must be synthetic.
+resource provisioning; referrals; matching; reporting; Entra sign-in; roles
+and permissions. Notifications exist as a standalone module, not yet wired in
+(see Notifications above). Any data used for demos must be synthetic.
