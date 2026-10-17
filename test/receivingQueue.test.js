@@ -9,7 +9,7 @@ import { createApp } from '../src/app.js';
 import { createMemoryReferralStore } from '../src/referrals/memoryReferralStore.js';
 import { createReferralService } from '../src/referrals/referralService.js';
 import { createReferralQueryService, LIST_LIMIT } from '../src/referrals/referralQueryService.js';
-import { receivingProgramIds, referralAccess } from '../src/authorization/referralAccess.js';
+import { receivingProgramIds, referralAccess, assertDemoGrantsAllowed } from '../src/authorization/referralAccess.js';
 import { stageOf } from '../src/referrals/stage.js';
 
 const CREATOR = 100;          // affiliated with Program 10; no grants
@@ -354,7 +354,29 @@ describe('HTTP routes', () => {
 
   test('createApp does not honor DEMO grants unless told to', async () => {
     assert.equal((await request(appAs(DEMO)).get('/api/referrals/received')).body.referrals.length, 0);
-    assert.equal((await request(appAs(DEMO, { allowDemoGrants: true })).get('/api/referrals/received')).body.referrals.length, 3);
+    assert.equal((await request(appAs(DEMO, { allowDemoGrants: true, nodeEnv: 'test' })).get('/api/referrals/received')).body.referrals.length, 3);
+  });
+
+  test('DEMO grants cannot be turned on outside development or test (PRD 16.1, 17.4)', () => {
+    for (const nodeEnv of ['production', 'Production', 'staging', '', undefined]) {
+      assert.throws(() => appAs(DEMO, { allowDemoGrants: true, nodeEnv }), /DEMO grants/, String(nodeEnv));
+    }
+    for (const nodeEnv of ['development', 'test']) {
+      assert.doesNotThrow(() => appAs(DEMO, { allowDemoGrants: true, nodeEnv }));
+    }
+    assert.doesNotThrow(() => appAs(DEMO, { nodeEnv: 'production' }), 'demo off is always allowed');
+    assert.throws(() => assertDemoGrantsAllowed(true, 'production'));
+    assert.doesNotThrow(() => assertDemoGrantsAllowed(false, undefined));
+  });
+
+  test('IDs beyond the safe integer range are refused, never rounded', async () => {
+    let seen = 'not called';
+    const spy = { ...ctx.store, getReferralById: async (id) => { seen = id; return null; } };
+    const app = createApp({ referralStore: spy, affiliationStore: spy, resolveIdentity: () => ({ userId: RECEIVER_11 }) });
+    assert.equal((await request(app).get('/api/referrals/9007199254740993')).status, 404);
+    assert.equal(seen, 'not called', 'the store is never asked for a rounded ID');
+    assert.equal((await request(appAs(RECEIVER_11)).get('/api/referrals/received?programId=9007199254740993')).status, 400);
+    assert.equal((await request(appAs(RECEIVER_11)).get('/api/referrals/received?programId=11')).status, 200);
   });
 
   test('existing routes still work alongside the new ones', async () => {

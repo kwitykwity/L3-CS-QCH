@@ -32,8 +32,17 @@ import { createReferralService } from './referralService.js';
 import { createReferralQueryService } from './referralQueryService.js';
 import { STAGES } from './stage.js';
 import { MAX_BODY_BYTES } from './validateReferral.js';
+import { assertDemoGrantsAllowed } from '../authorization/referralAccess.js';
 
 const POSITIVE_INT = /^[1-9][0-9]{0,15}$/;
+
+// A positive integer that JavaScript represents exactly, or null. Larger
+// values would be rounded to a different ID (Number.MAX_SAFE_INTEGER).
+function toId(text) {
+  if (typeof text !== 'string' || !POSITIVE_INT.test(text)) return null;
+  const id = Number(text);
+  return Number.isSafeInteger(id) ? id : null;
+}
 
 // Validates query parameters against an allowlist (PRD 10.3). Identity,
 // roles, membership or user IDs can never arrive this way (PRD 3.2).
@@ -43,10 +52,9 @@ function readQuery(query, allowed) {
 
   const result = {};
   if ('programId' in query) {
-    if (typeof query.programId !== 'string' || !POSITIVE_INT.test(query.programId)) {
-      throw referralErrors.invalidRequest(['programId']);
-    }
-    result.programId = Number(query.programId);
+    const programId = toId(query.programId);
+    if (programId === null) throw referralErrors.invalidRequest(['programId']);
+    result.programId = programId;
   }
   if ('stage' in query) {
     if (!STAGES.includes(query.stage)) throw referralErrors.invalidRequest(['stage']);
@@ -55,10 +63,11 @@ function readQuery(query, allowed) {
   return result;
 }
 
-// allowDemoGrants: honor DEMO receiving grants. Only the local synthetic
-// dev server sets this; it defaults to false so production fails closed
-// (PRD 16.1, 17.4).
-export function createReferralRouter({ store, resolveIdentity, allowDemoGrants = false }) {
+// allowDemoGrants: honor DEMO receiving grants. Defaults to false, and is
+// refused at start-up unless nodeEnv is 'development' or 'test', so
+// production and unknown environments fail closed (PRD 16.1, 17.4).
+export function createReferralRouter({ store, resolveIdentity, allowDemoGrants = false, nodeEnv }) {
+  assertDemoGrantsAllowed(allowDemoGrants, nodeEnv);
   const router = express.Router();
   const service = store ? createReferralService({ store }) : null;
   const queries = store ? createReferralQueryService({ store, allowDemoGrants }) : null;
@@ -106,8 +115,9 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
 
   router.get('/:referralId', async (req, res) => {
     readQuery(req.query, []);
-    if (!POSITIVE_INT.test(req.params.referralId)) throw referralErrors.referralNotFound();
-    res.json(await queries.getReferral(req.userId, Number(req.params.referralId)));
+    const referralId = toId(req.params.referralId);
+    if (referralId === null) throw referralErrors.referralNotFound();
+    res.json(await queries.getReferral(req.userId, referralId));
   });
 
   // Known domain errors return their status and stable code. Anything else
