@@ -60,7 +60,10 @@ export function createAffiliationService({ store }) {
     return { program, department };
   }
 
-  async function listActivePrograms() {
+  // Only users with application access (an active user record) may list
+  // Programs (PRD 3.1-3.3). The HTTP boundary checks this too.
+  async function listActivePrograms(userId) {
+    await requireActiveUser(userId);
     const rows = await store.listActivePrograms();
     return rows
       .map(({ program, department }) => toProgramSummary(program, department))
@@ -72,27 +75,35 @@ export function createAffiliationService({ store }) {
       );
   }
 
-  async function getAffiliation(userId) {
-    const user = await requireActiveUser(userId);
-
+  // Current affiliation for an already-loaded user. `version` is the
+  // precondition token the client must send back to change it (PRD 9.4).
+  async function describeAffiliation(user) {
     if (user.currentProgramId == null) {
-      return { status: 'NOT_SET', program: null };
+      return { status: 'NOT_SET', program: null, version: user.version };
     }
 
     const selectable = await getSelectableProgram(user.currentProgramId);
     if (!selectable) {
       // The stored Program was discontinued or retired after it was chosen.
       // The user must choose again before making a referral.
-      return { status: 'PROGRAM_NOT_ACTIVE', program: null };
+      return { status: 'PROGRAM_NOT_ACTIVE', program: null, version: user.version };
     }
 
     return {
       status: 'SET',
       program: toProgramSummary(selectable.program, selectable.department),
+      version: user.version,
     };
   }
 
-  // `body` is the raw request body. Only { programId } is accepted.
+  async function getAffiliation(userId) {
+    return describeAffiliation(await requireActiveUser(userId));
+  }
+
+  // `body` is the raw request body. Exactly { programId, version } is
+  // accepted, where `version` is what GET /api/me/affiliation returned.
+  // A stale version is refused with 409 and the current affiliation; in
+  // that case nothing is written and no audit event is added (PRD 9.4).
   async function setAffiliation(userId, body, { correlationId } = {}) {
     const user = await requireActiveUser(userId);
 
@@ -100,9 +111,13 @@ export function createAffiliationService({ store }) {
       body === null ||
       typeof body !== 'object' ||
       Array.isArray(body) ||
-      Object.keys(body).length !== 1 ||
+      Object.keys(body).length !== 2 ||
       !Object.hasOwn(body, 'programId') ||
-      !isPositiveInteger(body.programId)
+      !Object.hasOwn(body, 'version') ||
+      !isPositiveInteger(body.programId) ||
+      typeof body.version !== 'string' ||
+      body.version.length === 0 ||
+      body.version.length > 64
     ) {
       throw errors.invalidRequest();
     }
@@ -110,21 +125,34 @@ export function createAffiliationService({ store }) {
     const selectable = await getSelectableProgram(body.programId);
     if (!selectable) throw errors.programNotSelectable();
 
+    // Precondition: the client must have seen the current state.
+    if (body.version !== user.version) {
+      throw errors.affiliationChanged(await describeAffiliation(user));
+    }
+
+    let version = user.version;
     if (user.currentProgramId !== body.programId) {
-      // The store must update the user and append the audit event in one
-      // transaction (PRD 9.3, 9.6).
-      await store.updateUserProgramAffiliation({
+      // One transaction: conditional update + audit event, all or nothing
+      // (PRD 9.3, 9.6). The store re-checks the version atomically, so an
+      // update that raced past the check above still cannot overwrite.
+      const result = await store.updateUserProgramAffiliation({
         userId: user.userId,
+        expectedVersion: body.version,
         fromProgramId: user.currentProgramId ?? null,
         toProgramId: body.programId,
         actorUserId: user.userId,
         correlationId: correlationId ?? null,
       });
+      if (!result) {
+        throw errors.affiliationChanged(await describeAffiliation(await requireActiveUser(userId)));
+      }
+      version = result.version;
     }
 
     return {
       status: 'SET',
       program: toProgramSummary(selectable.program, selectable.department),
+      version,
     };
   }
 
