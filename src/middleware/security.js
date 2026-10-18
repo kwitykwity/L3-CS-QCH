@@ -1,6 +1,5 @@
 /**
- * Security Middleware - Sanitization and Production Error Redaction
- * Source of Truth: PRD Task 16 / Security Pass
+ * Security Middleware - PRD Compliant (§15)
  */
 
 export function enforceProductionSafety(env = process.env) {
@@ -12,7 +11,7 @@ export function enforceProductionSafety(env = process.env) {
   }
 }
 
-export function validateEnvironment(env = process.env, requiredKeys = ['NODE_ENV', 'JWT_SECRET']) {
+export function validateEnvironment(env = process.env, requiredKeys = ['NODE_ENV']) {
   const missing = requiredKeys.filter(key => !env[key]);
   if (missing.length > 0) {
     throw new Error(`FATAL: Missing required environment variables: ${missing.join(', ')}`);
@@ -28,13 +27,13 @@ export function sanitizeLogData(data) {
 
   const sanitized = {};
   const sensitiveKeys = [
-    'password', 'token', 'ssn', 'dob', 'client_name', 'email', 
-    'participant_name', 'contact_value', 'referral_context', 'notes', 
-    'participant_zip', 'phone', 'address'
+    'password', 'token', 'ssn', 'dob', 'clientname', 'email',
+    'participantname', 'contactvalue', 'referralcontext', 'notes',
+    'participantzip', 'phone', 'address'
   ];
 
   for (const [key, value] of Object.entries(data)) {
-    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9_]/g, '');
+    const normalizedKey = key.toLowerCase().replace(/[^a-z0-9]/g, '');
     if (sensitiveKeys.includes(normalizedKey)) {
       sanitized[key] = '[REDACTED]';
     } else if (typeof value === 'object' && value !== null) {
@@ -50,13 +49,11 @@ export function formatSafeError(err, env = process.env) {
   const isProd = env.NODE_ENV === 'production';
   const statusCode = err.statusCode || err.status || 500;
 
-  if (isProd) {
+  if (isProd && statusCode >= 500) {
     if (statusCode === 503) {
       return { error: 'Service Unavailable', statusCode: 503 };
     }
-    if (statusCode === 500) {
-      return { error: 'Internal Server Error', statusCode: 500 };
-    }
+    return { error: 'Internal Server Error', statusCode: 500 };
   }
 
   return {

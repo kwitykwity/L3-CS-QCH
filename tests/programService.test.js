@@ -5,17 +5,26 @@ import { createProgram, setProgramActiveState } from '../src/services/programSer
 test('Program Management Unit Tests - T-SQL Schema', async (t) => {
   const mockDb = {
     async query(sql, params) {
+      if (sql === 'BEGIN TRANSACTION' || sql === 'COMMIT' || sql === 'ROLLBACK') {
+        return [];
+      }
       if (sql.includes('dbo.user_grants')) {
         if (params.userId === 'usr-admin') {
-          return [{ grant_id: 1, permission: 'MANAGE_PROGRAM', scope_type: 'ORG' }];
+          return [{ grant_id: 1, permission: 'MANAGE_ORGANIZATION', scope_type: 'ORG', grant_source: 'IN_APP' }];
         }
         if (params.userId === 'usr-unauthorized') {
-          return [{ grant_id: 2, permission: 'VIEW_CREATED_REFERRAL', scope_type: 'PROGRAM' }];
+          return [{ grant_id: 2, permission: 'VIEW_CREATED_REFERRAL', scope_type: 'PROGRAM', grant_source: 'IN_APP' }];
+        }
+        return [];
+      }
+      if (sql.includes('SELECT program_id, department_id')) {
+        if (params.programId === 42) {
+          return [{ program_id: 42, department_id: 10, name: 'Housing Assistance', description: 'Shelter support', lifecycle_status: 'ACTIVE', row_version: 'v1' }];
         }
         return [];
       }
       if (sql.includes('INSERT INTO dbo.programs')) {
-        return [{ programId: 42 }];
+        return [{ programId: 42, rowVersion: 'v1' }];
       }
       if (sql.includes('UPDATE dbo.programs')) {
         if (params.expectedRowVersion === 'stale_version_token') return { rowsAffected: [0] };
