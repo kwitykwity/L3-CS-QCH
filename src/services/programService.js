@@ -27,7 +27,6 @@ async function verifyProgramAccess(db, userId, programId = null, departmentId = 
 
   const hasAccess = grants.some(g => {
     if (isProd && g.grant_source === 'DEMO') return false;
-
     if (g.permission === 'MANAGE_ORGANIZATION' && g.scope_type === 'ORG') return true;
 
     if (g.permission === 'MANAGE_PROGRAM') {
@@ -57,30 +56,35 @@ export async function createProgram(db, { name, description, departmentId }, use
     throw err;
   }
 
-  await db.query('BEGIN TRANSACTION');
+  const conn = typeof db.getConnection === 'function' ? await db.getConnection() : db;
+
   try {
+    await conn.query('BEGIN TRANSACTION');
+
     const insertSql = `
       INSERT INTO dbo.programs (department_id, name, description, lifecycle_status, created_at, updated_at)
       OUTPUT INSERTED.program_id AS programId, INSERTED.row_version AS rowVersion
       VALUES (@departmentId, @name, @description, 'ACTIVE', SYSUTCDATETIME(), SYSUTCDATETIME());
     `;
 
-    const result = await db.query(insertSql, { name, description: description || null, departmentId });
+    const result = await conn.query(insertSql, { name, description: description || null, departmentId });
     const row = result && result[0] ? result[0] : result;
     const programId = row.programId || row.insertId || row.id;
 
-    const afterJson = JSON.stringify({ programId, name, departmentId, lifecycleStatus: 'ACTIVE' });
-    await db.query(
+    const afterJson = JSON.stringify({ programId, name, departmentId, description: description || null, lifecycleStatus: 'ACTIVE' });
+    await conn.query(
       `INSERT INTO dbo.audit_events (entity_type, entity_id, action, actor_user_id, occurred_at, after_json)
        VALUES ('PROGRAM', @programId, 'CREATED', @userId, SYSUTCDATETIME(), @afterJson)`,
       { programId, userId, afterJson }
     );
 
-    await db.query('COMMIT');
+    await conn.query('COMMIT');
     return { programId, name, departmentId, lifecycleStatus: 'ACTIVE', rowVersion: row.rowVersion };
   } catch (err) {
-    await db.query('ROLLBACK');
+    await conn.query('ROLLBACK');
     throw err;
+  } finally {
+    if (typeof conn.release === 'function') conn.release();
   }
 }
 
@@ -97,8 +101,15 @@ export async function updateProgram(db, { programId, name, description, departme
   }
 
   const current = existingProg[0];
-  const targetDeptId = departmentId || current.department_id;
-  await verifyProgramAccess(db, userId, programId, targetDeptId);
+  const currentDeptId = current.department_id;
+  
+  // Rule 1: Authorize against current scope
+  await verifyProgramAccess(db, userId, programId, currentDeptId);
+
+  // Rule 1: If department is being moved, also authorize against destination department scope
+  if (departmentId && departmentId !== currentDeptId) {
+    await verifyProgramAccess(db, userId, null, departmentId);
+  }
 
   if (!expectedRowVersion) {
     const err = new Error('Bad Request: Version precondition (expectedRowVersion) is required.');
@@ -106,8 +117,11 @@ export async function updateProgram(db, { programId, name, description, departme
     throw err;
   }
 
-  await db.query('BEGIN TRANSACTION');
+  const conn = typeof db.getConnection === 'function' ? await db.getConnection() : db;
+
   try {
+    await conn.query('BEGIN TRANSACTION');
+
     const updateSql = `
       UPDATE dbo.programs
       SET name = COALESCE(@name, name),
@@ -119,7 +133,7 @@ export async function updateProgram(db, { programId, name, description, departme
       WHERE program_id = @programId AND row_version = @expectedRowVersion;
     `;
 
-    const result = await db.query(updateSql, { programId, name, description, departmentId, lifecycleStatus, expectedRowVersion });
+    const result = await conn.query(updateSql, { programId, name, description, departmentId, lifecycleStatus, expectedRowVersion });
     const rowsAffected = result && (result.rowsAffected ? result.rowsAffected[0] : (result.affectedRows || result.length));
 
     if (!rowsAffected || rowsAffected === 0) {
@@ -134,20 +148,28 @@ export async function updateProgram(db, { programId, name, description, departme
     }
 
     const beforeJson = JSON.stringify(current);
-    const afterJson = JSON.stringify({ programId, name: name || current.name, departmentId: targetDeptId, lifecycleStatus: lifecycleStatus || current.lifecycle_status });
+    const afterJson = JSON.stringify({
+      program_id: programId,
+      department_id: departmentId || current.department_id,
+      name: name || current.name,
+      description: description !== undefined ? description : current.description,
+      lifecycle_status: lifecycleStatus || current.lifecycle_status
+    });
 
-    await db.query(
+    await conn.query(
       `INSERT INTO dbo.audit_events (entity_type, entity_id, action, actor_user_id, occurred_at, before_json, after_json)
        VALUES ('PROGRAM', @programId, @action, @userId, SYSUTCDATETIME(), @beforeJson, @afterJson)`,
       { programId, action, userId, beforeJson, afterJson }
     );
 
-    await db.query('COMMIT');
+    await conn.query('COMMIT');
     const newRowVersion = result && result[0] ? result[0].newRowVersion : null;
     return { programId, updated: true, rowVersion: newRowVersion };
   } catch (err) {
-    await db.query('ROLLBACK');
+    await conn.query('ROLLBACK');
     throw err;
+  } finally {
+    if (typeof conn.release === 'function') conn.release();
   }
 }
 

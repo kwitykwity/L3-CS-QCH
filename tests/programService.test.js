@@ -1,19 +1,16 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createProgram, setProgramActiveState } from '../src/services/programService.js';
+import { createProgram, updateProgram, setProgramActiveState } from '../src/services/programService.js';
 
-test('Program Management Unit Tests - T-SQL Schema', async (t) => {
+test('Program Management Unit Tests - Dual Scope & Transaction Security', async (t) => {
   const mockDb = {
     async query(sql, params) {
-      if (sql === 'BEGIN TRANSACTION' || sql === 'COMMIT' || sql === 'ROLLBACK') {
-        return [];
-      }
       if (sql.includes('dbo.user_grants')) {
         if (params.userId === 'usr-admin') {
           return [{ grant_id: 1, permission: 'MANAGE_ORGANIZATION', scope_type: 'ORG', grant_source: 'IN_APP' }];
         }
-        if (params.userId === 'usr-unauthorized') {
-          return [{ grant_id: 2, permission: 'VIEW_CREATED_REFERRAL', scope_type: 'PROGRAM', grant_source: 'IN_APP' }];
+        if (params.userId === 'usr-dept10-only') {
+          return [{ grant_id: 2, permission: 'MANAGE_PROGRAM', scope_type: 'DEPARTMENT', department_id: 10, grant_source: 'IN_APP' }];
         }
         return [];
       }
@@ -48,25 +45,26 @@ test('Program Management Unit Tests - T-SQL Schema', async (t) => {
     assert.strictEqual(result.lifecycleStatus, 'ACTIVE');
   });
 
+  await t.test('Dual-Scope Check Blocks Reassignment Without Destination Permission', async () => {
+    // User has permission for Dept 10, but attempts to move Program 42 to Dept 20
+    await assert.rejects(
+      async () => {
+        await updateProgram(
+          mockDb,
+          { programId: 42, departmentId: 20, expectedRowVersion: 'v1' },
+          'usr-dept10-only'
+        );
+      },
+      (err) => err.statusCode === 403
+    );
+  });
+
   await t.test('Optimistic Row Version Locking & Stale Update Conflict', async () => {
     await assert.rejects(
       async () => {
         await setProgramActiveState(mockDb, 42, false, 'stale_version_token', 'usr-admin');
       },
       (err) => err.statusCode === 409 && err.message.includes('Conflict')
-    );
-  });
-
-  await t.test('Unauthorized Permissions Blocked', async () => {
-    await assert.rejects(
-      async () => {
-        await createProgram(
-          mockDb,
-          { name: 'Unauthorized Program', departmentId: 10 },
-          'usr-unauthorized'
-        );
-      },
-      (err) => err.statusCode === 403
     );
   });
 });

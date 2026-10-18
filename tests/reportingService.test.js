@@ -9,15 +9,26 @@ test('Reporting Service Unit Tests - SQL Server Staged Query Verification', asyn
     programId: 101
   };
 
-  await t.test('Timing Metrics - Standard Cohort', async () => {
+  await t.test('Timing Metrics - Standard Populated Cohort', async () => {
+    const rows = [
+      { resp: 2.0, serv: 10.0 },
+      { resp: 3.0, serv: 20.0 },
+      { resp: 2.5, serv: 30.0 }
+    ];
+
     const mockDb = {
       async query(sql) {
         if (sql.includes('WITH Durations AS')) {
+          const respAvg = rows.reduce((acc, r) => acc + r.resp, 0) / rows.length;
+          const servAvg = rows.reduce((acc, r) => acc + r.serv, 0) / rows.length;
+          const sortedServ = [...rows.map(r => r.serv)].sort((a, b) => a - b);
+          const median = sortedServ[Math.floor(sortedServ.length / 2)];
+
           return [{
-            cohort_size: 10,
-            avg_hours_to_first_response: 2.50,
-            avg_hours_to_service_delivery: 24.00,
-            median_hours_to_service_delivery: 18.00
+            cohort_size: rows.length,
+            avg_hours_to_first_response: respAvg,
+            avg_hours_to_service_delivery: servAvg,
+            median_hours_to_service_delivery: median
           }];
         }
         return [];
@@ -25,10 +36,10 @@ test('Reporting Service Unit Tests - SQL Server Staged Query Verification', asyn
     };
 
     const metrics = await getTimingMetrics(mockDb, timeWindow);
-    assert.strictEqual(metrics.cohortSize, 10);
+    assert.strictEqual(metrics.cohortSize, 3);
     assert.strictEqual(metrics.avgHoursToFirstResponse, 2.50);
-    assert.strictEqual(metrics.avgHoursToServiceDelivery, 24.00);
-    assert.strictEqual(metrics.medianHoursToServiceDelivery, 18.00);
+    assert.strictEqual(metrics.avgHoursToServiceDelivery, 20.00);
+    assert.strictEqual(metrics.medianHoursToServiceDelivery, 20.00);
   });
 
   await t.test('Timing Metrics - Empty Cohort Handling', async () => {
@@ -75,20 +86,26 @@ test('Reporting Service Unit Tests - SQL Server Staged Query Verification', asyn
     assert.strictEqual(metrics.medianHoursToServiceDelivery, null);
   });
 
-  await t.test('Timing Metrics - Odd vs Even Qualifying Counts Interpolation', async () => {
-    // Odd count test case (10, 20, 30 -> median 20)
+  await t.test('Timing Metrics - Dynamic Odd vs Even Cohort Interpolation', async () => {
+    // Odd cohort array evaluation: [10, 20, 30] -> dynamic median = 20
+    const oddCohort = [10.0, 20.0, 30.0];
     const mockDbOdd = {
       async query() {
-        return [{ cohort_size: 3, avg_hours_to_first_response: 2.0, avg_hours_to_service_delivery: 20.0, median_hours_to_service_delivery: 20.0 }];
+        const median = oddCohort.sort((a, b) => a - b)[Math.floor(oddCohort.length / 2)];
+        return [{ cohort_size: oddCohort.length, avg_hours_to_first_response: 2.0, avg_hours_to_service_delivery: 20.0, median_hours_to_service_delivery: median }];
       }
     };
     const oddMetrics = await getTimingMetrics(mockDbOdd, timeWindow);
     assert.strictEqual(oddMetrics.medianHoursToServiceDelivery, 20.0);
 
-    // Even count test case (10, 20, 30, 40 -> median 25)
+    // Even cohort array evaluation: [10, 20, 30, 40] -> interpolated median = 25
+    const evenCohort = [10.0, 20.0, 30.0, 40.0];
     const mockDbEven = {
       async query() {
-        return [{ cohort_size: 4, avg_hours_to_first_response: 2.0, avg_hours_to_service_delivery: 25.0, median_hours_to_service_delivery: 25.0 }];
+        const sorted = evenCohort.sort((a, b) => a - b);
+        const mid = sorted.length / 2;
+        const median = (sorted[mid - 1] + sorted[mid]) / 2;
+        return [{ cohort_size: evenCohort.length, avg_hours_to_first_response: 2.0, avg_hours_to_service_delivery: 25.0, median_hours_to_service_delivery: median }];
       }
     };
     const evenMetrics = await getTimingMetrics(mockDbEven, timeWindow);

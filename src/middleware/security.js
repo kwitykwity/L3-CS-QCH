@@ -49,11 +49,13 @@ export function formatSafeError(err, env = process.env) {
   const isProd = env.NODE_ENV === 'production';
   const statusCode = err.statusCode || err.status || 500;
 
-  if (isProd && statusCode >= 500) {
+  if (isProd) {
     if (statusCode === 503) {
       return { error: 'Service Unavailable', statusCode: 503 };
     }
-    return { error: 'Internal Server Error', statusCode: 500 };
+    if (statusCode >= 500) {
+      return { error: 'Internal Server Error', statusCode: 500 };
+    }
   }
 
   return {
