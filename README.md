@@ -4,8 +4,10 @@ QCH Connect - L3 Capstone Project
 
 ## Database
 
-Database schema and migrations are added through their own reviewed pull
-requests, separate from the application scaffold.
+The database schema, migrations, and synthetic development seed live in
+[`db/`](db/README.md), which explains the run order and how to apply them.
+Changes to them go through their own reviewed pull requests, separate from
+application code.
 
 Production Azure SQL is owned by QCH and is provided and configured through
 QCH IT. Database connection details, credentials, and secrets must never be
