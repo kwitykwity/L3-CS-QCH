@@ -36,7 +36,11 @@
 //   getReferralBySubmissionId(submissionId) -> referral row | null
 //   insertReferral(row) -> row with referralId (permanent) and createdAt (UTC)
 //       Throws DuplicateSubmissionError when the submission_id unique
-//       constraint rejects the insert.
+//       constraint rejects the insert. The Azure SQL store must translate
+//       only that violation (uq_referrals_submission, error 2627/2601 naming
+//       that index) into DuplicateSubmissionError; every other constraint or
+//       database error propagates unchanged, so it is never mistaken for a
+//       safe retry.
 //   appendAuditEvent({ entityType, entityId, action, actorUserId,
 //                      before, after, correlationId })
 //       Written in the same transaction as the change it records. The store
