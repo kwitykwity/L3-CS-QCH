@@ -33,13 +33,18 @@ import { stageOf } from './stage.js';
 export const EXPLANATION_MAX = 1000; // dbo.referrals.not_appropriate_explanation NVARCHAR(1000)
 const CONTROL_CHARS = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
 
-// Returns { ok: true, value } or { ok: false, fields }.
+// Returns { ok: true, value }, { ok: false, fields } naming allowlisted
+// fields only, or { ok: false, unexpectedField: true } for a property
+// outside the allowlist, whose name is never echoed (PRD 10.4, 15.4).
+//
+// explanation: omitted, null, '' or whitespace-only all mean "no
+// explanation". Any other non-string (number, boolean, object, array) is
+// an error, never silently dropped.
 export function validateResponse(body) {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) return { ok: false, fields: [] };
 
   const allowed = new Set(['decision', 'reasonId', 'explanation']);
-  const unknown = Object.keys(body).filter((k) => !allowed.has(k));
-  if (unknown.length > 0) return { ok: false, fields: unknown.sort() };
+  if (Object.keys(body).some((k) => !allowed.has(k))) return { ok: false, unexpectedField: true };
 
   const { decision } = body;
   if (decision === 'ACCEPTED') {
@@ -56,11 +61,17 @@ export function validateResponse(body) {
   if (reasonId === null) fields.push('reasonId');
 
   let explanation = null;
-  if (body.explanation !== undefined && body.explanation !== null && body.explanation !== '') {
-    const text = typeof body.explanation === 'string' ? body.explanation.trim() : '';
-    if (text.length === 0) explanation = null;
-    else if (text.length > EXPLANATION_MAX || CONTROL_CHARS.test(text)) fields.push('explanation');
-    else explanation = text;
+  if (body.explanation !== undefined && body.explanation !== null) {
+    if (typeof body.explanation !== 'string') {
+      fields.push('explanation');
+    } else if (body.explanation.length > EXPLANATION_MAX) {
+      // Counted as sent, like referral fields, so padding cannot exceed it.
+      fields.push('explanation');
+    } else {
+      const text = body.explanation.trim();
+      if (text.length > 0 && CONTROL_CHARS.test(text)) fields.push('explanation');
+      else explanation = text.length > 0 ? text : null;
+    }
   }
 
   if (fields.length > 0) return { ok: false, fields };
@@ -89,7 +100,11 @@ export function createResponseService({ store, allowDemoGrants = false }) {
     if (!Number.isSafeInteger(referralId) || referralId <= 0) throw referralErrors.referralNotFound();
 
     const validation = validateResponse(body);
-    if (!validation.ok) throw referralErrors.invalidRequest(validation.fields);
+    if (!validation.ok) {
+      throw validation.unexpectedField
+        ? referralErrors.unexpectedField()
+        : referralErrors.invalidRequest(validation.fields);
+    }
     const request = validation.value;
 
     return store.withTransaction(async (tx) => {
@@ -99,8 +114,12 @@ export function createResponseService({ store, allowDemoGrants = false }) {
       const row = await tx.getReferralById(referralId);
       if (!row) throw referralErrors.referralNotFound();
 
-      // 2. Authorization for this resource and action.
-      const grants = await store.getActiveGrants(userId);
+      // 2. Authorization for this resource and action. Grants and the
+      //    reason are read through the transaction with locking reads, so
+      //    a revocation or reason discontinuation that starts now waits
+      //    until this response commits or rolls back (see the store
+      //    contract); one that committed earlier is seen here and refuses.
+      const grants = await tx.getActiveGrants(userId);
       const access = referralAccess(userId, row, receivingProgramIds(grants, { allowDemoGrants }));
       const canRespond = programIdsWithCapability(grants, RESPOND, { allowDemoGrants }).has(row.receivingProgramId);
       if (!canRespond) {
@@ -112,7 +131,7 @@ export function createResponseService({ store, allowDemoGrants = false }) {
 
       let reason = null;
       if (request.decision === 'NOT_APPROPRIATE') {
-        reason = await store.getNotAppropriateReason(request.reasonId);
+        reason = await tx.getNotAppropriateReason(request.reasonId);
         if (!reason || reason.lifecycleStatus !== 'ACTIVE') throw referralErrors.reasonNotSelectable();
         if (reason.requiresExplanation && !request.explanation) throw referralErrors.invalidRequest(['explanation']);
       }
@@ -143,7 +162,10 @@ export function createResponseService({ store, allowDemoGrants = false }) {
         correlationId,
       });
 
-      // 6. Confirmed state (PRD 13.3).
+      // 6. Confirmed state (PRD 13.3), minimum necessary (PRD 10.5): the
+      //    decision the server recorded, never participant data. Responding
+      //    does not grant view access; the referral itself is still read
+      //    through GET /api/referrals/:id with its own check.
       return {
         status: 'RESPONDED',
         referral: {
@@ -154,7 +176,7 @@ export function createResponseService({ store, allowDemoGrants = false }) {
           stage: stageOf(updated),
           firstRespondedAt: updated.firstRespondedAt,
           notAppropriateReason: reason ? { reasonId: reason.reasonId, label: reason.label } : null,
-          notAppropriateExplanation: updated.notAppropriateExplanation,
+          hasExplanation: Boolean(updated.notAppropriateExplanation),
         },
       };
     });

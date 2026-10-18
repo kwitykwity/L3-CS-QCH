@@ -72,6 +72,19 @@
 //       requiresExplanation, displayOrder }] from dbo.not_appropriate_reasons
 //       where lifecycle_status = 'ACTIVE', ordered by display_order.
 //   getNotAppropriateReason(reasonId) -> reason (any lifecycle) | null
+//   tx.getActiveGrants(userId), tx.getNotAppropriateReason(reasonId)
+//       Locking reads, held until the response transaction ends (same rule
+//       as "Consistency of reference reads" above). A grant revocation
+//       (UPDATE dbo.user_grants SET revoked_at = ...) or a reason lifecycle
+//       change on a row the response has read waits until the response
+//       commits or rolls back, so a response never commits on a grant or
+//       reason that was already revoked or discontinued. In Azure SQL:
+//         SELECT ... FROM dbo.user_grants WITH (REPEATABLEREAD)
+//           WHERE user_id = @userId AND revoked_at IS NULL
+//         SELECT ... FROM dbo.not_appropriate_reasons WITH (REPEATABLEREAD)
+//           WHERE reason_id = @reasonId
+//       in the same transaction as the conditional UPDATE below. (A grant
+//       added during the response is not blocked and does not need to be.)
 //   tx.getReferralById(referralId)
 //   tx.recordFirstResponse({ referralId, decision, notAppropriateReasonId,
 //       notAppropriateExplanation, respondedByUserId })
@@ -209,6 +222,9 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
         return currentRow(referralId);
       },
 
+      getActiveGrants: lockingRead('grants', (userId) => activeGrants(userId)),
+      getNotAppropriateReason: lockingRead('reason', (reasonId) => reasonById(reasonId)),
+
       async recordFirstResponse({ referralId, decision, notAppropriateReasonId = null, notAppropriateExplanation = null, respondedByUserId }) {
         // Like UPDATE ... WHERE response_status = 'AWAITING_RESPONSE': a
         // second responder waits for the first transaction, then finds the
@@ -277,6 +293,12 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
 
   const grants = (seed.grants ?? []).map((g) => ({ revokedAt: null, ...g }));
   const reasons = (seed.notAppropriateReasons ?? []).map((r) => ({ requiresExplanation: false, lifecycleStatus: 'ACTIVE', ...r }));
+  const activeGrants = (userId) =>
+    grants.filter((g) => g.userId === userId && g.revokedAt == null).map((g) => ({ ...g }));
+  const reasonById = (reasonId) => {
+    const r = reasons.find((x) => x.reasonId === reasonId);
+    return r ? { ...r } : null;
+  };
 
   // Order: createdAt DESC, referralId DESC. `after` is a cursor position
   // { createdAt, referralId }; only rows strictly after it are returned.
@@ -298,7 +320,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     getReferralBySubmissionId,
 
     async getActiveGrants(userId) {
-      return grants.filter((g) => g.userId === userId && g.revokedAt == null).map((g) => ({ ...g }));
+      return activeGrants(userId);
     },
 
     async getReferralById(referralId) {
@@ -322,8 +344,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     },
 
     async getNotAppropriateReason(reasonId) {
-      const r = reasons.find((x) => x.reasonId === reasonId);
-      return r ? { ...r } : null;
+      return reasonById(reasonId);
     },
 
     // Changes to rows a referral transaction may have read wait for that
@@ -337,6 +358,18 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     _setDepartmentStatus: (departmentId, status) =>
       locks.exclusive(`department:${departmentId}`, async () => base._setDepartmentStatus(departmentId, status)),
     _afterLockingRead(fn) { afterLockingRead = fn; },
+    // Revokes a user's grants for one capability, waiting for any response
+    // transaction that has read that user's grants (like an UPDATE).
+    _revokeGrants: (userId, permission) =>
+      locks.exclusive(`grants:${userId}`, async () => {
+        for (const g of grants) {
+          if (g.userId === userId && g.permission === permission && g.revokedAt == null) g.revokedAt = now().toISOString();
+        }
+      }),
+    _setReasonStatus: (reasonId, lifecycleStatus) =>
+      locks.exclusive(`reason:${reasonId}`, async () => {
+        reasons.find((r) => r.reasonId === reasonId).lifecycleStatus = lifecycleStatus;
+      }),
     _referrals: referrals,
     _referralAuditEvents: auditEvents,
     _failNextAudit() { failNextAudit = true; },

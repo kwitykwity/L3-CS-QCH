@@ -123,7 +123,9 @@ describe('Awaiting Response -> Not Appropriate', () => {
     assert.equal(result.referral.decision, 'NOT_APPROPRIATE');
     assert.equal(result.referral.stage, 'COMPLETE');
     assert.deepEqual(result.referral.notAppropriateReason, { reasonId: 2, label: 'Program currently unavailable' });
-    assert.equal(result.referral.notAppropriateExplanation, SECRET_EXPLANATION, 'trimmed');
+    assert.equal(result.referral.hasExplanation, true);
+    assert.ok(!JSON.stringify(result).includes('XYZZY'), 'the confirmation does not echo the explanation (PRD 10.5)');
+    assert.equal(store._referrals[0].notAppropriateExplanation, SECRET_EXPLANATION, 'stored trimmed');
     assert.equal(store._referrals[0].notAppropriateReasonId, 2);
   });
 
@@ -187,10 +189,12 @@ describe('request validation (allowlist)', () => {
     ['string reasonId', { decision: 'NOT_APPROPRIATE', reasonId: '2' }, ['reasonId']],
     ['explanation over 1000 characters', notAppropriate({ explanation: 'x'.repeat(1001) }), ['explanation']],
     ['control characters in explanation', notAppropriate({ explanation: 'bad\u0000text' }), ['explanation']],
-    ['client-set responseStatus', { decision: 'ACCEPTED', responseStatus: 'RESPONDED' }, ['responseStatus']],
-    ['client-set timestamp', { decision: 'ACCEPTED', firstRespondedAt: '2020-01-01T00:00:00Z' }, ['firstRespondedAt']],
-    ['client-set responder', { decision: 'ACCEPTED', respondedByUserId: 1 }, ['respondedByUserId']],
-    ['client-set user', { decision: 'ACCEPTED', userId: 1 }, ['userId']],
+    ['numeric explanation', notAppropriate({ explanation: 42 }), ['explanation']],
+    ['zero explanation', notAppropriate({ explanation: 0 }), ['explanation']],
+    ['boolean explanation', notAppropriate({ explanation: false }), ['explanation']],
+    ['object explanation', notAppropriate({ explanation: { text: 'x' } }), ['explanation']],
+    ['array explanation', notAppropriate({ explanation: ['x'] }), ['explanation']],
+    ['padded explanation over 1000 as sent', notAppropriate({ explanation: ` ${'x'.repeat(1000)}` }), ['explanation']],
   ]) {
     test(`rejects ${label}`, () => {
       const result = validateResponse(body);
@@ -198,6 +202,49 @@ describe('request validation (allowlist)', () => {
       assert.deepEqual(result.fields, fields);
     });
   }
+
+  for (const [label, explanation] of [['omitted', undefined], ['null', null], ['empty', ''], ['whitespace-only', ' \n\t ']]) {
+    test(`an ${label} explanation means "no explanation"`, () => {
+      const body = notAppropriate();
+      if (explanation !== undefined) body.explanation = explanation;
+      const result = validateResponse(body);
+      assert.equal(result.ok, true);
+      assert.equal(result.value.explanation, null);
+    });
+  }
+
+  for (const [label, body] of [
+    ['client-set responseStatus', { decision: 'ACCEPTED', responseStatus: 'RESPONDED' }],
+    ['client-set timestamp', { decision: 'ACCEPTED', firstRespondedAt: '2020-01-01T00:00:00Z' }],
+    ['client-set responder', { decision: 'ACCEPTED', respondedByUserId: 1 }],
+    ['client-set user', { decision: 'ACCEPTED', userId: 1 }],
+    ['sensitive text as a property name', { decision: 'ACCEPTED', 'Synthetic Person Omega 555-0199': 1 }],
+  ]) {
+    test(`rejects ${label} without naming it`, () => {
+      const result = validateResponse(body);
+      assert.deepEqual(result, { ok: false, unexpectedField: true });
+    });
+  }
+
+  test('HTTP: an unknown property is refused with a fixed error that never echoes its name', async () => {
+    const { store, id } = await withReferral();
+    const app = createApp({ referralStore: store, affiliationStore: store, resolveIdentity: () => ({ userId: RESPONDER }) });
+    const res = await request(app).post(`/api/referrals/${id}/response`).send({ decision: 'ACCEPTED', 'Synthetic Person Omega 555-0199': 1 });
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body, { error: 'The request contains a field that is not allowed.', code: 'UNEXPECTED_FIELD' });
+    assert.ok(!res.text.includes('Omega'));
+    assert.equal(store._referrals[0].responseStatus, 'AWAITING_RESPONSE');
+  });
+
+  test('HTTP: a wrongly typed explanation is a 400 naming only the field', async () => {
+    const { store, id } = await withReferral();
+    const app = createApp({ referralStore: store, affiliationStore: store, resolveIdentity: () => ({ userId: RESPONDER }) });
+    const res = await request(app).post(`/api/referrals/${id}/response`).send(notAppropriate({ explanation: { nested: 'XYZZY' } }));
+    assert.equal(res.status, 400);
+    assert.deepEqual(res.body.fields, ['explanation']);
+    assert.ok(!res.text.includes('XYZZY'));
+    assert.equal(store._referrals[0].responseStatus, 'AWAITING_RESPONSE');
+  });
 
   test('validation errors never echo the explanation', async () => {
     const { id, responses } = await withReferral();
@@ -411,5 +458,143 @@ describe('HTTP', () => {
     const res = await request(appFor(store, RESPONDER)).get('/api/referrals/not-appropriate-reasons');
     assert.equal(res.status, 200);
     assert.equal(res.body.reasons.length, 6);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR #11 review: consistent grants and reasons during a response (PRD 3.3,
+// 9.3), response-only permission (PRD 3.3, 10.5), integration with #10.
+
+describe('grants and reasons stay consistent during a response', () => {
+  function pauseAfterRead(store, kind, id) {
+    let reached;
+    let release;
+    const reachedP = new Promise((r) => { reached = r; });
+    const gate = new Promise((r) => { release = r; });
+    let done = false;
+    store._afterLockingRead(async (k, i) => {
+      if (!done && k === kind && i === id) { done = true; reached(); await gate; }
+    });
+    return { reached: reachedP, release };
+  }
+  async function stillPending(promise) {
+    let settled = false;
+    promise.then(() => { settled = true; }, () => { settled = true; });
+    for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+    return !settled;
+  }
+
+  test('a revocation that starts during a response waits; the response commits on the grant it checked', async () => {
+    const { store, id, responses } = await withReferral();
+    const pause = pauseAfterRead(store, 'grants', RESPONDER);
+    const responding = responses.respond(RESPONDER, id, accept);
+    await pause.reached;
+
+    const revoking = store._revokeGrants(RESPONDER, 'RESPOND_TO_REFERRAL');
+    assert.ok(await stillPending(revoking), 'revocation waits for the response transaction');
+    pause.release();
+    assert.equal((await responding).status, 'RESPONDED');
+    await revoking;
+
+    // From now on the revocation applies.
+    const next = await withReferral();
+    await next.store._revokeGrants(RESPONDER, 'RESPOND_TO_REFERRAL');
+    await assert.rejects(next.responses.respond(RESPONDER, next.id, accept), (err) => err.code === 'NOT_AUTHORIZED');
+  });
+
+  test('a revocation committed before the grants are read refuses the response; nothing changes', async () => {
+    const { store, id, responses } = await withReferral();
+    const pause = pauseAfterRead(store, 'user', RESPONDER); // before the grant read
+    const responding = responses.respond(RESPONDER, id, accept);
+    await pause.reached;
+    await store._revokeGrants(RESPONDER, 'RESPOND_TO_REFERRAL'); // not blocked: grants not read yet
+    pause.release();
+    await assert.rejects(responding, (err) => err.code === 'NOT_AUTHORIZED');
+    assert.equal(store._referrals[0].responseStatus, 'AWAITING_RESPONSE');
+    assert.equal(store._referralAuditEvents.filter((e) => e.action !== 'CREATED').length, 0);
+  });
+
+  test('discontinuing a reason during a response waits; later responses cannot use it', async () => {
+    const { store, id, responses } = await withReferral();
+    const pause = pauseAfterRead(store, 'reason', 2);
+    const responding = responses.respond(RESPONDER, id, notAppropriate());
+    await pause.reached;
+
+    const discontinuing = store._setReasonStatus(2, 'DISCONTINUED');
+    assert.ok(await stillPending(discontinuing));
+    pause.release();
+    assert.equal((await responding).referral.notAppropriateReason.reasonId, 2);
+    await discontinuing;
+
+    const next = await withReferral();
+    await next.store._setReasonStatus(2, 'DISCONTINUED');
+    await assert.rejects(next.responses.respond(RESPONDER, next.id, notAppropriate()), (err) => err.code === 'REASON_NOT_SELECTABLE');
+  });
+
+  test('a reason discontinued before it is read is refused; nothing changes', async () => {
+    const { store, id, responses } = await withReferral();
+    const pause = pauseAfterRead(store, 'grants', RESPONDER); // before the reason read
+    const responding = responses.respond(RESPONDER, id, notAppropriate());
+    await pause.reached;
+    await store._setReasonStatus(2, 'DISCONTINUED');
+    pause.release();
+    await assert.rejects(responding, (err) => err.code === 'REASON_NOT_SELECTABLE');
+    assert.equal(store._referrals[0].responseStatus, 'AWAITING_RESPONSE');
+  });
+
+  test('a rolled-back response releases its locks', async () => {
+    const { store, id, responses } = await withReferral();
+    const pause = pauseAfterRead(store, 'grants', RESPONDER);
+    store._failNextAudit();
+    const responding = responses.respond(RESPONDER, id, accept);
+    await pause.reached;
+    const revoking = store._revokeGrants(RESPONDER, 'RESPOND_TO_REFERRAL');
+    pause.release();
+    await assert.rejects(responding);
+    await revoking;
+    assert.equal(store._referrals[0].responseStatus, 'AWAITING_RESPONSE');
+    assert.equal((await store.getActiveGrants(RESPONDER)).some((gr) => gr.permission === 'RESPOND_TO_REFERRAL'), false);
+  });
+});
+
+describe('response-only permission (PRD 3.3, 10.5)', () => {
+  const appFor = (store, userId) => createApp({ referralStore: store, affiliationStore: store, resolveIdentity: () => ({ userId }) });
+
+  test('the response returns only confirmation data, and responding grants no view access', async () => {
+    const { store, id } = await withReferral();
+    const res = await request(appFor(store, RESPOND_ONLY)).post(`/api/referrals/${id}/response`)
+      .send(notAppropriate({ explanation: SECRET_EXPLANATION }));
+    assert.equal(res.status, 200);
+    assert.deepEqual(Object.keys(res.body).sort(), ['referral', 'status']);
+    assert.deepEqual(Object.keys(res.body.referral).sort(), [
+      'decision', 'firstRespondedAt', 'hasExplanation', 'notAppropriateReason', 'referralId', 'responseStatus', 'serviceOutcome', 'stage',
+    ]);
+    for (const secret of ['Synthetic Person', 'Synthetic need', 'XYZZY']) assert.ok(!res.text.includes(secret), secret);
+
+    // Still no view: the referral itself, the queue and the detail stay closed.
+    assert.equal((await request(appFor(store, RESPOND_ONLY)).get(`/api/referrals/${id}`)).status, 404);
+    assert.deepEqual((await request(appFor(store, RESPOND_ONLY)).get('/api/referrals/received')).body.referrals, []);
+  });
+});
+
+describe('integration with PR #10 (safe IDs, demo guard)', () => {
+  const appFor = (store, userId, extra = {}) => createApp({ referralStore: store, affiliationStore: store, resolveIdentity: () => ({ userId }), ...extra });
+
+  test('response route refuses IDs beyond the safe integer range before touching the store', async () => {
+    const { store } = await withReferral();
+    let called = false;
+    const spy = { ...store, withTransaction: async () => { called = true; return null; } };
+    const res = await request(appFor(spy, RESPONDER)).post('/api/referrals/9007199254740993/response').send(accept);
+    assert.equal(res.status, 404);
+    assert.equal(called, false);
+  });
+
+  test('DEMO respond grants count only in development/test, and the app refuses them elsewhere', async () => {
+    const { store, id } = await withReferral();
+    assert.equal((await request(appFor(store, DEMO)).post(`/api/referrals/${id}/response`).send(accept)).status, 404, 'off by default');
+    assert.throws(() => appFor(store, DEMO, { allowDemoGrants: true, nodeEnv: 'production' }), /DEMO grants/);
+    assert.throws(() => appFor(store, DEMO, { allowDemoGrants: true }), /DEMO grants/);
+    const res = await request(appFor(store, DEMO, { allowDemoGrants: true, nodeEnv: 'test' })).post(`/api/referrals/${id}/response`).send(accept);
+    assert.equal(res.status, 200);
   });
 });

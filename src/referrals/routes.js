@@ -134,8 +134,9 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
 
   router.post('/:referralId/response', async (req, res) => {
     readQuery(req.query, []);
-    if (!POSITIVE_INT.test(req.params.referralId)) throw referralErrors.referralNotFound();
-    res.json(await responses.respond(req.userId, Number(req.params.referralId), req.body, {
+    const referralId = toId(req.params.referralId);
+    if (referralId === null) throw referralErrors.referralNotFound();
+    res.json(await responses.respond(req.userId, referralId, req.body, {
       correlationId: req.correlationId,
     }));
   });
