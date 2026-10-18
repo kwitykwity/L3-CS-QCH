@@ -112,17 +112,22 @@ How it behaves:
 - Each delivery is one `notification_deliveries` row: `PENDING`, then `SENT`
   or `FAILED`, with IDs, counts, timestamps, a failure category, and a
   correlation ID only (PRD 11.5).
-- `THROTTLED`, `UNAVAILABLE`, `TIMEOUT`, and `INTERNAL_ERROR` failures stay
+- `THROTTLED`, `UNAVAILABLE`, `TIMEOUT`, `CLAIM_EXPIRED`, and `INTERNAL_ERROR` failures stay
   `PENDING` and are retried by `retryPendingDeliveries()`, at least
   `retryAfterMs` apart (default 60s), up to `maxAttempts` (default 3). Every
   other failure ends `FAILED` at once.
 - Attempt ownership: claiming an attempt bumps `attempt_count`, and every
   result is written only while the row is still at that attempt. An older
   attempt can never overwrite a newer one's result.
-- Each send is cut off after `sendTimeoutMs` (default 30s), which must be
-  shorter than `retryAfterMs`. So a retry can only claim the row after the
-  previous attempt has finished, timed out, or died. A timed-out send's late
-  result is ignored.
+- The whole claim-to-send window is bounded. An attempt may only start a
+  send before `claim start + retryAfterMs - sendTimeoutMs`, and only if it
+  still owns the row (checked right before sending). The send itself is cut
+  off after `sendTimeoutMs` (default 30s, must be shorter than
+  `retryAfterMs`). So a send always ends before the claim's lease does, and
+  an expired or superseded attempt never starts a send. If the recipient
+  lookup stalls past that point, nothing is sent and the attempt records
+  `CLAIM_EXPIRED` (retried normally). A timed-out send's late result is
+  ignored.
 - Interrupted attempts: if our own step fails after the claim (recipient
   lookup, status write), the attempt is recorded as `INTERNAL_ERROR` and
   retried, or `FAILED` on the last attempt. If even that write fails, the
@@ -137,8 +142,9 @@ How it behaves:
   `test`.
 
 Delivery guarantee: **at least once while attempts remain, not exactly
-once.** The claim stops two workers sending the same attempt, but the
-Program can still get a second copy when:
+once.** Two attempts are never sending at the same time, and an attempt
+that lost its claim never starts a send. The only remaining duplicates come
+from provider-acceptance uncertainty, when:
 
 - a send times out after the mail provider had already accepted it (the
   provider's answer is unknown, so we retry), or

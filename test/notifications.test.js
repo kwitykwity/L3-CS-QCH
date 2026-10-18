@@ -573,3 +573,116 @@ test('an error name carrying sensitive text is logged as OtherError, never verba
   assert.ok(logger.lines.every((l) => !l.line.includes(PARTICIPANT.participantName)
     && !l.line.includes(PARTICIPANT.contactValue)));
 });
+
+// ---------------------------------------------------------------------------
+// Re-review fix: bound the whole claim-to-send window (PRD 11.6)
+// ---------------------------------------------------------------------------
+
+// Wraps a store so the FIRST recipient lookup waits until the test releases it.
+function pausedFirstLookup(store) {
+  let reached; let release;
+  const reachedP = new Promise((r) => { reached = r; });
+  const gate = new Promise((r) => { release = r; });
+  let calls = 0;
+  const wrapped = {
+    ...store,
+    async getRecipientForReferral(referralId) {
+      calls += 1;
+      if (calls === 1) { reached(); await gate; }
+      return store.getRecipientForReferral(referralId);
+    },
+  };
+  return { wrapped, reachedP, release };
+}
+
+test('stalled lookup: attempt 1 pauses past its lease, attempt 2 sends, released attempt 1 sends nothing', async () => {
+  const { store, clock: c } = setup();
+  const sender = scriptedSender();
+  const logger = captureLogger();
+  const { wrapped, reachedP, release } = pausedFirstLookup(store);
+  const service = createNotificationService({ store: wrapped, sender, logger, now: c.now });
+
+  const first = service.notifyReferralCommitted({ referralId: 101 });
+  await reachedP; // attempt 1 has claimed and is stuck in the lookup
+
+  c.advance(60_001); // past attempt 1's lease
+  const counts = await service.retryPendingDeliveries();
+  assert.equal(counts.SENT, 1, 'attempt 2 sends');
+
+  release(); // attempt 1 resumes
+  const result = await first;
+  assert.equal(result.outcome, 'SENT', 'reports the real state');
+  assert.equal(sender.calls, 1, 'no additional send');
+  const delivery = await store.getDeliveryByReferral(101, NEW_REFERRAL);
+  assert.equal(delivery.status, 'SENT');
+  assert.equal(delivery.attemptCount, 2);
+  assert.ok(logger.lines.some((l) => l.line.includes('event=claim_expired_before_send') && l.line.includes('attempt=1')));
+});
+
+test('stalled lookup past the send deadline with no retry yet: nothing sent, CLAIM_EXPIRED, later retry sends once', async () => {
+  const { store, clock: c } = setup();
+  const sender = scriptedSender();
+  const { wrapped, reachedP, release } = pausedFirstLookup(store);
+  const service = createNotificationService({ store: wrapped, sender, logger: captureLogger(), now: c.now });
+
+  const first = service.notifyReferralCommitted({ referralId: 101 });
+  await reachedP;
+  c.advance(30_001); // past claim + retryAfterMs - sendTimeoutMs (60s - 30s)
+  release();
+  assert.equal((await first).outcome, 'PENDING');
+  assert.equal(sender.calls, 0, 'an expired claim never starts a send');
+  assert.equal((await store.getDeliveryByReferral(101, NEW_REFERRAL)).failureCategory, FAILURE_CATEGORIES.CLAIM_EXPIRED);
+
+  c.advance(60_001);
+  await service.retryPendingDeliveries();
+  assert.equal(sender.calls, 1);
+  assert.equal((await store.getDeliveryByReferral(101, NEW_REFERRAL)).status, 'SENT');
+});
+
+test('a lookup that finishes before the send deadline still sends normally', async () => {
+  const { store, clock: c } = setup();
+  const sender = scriptedSender();
+  const { wrapped, reachedP, release } = pausedFirstLookup(store);
+  const service = createNotificationService({ store: wrapped, sender, logger: captureLogger(), now: c.now });
+
+  const first = service.notifyReferralCommitted({ referralId: 101 });
+  await reachedP;
+  c.advance(29_000);
+  release();
+  assert.equal((await first).outcome, 'SENT');
+  assert.equal(sender.calls, 1);
+});
+
+test('an attempt superseded before its deadline never starts a send', async () => {
+  const { store, clock: c } = setup();
+  const sender = scriptedSender();
+  const { wrapped, reachedP, release } = pausedFirstLookup(store);
+  const logger = captureLogger();
+  const service = createNotificationService({ store: wrapped, sender, logger, now: c.now });
+
+  const first = service.notifyReferralCommitted({ referralId: 101 });
+  await reachedP;
+  // Another worker claims attempt 2 (as if clocks disagreed about the lease).
+  const d = await store.getDeliveryByReferral(101, NEW_REFERRAL);
+  await store.claimDeliveryAttempt({ deliveryId: d.deliveryId, expectedAttemptCount: 1 });
+  release();
+  await first;
+  assert.equal(sender.calls, 0);
+  assert.ok(logger.lines.some((l) => l.line.includes('event=superseded_before_send')));
+});
+
+test('a claim that expires on the last attempt ends FAILED / CLAIM_EXPIRED, not stuck PENDING', async () => {
+  const { store, clock: c } = setup({ maxAttempts: 1 });
+  const sender = scriptedSender();
+  const { wrapped, reachedP, release } = pausedFirstLookup(store);
+  const service = createNotificationService({ store: wrapped, sender, logger: captureLogger(), now: c.now, maxAttempts: 1 });
+
+  const first = service.notifyReferralCommitted({ referralId: 101 });
+  await reachedP;
+  c.advance(30_001);
+  release();
+  assert.equal((await first).outcome, 'FAILED');
+  const delivery = await store.getDeliveryByReferral(101, NEW_REFERRAL);
+  assert.equal(delivery.failureCategory, FAILURE_CATEGORIES.CLAIM_EXPIRED);
+  assert.equal(sender.calls, 0);
+});

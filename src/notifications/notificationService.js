@@ -20,10 +20,17 @@
 //   token: every completion (SENT, retry later, FAILED) is a conditional
 //   write that only succeeds while attempt_count still equals it. An older
 //   attempt can never overwrite a newer attempt's result.
-// - A send is bounded by sendTimeoutMs, which must be shorter than
-//   retryAfterMs. last_attempt_at + retryAfterMs is the claim's lease: a
-//   retry can only claim the delivery after the lease ends, by which time
-//   the earlier attempt has finished, timed out, or died.
+// - last_attempt_at + retryAfterMs is the claim's lease: a retry can only
+//   claim the delivery after the lease ends.
+// - The whole claim-to-send window is bounded, not just the send. An
+//   attempt may only START a send before its send deadline:
+//     claim start + retryAfterMs - sendTimeoutMs
+//   and only while it still owns the row (re-checked just before sending).
+//   The send itself is cut off after sendTimeoutMs. So a send always ends
+//   before the lease does, and an expired or superseded attempt never
+//   starts a send. If the deadline has passed (for example the recipient
+//   lookup stalled), the attempt sends nothing and records CLAIM_EXPIRED,
+//   which is retried normally.
 // - A send that outlives its timeout is abandoned. Its late result is
 //   ignored and never written.
 //
@@ -37,10 +44,12 @@
 //   Nothing is left PENDING forever.
 //
 // Delivery guarantee: at least once while attempts remain, never exactly
-// once. The claim stops two workers sending the same attempt, but a second
-// copy is still possible when (a) a send times out after the provider
-// already accepted it, or (b) the provider accepts it and we cannot record
-// SENT. The message is generic, so a duplicate only tells the Program twice.
+// once. Two attempts can never be sending at the same time, and an attempt
+// that lost its claim never starts a send. A second copy is still possible
+// only through provider-acceptance uncertainty: (a) a send times out after
+// the provider already accepted it, or (b) the provider accepts it and we
+// cannot record SENT. The message is generic, so such a duplicate only
+// tells the Program twice.
 
 import { buildNewReferralMessage, NEW_REFERRAL } from './content.js';
 import {
@@ -118,6 +127,10 @@ export function createNotificationService({
   }
 
   async function attemptDelivery(delivery) {
+    // Taken BEFORE the claim, so it is never later than the stored
+    // last_attempt_at: the send deadline errs on the early side.
+    const claimStartedMs = now().getTime();
+    const sendDeadlineMs = claimStartedMs + retryAfterMs - sendTimeoutMs;
     const claimed = await store.claimDeliveryAttempt({
       deliveryId: delivery.deliveryId,
       expectedAttemptCount: delivery.attemptCount,
@@ -159,6 +172,17 @@ export function createNotificationService({
     try {
       const recipient = await store.getRecipientForReferral(claimed.referralId);
       if (!recipient) return await finish('FAILED', FAILURE_CATEGORIES.NO_RECIPIENT);
+
+      // Last gate before any send: the claim must be fresh and still ours.
+      if (now().getTime() > sendDeadlineMs) {
+        log('warn', { ...base, event: 'claim_expired_before_send' });
+        return await finish(attempt < maxAttempts ? 'RETRY' : 'FAILED', FAILURE_CATEGORIES.CLAIM_EXPIRED);
+      }
+      const current = await store.getDeliveryByReferral(claimed.referralId, claimed.notificationType);
+      if (!current || current.status !== 'PENDING' || current.attemptCount !== attempt) {
+        log('warn', { ...base, event: 'superseded_before_send' });
+        return { outcome: current?.status ?? 'PENDING', deliveryId: claimed.deliveryId };
+      }
 
       const { subject, body } = buildNewReferralMessage();
       try {

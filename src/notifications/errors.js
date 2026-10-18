@@ -20,6 +20,9 @@ export const FAILURE_CATEGORIES = Object.freeze({
   // The send did not finish within sendTimeoutMs. Retried. The provider
   // may still have accepted it, so a retry can deliver a second copy.
   TIMEOUT: 'TIMEOUT',
+  // The claim got too old before the send could start (for example the
+  // recipient lookup stalled). Nothing was sent. Retried.
+  CLAIM_EXPIRED: 'CLAIM_EXPIRED',
   // Our own step failed after the claim (recipient lookup, status write).
   // Retried while attempts remain.
   INTERNAL_ERROR: 'INTERNAL_ERROR',
@@ -35,6 +38,7 @@ const TRANSIENT = new Set([
   FAILURE_CATEGORIES.THROTTLED,
   FAILURE_CATEGORIES.UNAVAILABLE,
   FAILURE_CATEGORIES.TIMEOUT,
+  FAILURE_CATEGORIES.CLAIM_EXPIRED,
   FAILURE_CATEGORIES.INTERNAL_ERROR,
 ]);
 
