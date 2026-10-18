@@ -101,6 +101,33 @@ The suite covers:
 `/health` reports availability and nothing else. Per PRD 15.3 and 9.12 it must
 never return secrets, connection strings, config values, or error details.
 
+## Guided Program Matching (GPME, card 10)
+
+| Method | Path                         | Response                                                        |
+| ------ | ---------------------------- | --------------------------------------------------------------- |
+| `GET`  | `/api/gpme/need-categories`  | `200 {"needCategories":[{needCategoryId, name}]}`               |
+| `POST` | `/api/gpme/match`            | `200` with `RESULTS` or `NO_PLAUSIBLE_MATCH`; `503` with `UNABLE_TO_MATCH` |
+
+`POST /api/gpme/match` accepts only `needCategoryIds` (required),
+`ageRange: {min, max}` (optional), and `participantZip` (optional). Anything
+else is rejected, so Notes and Referral Context can never reach matching
+(PRD 8.2). It uses POST because the inputs describe a participant and must not
+appear in a URL (PRD 5.5). Nothing is stored.
+
+The rules live in `src/gpme/matchPrograms.js` (rule version `gpme-v1`) and
+follow the GPME Decision Proposal the team approved on Oct 18:
+
+- A Program is **plausible** when every criterion passes, **possible** when
+  none fails but at least one could not be checked, and left out when one
+  fails. A fail needs a limit on file AND a participant answer outside it.
+- Missing Program information is never "no restriction" (PRD 8.10).
+- Explanations use Program facts only, never the participant's age or ZIP.
+- Order is Department name, then Program name. It never means "better match".
+- Direct Referral never calls GPME and keeps working if GPME fails (PRD 8.8).
+
+The database side (state columns, `program_service_area_zips`) is migration
+003, in its own pull request.
+
 ## Scope of this scaffold
 
 Deliberately **not** built here: database code, schema, or migrations; Azure

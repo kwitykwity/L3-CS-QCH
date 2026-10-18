@@ -4,6 +4,7 @@ import express from 'express';
 import { errorHandler } from './errorHandler.js';
 import { createAffiliationRouter } from './affiliation/routes.js';
 import { createReferralRouter } from './referrals/routes.js';
+import { createGpmeRouter } from './gpme/routes.js';
 
 const publicDir = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -18,6 +19,8 @@ const publicDir = path.join(
 // - referralStore: the referral data store (see
 //   src/referrals/memoryReferralStore.js for the contract). In production
 //   one Azure SQL store will serve as both stores.
+//   GPME (card 10) reads Program data and need categories from the
+//   affiliationStore, the Program data store.
 // - resolveIdentity(req) -> { userId } | null: supplied by the future Entra
 //   sign-in. Without one, /api routes answer 401 (fail closed).
 export function createApp({ affiliationStore, referralStore, resolveIdentity } = {}) {
@@ -35,6 +38,11 @@ export function createApp({ affiliationStore, referralStore, resolveIdentity } =
   app.use(
     '/api/referrals',
     createReferralRouter({ store: referralStore, resolveIdentity }),
+  );
+
+  app.use(
+    '/api/gpme',
+    createGpmeRouter({ store: affiliationStore, resolveIdentity }),
   );
 
   app.use(
