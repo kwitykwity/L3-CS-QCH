@@ -9,6 +9,7 @@ import { createApp } from '../src/app.js';
 import { createReferralService } from '../src/referrals/referralService.js';
 import { createMemoryReferralStore } from '../src/referrals/memoryReferralStore.js';
 import { createAffiliationService } from '../src/affiliation/affiliationService.js';
+import { LIMITS, MAX_BODY_BYTES } from '../src/referrals/validateReferral.js';
 
 const NAME = 'Synthetic Person Alpha';
 const CONTEXT = 'Synthetic context: needs evening class schedule';
@@ -247,9 +248,16 @@ describe('Submission ID idempotency', () => {
     const body = validBody();
     await service.createDirectReferral(100, body);
 
-    await rejectsWith(
+    await assert.rejects(
       service.createDirectReferral(100, { ...body, participantName: 'Synthetic Person Beta' }),
-      'SUBMISSION_ID_CONFLICT',
+      (err) => {
+        assert.equal(err.code, 'SUBMISSION_ID_CONFLICT');
+        // PRD 7.4: check the earlier attempt first; never an unconditional
+        // "start a new referral".
+        assert.doesNotMatch(err.message, /start a new referral/i);
+        assert.match(err.message, /check whether the earlier referral was received/i);
+        return true;
+      },
     );
     assert.equal(store._referrals.length, 1);
   });
@@ -364,8 +372,8 @@ describe('validation', () => {
     test(`rejects a client-supplied "${field}" field (allowlist)`, async () => {
       const store = seed();
       await assert.rejects(createReferralService({ store }).createDirectReferral(100, validBody({ [field]: 'x' })), (err) => {
-        assert.equal(err.code, 'INVALID_REQUEST');
-        assert.deepEqual(err.fields, [field]);
+        assert.equal(err.code, 'UNEXPECTED_FIELD');
+        assert.equal(err.fields, undefined, 'the property name is never echoed');
         return true;
       });
       assert.equal(store._referrals.length, 0);
@@ -429,7 +437,7 @@ describe('HTTP: POST /api/referrals', () => {
     const response = await request(appFor(store, 100)).post('/api/referrals').send(validBody({ userId: 101 }));
 
     assert.equal(response.status, 400);
-    assert.deepEqual(response.body.fields, ['userId']);
+    assert.equal(response.body.code, 'UNEXPECTED_FIELD');
     assert.equal(store._referrals.length, 0);
   });
 
@@ -517,5 +525,241 @@ describe('HTTP: GET /api/referrals/submissions/:submissionId (safe check)', () =
   test('400 for a malformed Submission ID', async () => {
     const check = await request(appFor(seed(), 100)).get('/api/referrals/submissions/not-a-uuid');
     assert.equal(check.status, 400);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// PR #8 review: request size (PRD 10.7), error privacy (10.4, 15.4),
+// consistent reference reads during creation (3.9, 9.3, 9.4).
+
+describe('request size matches the field limits (PRD 10.7)', () => {
+  const appFor = (store) => createApp({ affiliationStore: store, referralStore: store, resolveIdentity: () => ({ userId: 100 }) });
+
+  // Every text field at its maximum length, in a 3-byte UTF-8 script.
+  function maximalCjkBody() {
+    const email = `${'名'.repeat(LIMITS.contactValue - '@example.test'.length)}@example.test`;
+    return validBody({
+      participantName: '山'.repeat(LIMITS.participantName),
+      contactMethod: 'EMAIL',
+      contactValue: email,
+      referralContext: '語'.repeat(LIMITS.referralContext),
+      notes: '記'.repeat(LIMITS.notes),
+    });
+  }
+
+  // JSON with every non-ASCII code unit written as \uXXXX (6 bytes each).
+  const escapedJson = (body, space) =>
+    JSON.stringify(body, null, space).replace(/[\u0080-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+
+  const post = (app, text) =>
+    request(app).post('/api/referrals').set('Content-Type', 'application/json').send(text);
+
+  test('the body limit covers the worst-case encoding of a maximal referral', () => {
+    const worst = Buffer.byteLength(escapedJson(maximalCjkBody(), 2));
+    assert.ok(worst > 16 * 1024, 'the old 16 KB limit really was too small');
+    assert.ok(MAX_BODY_BYTES >= worst, `${MAX_BODY_BYTES} < ${worst}`);
+    assert.ok(MAX_BODY_BYTES < 128 * 1024, 'still a tight bound');
+  });
+
+  test('a maximal multilingual referral is accepted as raw UTF-8', async () => {
+    const store = seed();
+    const text = JSON.stringify(maximalCjkBody());
+    assert.ok(Buffer.byteLength(text) > 24 * 1024);
+    const response = await post(appFor(store), text);
+    assert.equal(response.status, 201, response.text);
+    assert.equal(store._referrals[0].referralContext.length, LIMITS.referralContext);
+  });
+
+  test('a maximal multilingual referral is accepted as escaped, pretty-printed JSON', async () => {
+    const store = seed();
+    const body = maximalCjkBody();
+    const response = await post(appFor(store), escapedJson(body, 2));
+    assert.equal(response.status, 201, response.text);
+    assert.equal(store._referrals[0].notes, body.notes);
+  });
+
+  test('emoji (surrogate pairs) up to the limit are accepted in both encodings', async () => {
+    const body = validBody({ referralContext: '🏠'.repeat(LIMITS.referralContext / 2), notes: '📞'.repeat(LIMITS.notes / 2) });
+    assert.equal((await post(appFor(seed()), JSON.stringify(body))).status, 201);
+    const escaped = JSON.stringify(body).replace(/[\u0080-￿]/g, (c) => `\\u${c.charCodeAt(0).toString(16).padStart(4, '0')}`);
+    assert.equal((await post(appFor(seed()), escaped)).status, 201);
+  });
+
+  test('one character over a field limit is a field error, not a body-size error', async () => {
+    const store = seed();
+    const response = await post(appFor(store), JSON.stringify(validBody({ referralContext: '語'.repeat(LIMITS.referralContext + 1) })));
+    assert.equal(response.status, 400);
+    assert.deepEqual(response.body.fields, ['referralContext']);
+    assert.equal(store._referrals.length, 0);
+  });
+
+  test('field limits count the text as sent, so padding cannot exceed the bound', async () => {
+    const store = seed();
+    const padded = ` ${'x'.repeat(LIMITS.referralContext)}`;
+    await assert.rejects(createReferralService({ store }).createDirectReferral(100, validBody({ referralContext: padded })),
+      (err) => err.code === 'INVALID_REQUEST' && err.fields.includes('referralContext'));
+    await assert.rejects(createReferralService({ store }).createDirectReferral(100, validBody({ participantZip: `${' '.repeat(20)}11375` })),
+      (err) => err.fields.includes('participantZip'));
+  });
+
+  test('a body over the limit is refused with a plain 400 and nothing is stored', async () => {
+    const store = seed();
+    const text = JSON.stringify(validBody({ referralContext: 'x'.repeat(MAX_BODY_BYTES) }));
+    const response = await post(appFor(store), text);
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, 'INVALID_REQUEST');
+    assert.ok(!response.text.includes('xxxx'));
+    assert.equal(store._referrals.length, 0);
+  });
+});
+
+describe('unknown properties are refused without echoing their names (PRD 10.4, 15.4)', () => {
+  const MARKER = 'Synthetic Person Omega SSN 000-00-0000';
+  const appFor = (store) => createApp({ affiliationStore: store, referralStore: store, resolveIdentity: () => ({ userId: 100 }) });
+
+  test('service: a property named with sensitive text gives a fixed error', async () => {
+    const store = seed();
+    await assert.rejects(createReferralService({ store }).createDirectReferral(100, validBody({ [MARKER]: 'x' })), (err) => {
+      assert.equal(err.code, 'UNEXPECTED_FIELD');
+      assert.ok(!JSON.stringify({ ...err, message: err.message }).includes('Omega'));
+      return true;
+    });
+    assert.equal(store._referrals.length, 0);
+  });
+
+  test('HTTP: the response never contains the property name', async () => {
+    const store = seed();
+    const response = await request(appFor(store)).post('/api/referrals').send(validBody({ [MARKER]: 'x' }));
+    assert.equal(response.status, 400);
+    assert.deepEqual(response.body, { error: 'The request contains a field that is not allowed.', code: 'UNEXPECTED_FIELD' });
+    assert.ok(!response.text.includes('Omega'));
+  });
+
+  test('HTTP: a "__proto__" property is refused the same way', async () => {
+    const text = JSON.stringify(validBody()).replace(/^\{/, '{"__proto__":{"isAdmin":true},');
+    const response = await request(appFor(seed())).post('/api/referrals').set('Content-Type', 'application/json').send(text);
+    assert.equal(response.status, 400);
+    assert.equal(response.body.code, 'UNEXPECTED_FIELD');
+  });
+
+  test('invalid allowed fields are still named, so the form can move focus', async () => {
+    const response = await request(appFor(seed())).post('/api/referrals').send(validBody({ participantZip: 'bad' }));
+    assert.deepEqual(response.body.fields, ['participantZip']);
+  });
+});
+
+describe('affiliation, Program and Department stay consistent during creation (PRD 3.9, 9.3, 9.4)', () => {
+  // Pauses a referral transaction right after it reads `kind:id`.
+  function pauseAfterRead(store, kind, id) {
+    let reached;
+    let release;
+    const reachedP = new Promise((r) => { reached = r; });
+    const gate = new Promise((r) => { release = r; });
+    let done = false;
+    store._afterLockingRead(async (k, i) => {
+      if (!done && k === kind && i === id) {
+        done = true;
+        reached();
+        await gate;
+      }
+    });
+    return { reached: reachedP, release };
+  }
+
+  // Resolves to true if the promise is still pending after the event loop
+  // has had several turns.
+  async function stillPending(promise) {
+    let settled = false;
+    promise.then(() => { settled = true; }, () => { settled = true; });
+    for (let i = 0; i < 10; i++) await new Promise((r) => setImmediate(r));
+    return !settled;
+  }
+
+  test('an affiliation change waits for an in-progress referral; the referral keeps the affiliation it read', async () => {
+    const store = seed();
+    const referrals = createReferralService({ store });
+    const affiliation = createAffiliationService({ store });
+    const { version } = await affiliation.getAffiliation(100);
+
+    const pause = pauseAfterRead(store, 'department', 2); // the last reference read
+    const creating = referrals.createDirectReferral(100, validBody());
+    await pause.reached;
+
+    const changing = affiliation.setAffiliation(100, { programId: 11, version });
+    assert.ok(await stillPending(changing), 'the affiliation change waits for the referral');
+
+    pause.release();
+    const created = await creating;
+    await changing;
+
+    assert.equal(created.referral.referringProgramId, 10);
+    assert.equal(store._referrals[0].referringDepartmentId, 1);
+    assert.equal((await affiliation.getAffiliation(100)).program.programId, 11);
+    // The next referral uses the new affiliation.
+    const next = await referrals.createDirectReferral(100, validBody());
+    assert.equal(next.referral.referringProgramId, 11);
+  });
+
+  test('an affiliation change that commits before the referral reads it is used', async () => {
+    const store = seed();
+    const affiliation = createAffiliationService({ store });
+    const { version } = await affiliation.getAffiliation(100);
+    await affiliation.setAffiliation(100, { programId: 11, version });
+    const created = await createReferralService({ store }).createDirectReferral(100, validBody());
+    assert.equal(created.referral.referringProgramId, 11);
+  });
+
+  for (const [label, kind, id, change] of [
+    ['receiving Program', 'program', 11, (s) => s._setProgramStatus(11, 'DISCONTINUED')],
+    ['receiving Department', 'department', 2, (s) => s._setDepartmentStatus(2, 'DISCONTINUED')],
+    ['referring Program', 'program', 10, (s) => s._setProgramStatus(10, 'DISCONTINUED')],
+    ['referring Department', 'department', 1, (s) => s._setDepartmentStatus(1, 'DISCONTINUED')],
+  ]) {
+    test(`discontinuing the ${label} waits for an in-progress referral, then applies to later ones`, async () => {
+      const store = seed();
+      const referrals = createReferralService({ store });
+      const pause = pauseAfterRead(store, kind, id);
+      const creating = referrals.createDirectReferral(100, validBody());
+      await pause.reached;
+
+      const changing = change(store);
+      assert.ok(await stillPending(changing), 'the lifecycle change waits');
+
+      pause.release();
+      assert.equal((await creating).status, 'RECEIVED');
+      await changing;
+
+      await assert.rejects(referrals.createDirectReferral(100, validBody()),
+        (err) => ['RECEIVING_PROGRAM_NOT_SELECTABLE', 'AFFILIATION_PROGRAM_NOT_ACTIVE'].includes(err.code));
+      assert.equal(store._referrals.length, 1);
+    });
+  }
+
+  test('a rolled-back creation releases its locks', async () => {
+    const store = seed();
+    const pause = pauseAfterRead(store, 'program', 11);
+    store._failNextAudit();
+    const creating = createReferralService({ store }).createDirectReferral(100, validBody());
+    await pause.reached;
+    const changing = store._setProgramStatus(11, 'DISCONTINUED');
+    pause.release();
+    await assert.rejects(creating);
+    await changing;
+    assert.equal(store._referrals.length, 0);
+    assert.equal((await store.getProgram(11)).lifecycleStatus, 'DISCONTINUED');
+  });
+
+  test('referrals that only read the same rows do not wait for each other', async () => {
+    const store = seed();
+    const referrals = createReferralService({ store });
+    const pause = pauseAfterRead(store, 'program', 11);
+    const first = referrals.createDirectReferral(100, validBody());
+    await pause.reached;
+    // A second referral to the same Program completes while the first is paused.
+    const second = await referrals.createDirectReferral(101, validBody());
+    assert.equal(second.status, 'RECEIVED');
+    pause.release();
+    assert.equal((await first).status, 'RECEIVED');
+    assert.equal(store._referrals.length, 2);
   });
 });

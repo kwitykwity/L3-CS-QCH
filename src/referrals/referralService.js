@@ -87,7 +87,11 @@ export function createReferralService({ store }) {
     if (!Number.isSafeInteger(userId) || userId <= 0) throw referralErrors.notAuthenticated();
 
     const validation = validateDirectReferral(body);
-    if (!validation.ok) throw referralErrors.invalidRequest(validation.fields);
+    if (!validation.ok) {
+      throw validation.unexpectedField
+        ? referralErrors.unexpectedField()
+        : referralErrors.invalidRequest(validation.fields);
+    }
     const request = validation.value;
 
     try {

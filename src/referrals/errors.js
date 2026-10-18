@@ -19,6 +19,9 @@ export class ReferralError extends Error {
 export const referralErrors = Object.freeze({
   invalidRequest: (fields) =>
     new ReferralError(400, 'INVALID_REQUEST', 'The referral is not valid.', { fields }),
+  // A property outside the allowlist. Its name is never echoed (PRD 10.4).
+  unexpectedField: () =>
+    new ReferralError(400, 'UNEXPECTED_FIELD', 'The request contains a field that is not allowed.'),
   notAuthenticated: () =>
     new ReferralError(401, 'NOT_AUTHENTICATED', 'Sign-in is required.'),
   receivingProgramNotSelectable: () =>
@@ -27,11 +30,15 @@ export const referralErrors = Object.freeze({
       'RECEIVING_PROGRAM_NOT_SELECTABLE',
       'That Program cannot receive referrals right now.',
     ),
+  // The Submission ID is already attached to a different referral. The
+  // caller first checks whether its own earlier attempt was received
+  // (GET /api/referrals/submissions/:id, PRD 7.4) before deliberately
+  // starting a new referral; nothing about the other referral is revealed.
   submissionIdConflict: () =>
     new ReferralError(
       409,
       'SUBMISSION_ID_CONFLICT',
-      'This submission ID was already used for a different referral. Start a new referral.',
+      'This Submission ID is already in use. Check whether the earlier referral was received before sending a new one.',
     ),
   // Used both for "does not exist" and "you may not see it" (PRD 3.3).
   referralNotFound: () =>
