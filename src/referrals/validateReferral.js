@@ -5,7 +5,12 @@
 //   (PRD 10.3).
 // - Field limits match db/migrations/001_core_schema.sql (PR #4).
 // - No DOB, SSN, or address fields exist (PRD 5.2).
-// - Errors list the names of invalid fields only, never their values.
+// - Errors list the names of invalid fields only, never their values. A
+//   property outside the allowlist is reported as a fixed "unexpected
+//   field" error without its name: the name is arbitrary request content
+//   and could itself carry participant data (PRD 10.4, 15.4).
+// - Length limits apply to the text as sent, before trimming, so every
+//   accepted request fits the HTTP body limit below (PRD 10.7).
 //
 // Exact limits and formats are engineering decisions (PRD 10.7, Section 22)
 // and can be changed in one place here.
@@ -31,6 +36,20 @@ export const LIMITS = Object.freeze({
   notes: 4000,
 });
 
+// The largest body an accepted referral can need, so the HTTP limit never
+// rejects a valid referral (PRD 10.7). Lengths are UTF-16 code units, the
+// same unit as JavaScript .length and SQL NVARCHAR. The worst case for one
+// code unit is the 6-byte JSON escape "\uXXXX" (raw UTF-8 needs at most 3
+// bytes), so 6 bytes per unit covers raw UTF-8, escaped JSON, and emoji.
+// Fixed-size fields (Submission ID, IDs, ZIP, contact method) and JSON
+// keys/punctuation fit comfortably in the 4 KB allowance, including
+// pretty-printed JSON.
+const WORST_CASE_BYTES_PER_UNIT = 6;
+const STRUCTURE_ALLOWANCE_BYTES = 4 * 1024;
+export const MAX_BODY_BYTES =
+  WORST_CASE_BYTES_PER_UNIT * Object.values(LIMITS).reduce((a, b) => a + b, 0)
+  + STRUCTURE_ALLOWANCE_BYTES;
+
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ZIP = /^\d{5}$/;
 // Deliberately simple: one @, no spaces, a dot in the domain.
@@ -46,9 +65,9 @@ function isPositiveInteger(value) {
 
 // Returns the trimmed string, or undefined if the value is not usable text.
 function cleanText(value, max, { singleLine = false } = {}) {
-  if (typeof value !== 'string') return undefined;
+  if (typeof value !== 'string' || value.length > max) return undefined;
   const trimmed = value.trim();
-  if (trimmed.length === 0 || trimmed.length > max) return undefined;
+  if (trimmed.length === 0) return undefined;
   if (CONTROL_CHARS.test(trimmed)) return undefined;
   if (singleLine && /[\r\n\t]/.test(trimmed)) return undefined;
   return trimmed;
@@ -58,18 +77,19 @@ function isEmpty(value) {
   return value === undefined || value === null || value === '';
 }
 
-// Returns { ok: true, value } or { ok: false, fields: [...] }.
+// Returns { ok: true, value }, { ok: false, fields: [...] } with allowlisted
+// field names only, or { ok: false, unexpectedField: true } with no names.
 export function validateDirectReferral(body) {
   if (body === null || typeof body !== 'object' || Array.isArray(body)) {
     return { ok: false, fields: [] };
   }
 
-  const fields = [];
-  const unknown = Object.keys(body).filter((key) => !ALLOWED_FIELDS.has(key));
-  if (unknown.length > 0) {
-    // Field names only; values are never echoed.
-    return { ok: false, fields: unknown.sort() };
+  if (Object.keys(body).some((key) => !ALLOWED_FIELDS.has(key))) {
+    // Never echo the name: it is arbitrary request content.
+    return { ok: false, unexpectedField: true };
   }
+
+  const fields = [];
 
   const submissionId =
     typeof body.submissionId === 'string' && UUID.test(body.submissionId)
@@ -114,7 +134,8 @@ export function validateDirectReferral(body) {
   // Optional: unknown or unavailable ZIP does not block a referral (PRD 5.2).
   let participantZip = null;
   if (!isEmpty(body.participantZip)) {
-    if (typeof body.participantZip === 'string' && ZIP.test(body.participantZip.trim())) {
+    if (typeof body.participantZip === 'string' && body.participantZip.length <= 10
+      && ZIP.test(body.participantZip.trim())) {
       participantZip = body.participantZip.trim();
     } else {
       fields.push('participantZip');

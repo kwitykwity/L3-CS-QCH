@@ -37,33 +37,50 @@ import { createReferralService } from './referralService.js';
 import { createReferralQueryService } from './referralQueryService.js';
 import { createResponseService } from './responseService.js';
 import { STAGES } from './stage.js';
+import { MAX_BODY_BYTES } from './validateReferral.js';
+import { decodeCursor } from './cursor.js';
+import { assertDemoGrantsAllowed } from '../authorization/referralAccess.js';
 
 const POSITIVE_INT = /^[1-9][0-9]{0,15}$/;
 
+// A positive integer that JavaScript represents exactly, or null. Larger
+// values would be rounded to a different ID (Number.MAX_SAFE_INTEGER).
+function toId(text) {
+  if (typeof text !== 'string' || !POSITIVE_INT.test(text)) return null;
+  const id = Number(text);
+  return Number.isSafeInteger(id) ? id : null;
+}
+
 // Validates query parameters against an allowlist (PRD 10.3). Identity,
 // roles, membership or user IDs can never arrive this way (PRD 3.2).
+// An unknown parameter is refused without echoing its name, which is
+// arbitrary request content (PRD 10.4, 15.4).
 function readQuery(query, allowed) {
-  const unknown = Object.keys(query).filter((key) => !allowed.includes(key));
-  if (unknown.length > 0) throw referralErrors.invalidRequest(unknown.sort());
+  if (Object.keys(query).some((key) => !allowed.includes(key))) throw referralErrors.unexpectedField();
 
   const result = {};
   if ('programId' in query) {
-    if (typeof query.programId !== 'string' || !POSITIVE_INT.test(query.programId)) {
-      throw referralErrors.invalidRequest(['programId']);
-    }
-    result.programId = Number(query.programId);
+    const programId = toId(query.programId);
+    if (programId === null) throw referralErrors.invalidRequest(['programId']);
+    result.programId = programId;
   }
   if ('stage' in query) {
     if (!STAGES.includes(query.stage)) throw referralErrors.invalidRequest(['stage']);
     result.stage = query.stage;
   }
+  if ('cursor' in query) {
+    const after = decodeCursor(query.cursor);
+    if (!after) throw referralErrors.invalidRequest(['cursor']);
+    result.after = after;
+  }
   return result;
 }
 
-// allowDemoGrants: honor DEMO receiving grants. Only the local synthetic
-// dev server sets this; it defaults to false so production fails closed
-// (PRD 16.1, 17.4).
-export function createReferralRouter({ store, resolveIdentity, allowDemoGrants = false }) {
+// allowDemoGrants: honor DEMO receiving grants. Defaults to false, and is
+// refused at start-up unless nodeEnv is 'development' or 'test', so
+// production and unknown environments fail closed (PRD 16.1, 17.4).
+export function createReferralRouter({ store, resolveIdentity, allowDemoGrants = false, nodeEnv }) {
+  assertDemoGrantsAllowed(allowDemoGrants, nodeEnv);
   const router = express.Router();
   const service = store ? createReferralService({ store }) : null;
   const queries = store ? createReferralQueryService({ store, allowDemoGrants }) : null;
@@ -87,8 +104,9 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
     next();
   });
 
-  // Bounded body (PRD 10.7): the largest valid referral is well under this.
-  router.use(express.json({ limit: '16kb' }));
+  // Bounded body (PRD 10.7), derived from the field limits so that every
+  // referral the validator accepts also fits here, in any encoding.
+  router.use(express.json({ limit: MAX_BODY_BYTES }));
 
   router.post('/', async (req, res) => {
     const result = await service.createDirectReferral(req.userId, req.body, {
@@ -102,11 +120,11 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
   });
 
   router.get('/received', async (req, res) => {
-    res.json(await queries.listReceived(req.userId, readQuery(req.query, ['programId', 'stage'])));
+    res.json(await queries.listReceived(req.userId, readQuery(req.query, ['programId', 'stage', 'cursor'])));
   });
 
   router.get('/sent', async (req, res) => {
-    res.json(await queries.listSent(req.userId, readQuery(req.query, ['stage'])));
+    res.json(await queries.listSent(req.userId, readQuery(req.query, ['stage', 'cursor'])));
   });
 
   router.get('/not-appropriate-reasons', async (req, res) => {
@@ -124,8 +142,9 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
 
   router.get('/:referralId', async (req, res) => {
     readQuery(req.query, []);
-    if (!POSITIVE_INT.test(req.params.referralId)) throw referralErrors.referralNotFound();
-    res.json(await queries.getReferral(req.userId, Number(req.params.referralId)));
+    const referralId = toId(req.params.referralId);
+    if (referralId === null) throw referralErrors.referralNotFound();
+    res.json(await queries.getReferral(req.userId, referralId));
   });
 
   // Known domain errors return their status and stable code. Anything else

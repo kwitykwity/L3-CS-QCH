@@ -28,6 +28,17 @@
 
 export const RECEIVING_VIEW = 'VIEW_RECEIVED_REFERRAL';
 
+// The only environments where DEMO grants may be honored (PRD 16.1, 17.4).
+export const DEMO_GRANT_ENVS = Object.freeze(['development', 'test']);
+
+// Fails closed at start-up: asking to honor DEMO grants in production, in
+// an unknown environment, or without naming the environment throws.
+export function assertDemoGrantsAllowed(allowDemoGrants, nodeEnv) {
+  if (allowDemoGrants === true && !DEMO_GRANT_ENVS.includes(nodeEnv)) {
+    throw new Error(`DEMO grants can only be enabled when NODE_ENV is ${DEMO_GRANT_ENVS.join(' or ')}`);
+  }
+}
+
 function isUsable(grant, { allowDemoGrants }) {
   if (!grant || grant.revokedAt != null) return false;
   if (grant.grantSource === 'IN_APP') return true;

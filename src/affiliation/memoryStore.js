@@ -106,5 +106,8 @@ export function createMemoryStore(
     _setProgramStatus(programId, lifecycleStatus) {
       programsById.get(programId).lifecycleStatus = lifecycleStatus;
     },
+    _setDepartmentStatus(departmentId, lifecycleStatus) {
+      departmentsById.get(departmentId).lifecycleStatus = lifecycleStatus;
+    },
   };
 }

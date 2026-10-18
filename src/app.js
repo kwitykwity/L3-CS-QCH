@@ -20,9 +20,11 @@ const publicDir = path.join(
 //   one Azure SQL store will serve as both stores.
 // - resolveIdentity(req) -> { userId } | null: supplied by the future Entra
 //   sign-in. Without one, /api routes answer 401 (fail closed).
-// - allowDemoGrants: honor DEMO permission grants. Defaults to false, so
-//   demo access fails closed unless a non-production caller turns it on.
-export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false } = {}) {
+// - allowDemoGrants: honor DEMO permission grants. Defaults to false. Turning
+//   it on also requires nodeEnv 'development' or 'test'; anything else,
+//   including no nodeEnv, throws at start-up (PRD 16.1, 17.4).
+// - nodeEnv: the validated NODE_ENV from loadConfig().
+export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false, nodeEnv } = {}) {
   const app = express();
 
   // Don't advertise the framework or its version.
@@ -36,7 +38,7 @@ export function createApp({ affiliationStore, referralStore, resolveIdentity, al
 
   app.use(
     '/api/referrals',
-    createReferralRouter({ store: referralStore, resolveIdentity, allowDemoGrants }),
+    createReferralRouter({ store: referralStore, resolveIdentity, allowDemoGrants, nodeEnv }),
   );
 
   app.use(
