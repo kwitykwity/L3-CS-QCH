@@ -22,6 +22,7 @@ import express from 'express';
 import { AffiliationError } from '../affiliation/errors.js';
 import { ReferralError, referralErrors } from './errors.js';
 import { createReferralService } from './referralService.js';
+import { MAX_BODY_BYTES } from './validateReferral.js';
 
 export function createReferralRouter({ store, resolveIdentity }) {
   const router = express.Router();
@@ -45,8 +46,9 @@ export function createReferralRouter({ store, resolveIdentity }) {
     next();
   });
 
-  // Bounded body (PRD 10.7): the largest valid referral is well under this.
-  router.use(express.json({ limit: '16kb' }));
+  // Bounded body (PRD 10.7), derived from the field limits so that every
+  // referral the validator accepts also fits here, in any encoding.
+  router.use(express.json({ limit: MAX_BODY_BYTES }));
 
   router.post('/', async (req, res) => {
     const result = await service.createDirectReferral(req.userId, req.body, {
