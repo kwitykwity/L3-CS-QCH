@@ -1,6 +1,6 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { enforceProductionSafety, validateEnvironment, sanitizeLogData, formatSafeError } from '../src/middleware/security.js';
+import { formatSafeError, sanitizeLogData } from '../src/middleware/security.js';
 
 test('Security & Production-Safety Test Suite', async (t) => {
   await t.test('Production Error Redaction (503 / 500)', async () => {
@@ -11,6 +11,15 @@ test('Security & Production-Safety Test Suite', async (t) => {
     assert.strictEqual(formatted.error, 'Service Unavailable');
     assert.strictEqual(formatted.statusCode, 503);
     assert.strictEqual(formatted.stack, undefined);
+  });
+
+  await t.test('Production 4xx Raw Message Redaction', async () => {
+    const err400 = new Error('Internal SQL Syntax Error near line 1');
+    err400.statusCode = 400;
+
+    const formatted = formatSafeError(err400, { NODE_ENV: 'production' });
+    assert.strictEqual(formatted.error, 'Bad Request');
+    assert.strictEqual(formatted.statusCode, 400);
   });
 
   await t.test('Schema Participant PII Redaction', async () => {

@@ -45,16 +45,28 @@ export function sanitizeLogData(data) {
   return sanitized;
 }
 
+const HTTP_STATUS_NAMES = {
+  400: 'Bad Request',
+  401: 'Unauthorized',
+  403: 'Forbidden',
+  404: 'Not Found',
+  409: 'Conflict',
+  422: 'Unprocessable Entity',
+  500: 'Internal Server Error',
+  503: 'Service Unavailable'
+};
+
 export function formatSafeError(err, env = process.env) {
   const isProd = env.NODE_ENV === 'production';
   const statusCode = err.statusCode || err.status || 500;
 
   if (isProd) {
-    if (statusCode === 503) {
-      return { error: 'Service Unavailable', statusCode: 503 };
-    }
     if (statusCode >= 500) {
-      return { error: 'Internal Server Error', statusCode: 500 };
+      return { error: HTTP_STATUS_NAMES[statusCode] || 'Internal Server Error', statusCode };
+    }
+    // Rule 4: Return fixed safe status text for 4xx errors unless explicitly marked as a safe domain message
+    if (!err.isTrustedDomainError) {
+      return { error: HTTP_STATUS_NAMES[statusCode] || 'Bad Request', statusCode };
     }
   }
 
