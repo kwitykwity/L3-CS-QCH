@@ -88,9 +88,17 @@ export function createGpmeService({ store, ruleVersion = GPME_RULE_VERSION, logF
   };
 }
 
-// Safe metadata only: never the error message, stack, or request values,
-// any of which could carry participant data (PRD 15.3).
+// Error kinds that may appear in logs. Anything else, including a custom
+// error name that could carry arbitrary text, is logged as OtherError.
+const LOGGABLE_ERROR_KINDS = new Set(['Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError']);
+
+export function safeErrorKind(err) {
+  const name = err?.name;
+  return typeof name === 'string' && LOGGABLE_ERROR_KINDS.has(name) ? name : 'OtherError';
+}
+
+// Safe metadata only: never the error message, stack, raw error name, or
+// request values, any of which could carry participant data (PRD 15.3).
 function defaultLogFailure(err) {
-  const name = typeof err?.name === 'string' ? err.name : 'UnknownError';
-  console.error(`[gpme] matching unavailable (${name})`);
+  console.error(`[gpme] matching unavailable (${safeErrorKind(err)})`);
 }

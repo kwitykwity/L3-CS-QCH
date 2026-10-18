@@ -11,7 +11,7 @@ import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { createMemoryStore } from '../src/affiliation/memoryStore.js';
 import { createMemoryReferralStore } from '../src/referrals/memoryReferralStore.js';
-import { createGpmeService } from '../src/gpme/gpmeService.js';
+import { createGpmeService, safeErrorKind } from '../src/gpme/gpmeService.js';
 import { matchPrograms, GPME_RULE_VERSION } from '../src/gpme/matchPrograms.js';
 import { findMatchingFactProblems, readMatchingFacts } from '../src/gpme/programFacts.js';
 import { validateMatchRequest } from '../src/gpme/validateMatchRequest.js';
@@ -246,6 +246,27 @@ describe('GPME expected results (T1 to T16)', () => {
     const res = await request(appFor(store)).post('/api/gpme/match').send(T2_INPUT);
     assert.equal(res.status, 503);
     assert.equal(res.body.status, 'UNABLE_TO_MATCH');
+  });
+
+  test('T15 failure logging never prints a raw error name (PRD 15.3)', async () => {
+    const store = seedStore();
+    store.listMatchablePrograms = async () => {
+      const err = new Error('boom');
+      err.name = 'Synthetic Person Gamma 99901';
+      throw err;
+    };
+    const lines = [];
+    const original = console.error;
+    console.error = (line) => lines.push(line);
+    try {
+      const result = await createGpmeService({ store }).match(100, T2_INPUT);
+      assert.equal(result.status, 'UNABLE_TO_MATCH');
+    } finally {
+      console.error = original;
+    }
+    assert.deepEqual(lines, ['[gpme] matching unavailable (OtherError)']);
+    assert.equal(safeErrorKind(new TypeError('x')), 'TypeError');
+    assert.equal(safeErrorKind(null), 'OtherError');
   });
 
   test('T16 determinism: 100 runs give identical output', async () => {
