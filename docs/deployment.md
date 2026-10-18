@@ -31,14 +31,18 @@ git fetch
 git checkout <release tag or commit>   # PROVIDED BY the release owner
 npm ci
 npm test
-npm run check-runtime
 ```
 
 - `npm ci` installs the exact versions in `package-lock.json`.
 - `npm test` must end with 0 failures.
-- `npm run check-runtime` confirms Node 24.15.0, the team's development
-  version. The production Node version on App Service is **PROVIDED BY QCH
-  IT**.
+- Node version, development vs production:
+  - `npm run check-runtime` checks for exactly Node 24.15.0, the team's
+    settled **development** version. Use it on developer machines and any
+    build machine that is meant to match development.
+  - The **production** Node version on App Service is **PROVIDED BY QCH IT**
+    and may differ. `check-runtime` is not the production check. Before
+    deploying, confirm the App Service runs the Node version QCH IT
+    confirmed, and that the test run above used that same version.
 
 ## 2. Set the configuration
 
@@ -48,7 +52,10 @@ Configuration table.
 
 - `NODE_ENV` must be exactly `production`. The app refuses to start with a
   missing or unknown value.
-- `PORT` is whatever App Service expects. **PROVIDED BY QCH IT.**
+- `PORT` is supplied by the hosting platform (App Service) at runtime and is
+  not a QCH IT secret or setting to invent. The deployment must not hard-code
+  a port. QCH IT confirms how their App Service setup provides it. The same
+  rule appears in [qch-it-requirements.md](qch-it-requirements.md).
 - Secrets (`AZURE_CLIENT_SECRET`, `DATABASE_URL`) come from Azure Key Vault,
   never from a `.env` file or source code (PRD 15.2).
 - Production must never fall back to demo sign-in, development defaults, or
@@ -59,8 +66,10 @@ Configuration table.
 Migrations are applied on purpose, before the new app version starts. The app
 never changes the production schema on its own (PRD 9.8, 18.3).
 
-- Follow `db/README.md` for run order, the required `sqlcmd -I -b` flags, and
-  what to do if a run fails partway. (That file arrives when PR #4 merges.)
+- Follow [`db/README.md`](../db/README.md) for run order, the required
+  `sqlcmd -I -b` flags, and what to do if a run fails partway. It covers
+  migrations 001 and 002 (merged in PR #4). Migration 003 is in review in
+  PR #15; do not apply it until it merges.
 - Test every migration outside production first.
 - Write down which migrations were applied, to which database, from which
   commit, by whom, and when. The database does not record this itself yet
@@ -88,7 +97,7 @@ A release counts as successful only after these checks pass (PRD 18.4).
 | Startup log | `QCH Connect listening on ... (production)`, and no startup error | Built |
 | Database reachable | A readiness check that reports database availability only | Not built yet |
 | Staff sign-in | A QCH test account can sign in through Entra ID | Not built yet |
-| Notification send | A test notification reaches the shared mailbox | Not built yet |
+| Notification delivery | A test referral to a QCH-approved test Program sends one email **from** the shared mailbox that **arrives in that Program's configured, authorized recipient inbox** (not just leaves the mailbox). The email is generic with no participant data, and the delivery row ends `SENT`. Use synthetic referral data only. | Not built yet |
 
 `/health` reports only that the app is up. It never returns secrets,
 connection strings, or error details (PRD 9.12, 15.3).
@@ -97,10 +106,17 @@ connection strings, or error details (PRD 9.12, 15.3).
 
 1. Stop. Do not run further migrations.
 2. If the cause is configuration, fix the configuration and verify again.
-3. Otherwise, redeploy the last known-good commit and verify again.
-4. Rolling back the app does **not** roll back the database (PRD 18.4). A
-   database restore follows QCH's backup and restore procedure, **PROVIDED BY
-   QCH IT.**
+3. Otherwise, consider redeploying the last known-good commit. **First
+   confirm that commit works with the schema already applied to the
+   database.** Rolling back the app does **not** roll back the database
+   (PRD 18.4), so the older app must run correctly against any migrations
+   this release already applied.
+   - Compatible (for example the new migrations only added columns or
+     tables the older app ignores): redeploy it and verify again.
+   - Not compatible, or unknown: do **not** redeploy it. Treat it as a
+     database recovery and follow QCH's backup and restore procedure,
+     **PROVIDED BY QCH IT**, together with QCH IT.
+4. Record what was checked and decided.
 
 ## Never in production
 

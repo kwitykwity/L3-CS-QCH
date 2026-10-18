@@ -1,7 +1,16 @@
 # Handoff checklist
 
 Every handoff item in PRD 19, where it lives, and what it still waits on.
-Handoff is complete when each row is done or has an agreed plan (PRD 19.6).
+
+**Status: draft.** Production deployment, the operational documentation,
+and handoff acceptance are all unfinished.
+
+Handoff is complete when each deliverable is delivered and any remaining
+gap has an agreed resolution or acceptance plan (PRD 19.6). **An agreed gap
+plan does not waive an explicit requirement.** In particular, the backup and
+restore procedure must be exercised successfully at least once in an
+isolated, QCH-approved environment before handoff acceptance (PRD 19.5); a
+plan to do it later does not satisfy that.
 
 Status key: **Done**, **Draft** (written, not final), **In review** (open
 pull request), **Not started**.
@@ -13,8 +22,8 @@ pull request), **Not started**.
 | Authoritative source code | This repository during development; a QCH-owned repository at handoff | Draft | QCH IT repository location (19.3) |
 | Deployment documentation | `docs/deployment.md` | Draft | QCH IT deployment tooling and resource details |
 | Environment and configuration documentation | `docs/qch-it-requirements.md`, README Configuration table | Draft | QCH IT values and confirmations |
-| Database schema and migrations | `db/migrations/`, `db/README.md` | In review | PR #4; GPME schema change (migration 003, pending team decisions); migration-history handling |
-| Data Dictionary | Not written | Not started | Schema settling (PR #4 and migration 003) |
+| Database schema and migrations | `db/migrations/`, `db/README.md` | Draft | Migrations 001 and 002 merged (PR #4). Migration 003 in review (PR #15), not merged. Migration-history handling not built. |
+| Data Dictionary | Not written | Not started | Nothing blocking for the merged schema (001, 002): it can be written now. Add 003's columns only if and when PR #15 merges. |
 | Administrative instructions | Not written | Not started | Permission administration and Program management features |
 | Backup and restore procedure | Not written | Not started | QCH IT backup approach |
 | Recovery procedure | `docs/deployment.md` (app); `db/README.md` (failed migration) | Draft | QCH IT backup and restore details |
@@ -45,4 +54,8 @@ pull request), **Not started**.
 - [ ] Agreed source, documentation, and configuration guidance delivered.
 - [ ] Ownership and access arrangements in place.
 - [ ] Knowledge-transfer activities complete.
-- [ ] Remaining gaps written down with an agreed plan.
+- [ ] Backup and restore exercised successfully in an isolated, QCH-approved
+      environment, with the result documented (PRD 19.5). Required; a gap
+      plan cannot replace it.
+- [ ] Remaining gaps written down with an agreed resolution or acceptance
+      plan. A gap plan never waives an explicit PRD requirement.

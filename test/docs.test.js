@@ -98,7 +98,10 @@ test('every link between docs points to a file that exists', () => {
   }
 });
 
-test('docs hold no real configuration values or secrets', () => {
+// A limited guard: it catches a few known secret and identifier patterns
+// (GUIDs, password=, AccountKey=, Azure SQL / Key Vault hosts, QCH email
+// addresses). It cannot prove a document contains no secrets.
+test('docs do not match known secret or identifier patterns (limited guard)', () => {
   const guid = /\b[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\b/i;
   const secretPatterns = [
     guid, // tenant and client IDs

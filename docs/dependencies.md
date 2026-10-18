@@ -1,8 +1,12 @@
 # Dependencies and licenses
 
 Handoff deliverable from PRD 19.2. The app has 2 direct runtime dependencies and 1
-direct development dependency. All installed packages use permissive open-source
-licenses (MIT, ISC, BSD-2-Clause, BSD-3-Clause).
+direct development dependency.
+
+The license information below is the **license metadata each package declares
+in `package-lock.json`**. It has not been checked against each package's actual
+license files and is not a legal review. At the time of writing, every declared
+license is MIT, ISC, BSD-2-Clause, or BSD-3-Clause.
 
 ## Direct dependencies
 
@@ -17,15 +21,16 @@ dependency that this table does not match.
 
 ## Full list
 
-Every installed package, with its version and declared license, comes from
-`package-lock.json`:
+Every package entry in `package-lock.json`, with its version and its
+lockfile-declared license:
 
 ```bash
 npm run licenses
 ```
 
-The output lists runtime and development packages separately and counts
-each license. Run it again after any dependency change.
+The output marks each package runtime or development and counts each
+declared license. A package with no declared license shows as `UNKNOWN`.
+Run it again after any dependency change.
 
 ## Open item
 
