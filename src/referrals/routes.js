@@ -32,6 +32,7 @@ import { createReferralService } from './referralService.js';
 import { createReferralQueryService } from './referralQueryService.js';
 import { STAGES } from './stage.js';
 import { MAX_BODY_BYTES } from './validateReferral.js';
+import { decodeCursor } from './cursor.js';
 import { assertDemoGrantsAllowed } from '../authorization/referralAccess.js';
 
 const POSITIVE_INT = /^[1-9][0-9]{0,15}$/;
@@ -46,9 +47,10 @@ function toId(text) {
 
 // Validates query parameters against an allowlist (PRD 10.3). Identity,
 // roles, membership or user IDs can never arrive this way (PRD 3.2).
+// An unknown parameter is refused without echoing its name, which is
+// arbitrary request content (PRD 10.4, 15.4).
 function readQuery(query, allowed) {
-  const unknown = Object.keys(query).filter((key) => !allowed.includes(key));
-  if (unknown.length > 0) throw referralErrors.invalidRequest(unknown.sort());
+  if (Object.keys(query).some((key) => !allowed.includes(key))) throw referralErrors.unexpectedField();
 
   const result = {};
   if ('programId' in query) {
@@ -59,6 +61,11 @@ function readQuery(query, allowed) {
   if ('stage' in query) {
     if (!STAGES.includes(query.stage)) throw referralErrors.invalidRequest(['stage']);
     result.stage = query.stage;
+  }
+  if ('cursor' in query) {
+    const after = decodeCursor(query.cursor);
+    if (!after) throw referralErrors.invalidRequest(['cursor']);
+    result.after = after;
   }
   return result;
 }
@@ -106,11 +113,11 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
   });
 
   router.get('/received', async (req, res) => {
-    res.json(await queries.listReceived(req.userId, readQuery(req.query, ['programId', 'stage'])));
+    res.json(await queries.listReceived(req.userId, readQuery(req.query, ['programId', 'stage', 'cursor'])));
   });
 
   router.get('/sent', async (req, res) => {
-    res.json(await queries.listSent(req.userId, readQuery(req.query, ['stage'])));
+    res.json(await queries.listSent(req.userId, readQuery(req.query, ['stage', 'cursor'])));
   });
 
   router.get('/:referralId', async (req, res) => {

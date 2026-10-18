@@ -51,11 +51,21 @@
 //       departmentId, grantSource, revokedAt }] from dbo.user_grants where
 //       revoked_at IS NULL. Authorization is decided by the service, not here.
 //   getReferralById(referralId) -> referral row | null
-//   listReferralsByReceivingPrograms(programIds, { stage, limit })
-//   listReferralsByCreator(userId, { stage, limit })
+//   listReferralsByReceivingPrograms(programIds, { stage, limit, after })
+//   listReferralsByCreator(userId, { stage, limit, after })
 //       Newest first (created_at DESC, then referral_id DESC), at most
 //       `limit` rows, filtered by stage when given (see stage.js for the
 //       exact conditions). Uses ix_referrals_inbox / ix_referrals_my_sent.
+//       `after` = { createdAt, referralId } (a page cursor, cursor.js):
+//       only rows strictly after that position, in SQL
+//         AND (created_at < @afterCreatedAt
+//              OR (created_at = @afterCreatedAt AND referral_id < @afterId))
+//       with the same ORDER BY and TOP (@limit). Scope (program IDs or
+//       creator), stage, cursor and limit are all applied in the query and
+//       all parameterized. createdAt must be returned with the full stored
+//       precision (for datetime2: CONVERT(varchar(33), created_at, 127))
+//       and the cursor value compared as datetime2, so no row is skipped or
+//       repeated between pages.
 //
 // Columns map to dbo.referrals and dbo.audit_events in
 // db/migrations/001_core_schema.sql (PR #4).
@@ -202,9 +212,15 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
 
   const grants = (seed.grants ?? []).map((g) => ({ revokedAt: null, ...g }));
 
-  function newestFirst(rows, { stage, limit }) {
+  // Order: createdAt DESC, referralId DESC. `after` is a cursor position
+  // { createdAt, referralId }; only rows strictly after it are returned.
+  const isAfter = (r, after) =>
+    r.createdAt < after.createdAt || (r.createdAt === after.createdAt && r.referralId < after.referralId);
+
+  function newestFirst(rows, { stage, limit, after }) {
     return rows
       .filter((r) => !stage || stageOf(r) === stage)
+      .filter((r) => !after || isAfter(r, after))
       .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.referralId - a.referralId)
       .slice(0, limit ?? Infinity)
       .map(copy);

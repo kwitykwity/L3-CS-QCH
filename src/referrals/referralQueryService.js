@@ -14,9 +14,12 @@ import { errors as affiliationErrors } from '../affiliation/errors.js';
 import { receivingProgramIds, referralAccess } from '../authorization/referralAccess.js';
 import { referralErrors } from './errors.js';
 import { stageOf } from './stage.js';
+import { encodeCursor } from './cursor.js';
 
-// Bounded lists (PRD 9.9, 10.7). The store returns at most limit + 1 rows
-// so "there are more" can be reported without counting everything.
+// Bounded pages (PRD 9.9, 10.7). The store returns at most limit + 1 rows
+// so "there are more" can be reported without counting everything. When
+// there are more, nextCursor fetches the following page (see cursor.js).
+// Authorization is evaluated again for every page.
 export const LIST_LIMIT = 200;
 
 export function createReferralQueryService({ store, allowDemoGrants = false }) {
@@ -62,12 +65,14 @@ export function createReferralQueryService({ store, allowDemoGrants = false }) {
   }
 
   function page(rows) {
-    return { items: rows.slice(0, LIST_LIMIT), hasMore: rows.length > LIST_LIMIT };
+    const items = rows.slice(0, LIST_LIMIT);
+    const hasMore = rows.length > LIST_LIMIT;
+    return { items, hasMore, nextCursor: hasMore ? encodeCursor(items.at(-1)) : null };
   }
 
   // Receiving queue: referrals sent TO Programs the user holds a
   // receiving grant for. Optional programId must be one of those.
-  async function listReceived(userId, { programId, stage } = {}) {
+  async function listReceived(userId, { programId, stage, after } = {}) {
     await requireActiveUser(userId);
     const allowed = await receivingIdsFor(userId);
     const nameOf = programNamer();
@@ -76,23 +81,23 @@ export function createReferralQueryService({ store, allowDemoGrants = false }) {
 
     if (programId !== undefined && !allowed.has(programId)) throw referralErrors.notAuthorizedForProgram();
     const scope = programId !== undefined ? [programId] : [...allowed];
-    if (scope.length === 0) return { programs, referrals: [], hasMore: false };
+    if (scope.length === 0) return { programs, referrals: [], hasMore: false, nextCursor: null };
 
-    const rows = await store.listReferralsByReceivingPrograms(scope, { stage, limit: LIST_LIMIT + 1 });
-    const { items, hasMore } = page(rows);
+    const rows = await store.listReferralsByReceivingPrograms(scope, { stage, after, limit: LIST_LIMIT + 1 });
+    const { items, hasMore, nextCursor } = page(rows);
     const referrals = [];
     for (const row of items) referrals.push(await listItem(row, nameOf, { includeNeed: true }));
-    return { programs, referrals, hasMore };
+    return { programs, referrals, hasMore, nextCursor };
   }
 
   // The user's own submitted referrals (VIEW_CREATED_REFERRAL).
-  async function listSent(userId, { stage } = {}) {
+  async function listSent(userId, { stage, after } = {}) {
     await requireActiveUser(userId);
     const nameOf = programNamer();
-    const { items, hasMore } = page(await store.listReferralsByCreator(userId, { stage, limit: LIST_LIMIT + 1 }));
+    const { items, hasMore, nextCursor } = page(await store.listReferralsByCreator(userId, { stage, after, limit: LIST_LIMIT + 1 }));
     const referrals = [];
     for (const row of items) referrals.push(await listItem(row, nameOf, { includeNeed: false }));
-    return { referrals, hasMore };
+    return { referrals, hasMore, nextCursor };
   }
 
   async function getReferral(userId, referralId) {
