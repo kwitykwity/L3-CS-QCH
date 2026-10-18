@@ -12,29 +12,33 @@
    TEAM PROPOSAL / SYNTHETIC for development and demos.
    ===================================================================== */
 
-/* Service categories - TEAM/LLM-GENERATED, NOT a QCH-provided list.
-   Used only so dev search and matching have something to work with. */
+/* Need categories (stored in dbo.service_categories).
+   SOURCE: GPME Decision Proposal (Card 10), 15-category draft approved by
+   the team on Oct 18, 2026 as a TEAM PRODUCT DECISION. NOT a QCH-provided
+   list. Names follow QCH's public website sections where one exists.
+   OPEN: final wording for "LGBTQ+ community and support" and
+   "Immigration and citizenship" (both say something about the
+   participant). How this list reaches production is a separate decision.
+   Re-running the seed on an older dev database leaves the earlier
+   LLM-generated names in place; reset the dev database to remove them. */
 INSERT INTO dbo.service_categories (name)
 SELECT v.name
 FROM (VALUES
-    (N'Benefits'),
-    (N'Childcare'),
-    (N'Community Space'),
-    (N'Counseling & Mental Health'),
-    (N'Education'),
-    (N'Employment & Training'),
-    (N'Family Support'),
     (N'Food'),
-    (N'Health & Wellness'),
-    (N'Housing'),
-    (N'Immigration'),
-    (N'Leadership'),
-    (N'Legal'),
-    (N'LGBTQ+'),
-    (N'Older Adult Care'),
-    (N'Training for Organizations'),
-    (N'Transportation'),
-    (N'Youth Enrichment')
+    (N'Housing and eviction prevention'),
+    (N'Immigration and citizenship'),
+    (N'English classes (ESOL)'),
+    (N'Benefits help'),
+    (N'Jobs and job training'),
+    (N'Finishing high school or getting an HSE'),
+    (N'College access'),
+    (N'Childcare for infants and toddlers'),
+    (N'After-school and youth programs'),
+    (N'LGBTQ+ community and support'),
+    (N'Family support and connection to services'),
+    (N'Older adult center activities'),
+    (N'Help at home for older adults'),
+    (N'Adult day program (frail or memory-impaired)')
 ) AS v(name)
 WHERE NOT EXISTS (SELECT 1 FROM dbo.service_categories s WHERE s.name = v.name);
 GO
