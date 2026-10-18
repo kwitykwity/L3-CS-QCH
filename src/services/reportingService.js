@@ -22,14 +22,13 @@ export async function getTotalReferrals(db, { startDate, endDate, departmentId, 
 
 export async function getTimingMetrics(db, { startDate, endDate, departmentId, programId }) {
   let query = `
-    SELECT 
-      COUNT(referral_id) AS cohort_size,
-      AVG(CAST(DATEDIFF(SECOND, created_at, first_responded_at) AS FLOAT) / 3600.0) AS avg_hours_to_first_response,
-      AVG(CAST(DATEDIFF(SECOND, created_at, first_resulted_in_service_at) AS FLOAT) / 3600.0) AS avg_hours_to_service_delivery,
-      PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY CAST(DATEDIFF(SECOND, created_at, first_resulted_in_service_at) AS FLOAT) / 3600.0) 
-        OVER () AS median_hours_to_service_delivery
-    FROM dbo.referrals
-    WHERE created_at >= @startDate AND created_at <= @endDate
+    WITH Durations AS (
+      SELECT 
+        referral_id,
+        CAST(DATEDIFF(SECOND, created_at, first_responded_at) AS FLOAT) / 3600.0 AS response_hours,
+        CAST(DATEDIFF(SECOND, created_at, first_resulted_in_service_at) AS FLOAT) / 3600.0 AS service_hours
+      FROM dbo.referrals
+      WHERE created_at >= @startDate AND created_at <= @endDate
   `;
   const params = { startDate, endDate };
 
@@ -40,6 +39,21 @@ export async function getTimingMetrics(db, { startDate, endDate, departmentId, p
     query += " AND (referring_department_id = @departmentId OR receiving_department_id = @departmentId)";
     params.departmentId = departmentId;
   }
+
+  query += `
+    ),
+    Medians AS (
+      SELECT DISTINCT
+        PERCENTILE_CONT(0.5) WITHIN GROUP (ORDER BY service_hours) OVER () AS median_hours_to_service_delivery
+      FROM Durations
+      WHERE service_hours IS NOT NULL
+    )
+    SELECT 
+      (SELECT COUNT(referral_id) FROM Durations) AS cohort_size,
+      (SELECT AVG(response_hours) FROM Durations) AS avg_hours_to_first_response,
+      (SELECT AVG(service_hours) FROM Durations) AS avg_hours_to_service_delivery,
+      (SELECT median_hours_to_service_delivery FROM Medians) AS median_hours_to_service_delivery
+  `;
 
   const result = await db.query(query, params);
   const row = result && result[0] ? result[0] : {};
