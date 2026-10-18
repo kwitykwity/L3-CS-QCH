@@ -1,48 +1,47 @@
 import test from 'node:test';
 import assert from 'node:assert/strict';
-import { createMemoryStore } from '../src/affiliation/memoryStore.js';
-import { createAffiliationService } from '../src/affiliation/affiliationService.js';
+import { createProgram, setProgramActiveState } from '../src/services/programService.js';
 
 test('Program Management Unit Tests', async (t) => {
-  await t.test('Authorized Program Creation and Retrieval', async () => {
-    const store = createMemoryStore();
-    if (typeof store.setUser === 'function') {
-      await store.setUser({ userId: 'usr-admin', active: true });
+  const mockDb = {
+    async query(sql, params) {
+      if (sql.includes('INSERT INTO programs')) {
+        return { insertId: 42 };
+      }
+      if (sql.includes('UPDATE programs')) {
+        return { affectedRows: 1 };
+      }
+      return [];
     }
+  };
 
-    const service = createAffiliationService({ store });
-    try {
-      const programs = await service.listActivePrograms('usr-admin');
-      assert.ok(Array.isArray(programs));
-    } catch (err) {
-      assert.ok(err.status === 401 || err.status === 403 || err.code === 'NOT_AUTHENTICATED');
-    }
+  await t.test('Authorized Program Creation and Retrieval', async () => {
+    const result = await createProgram(
+      mockDb,
+      { name: 'Housing Assistance', description: 'Shelter support', departmentId: 10 },
+      'Program Director'
+    );
+    assert.strictEqual(result.programId, 42);
+    assert.strictEqual(result.name, 'Housing Assistance');
+    assert.strictEqual(result.isActive, true);
   });
 
   await t.test('Discontinue/Reactivate State Toggle', async () => {
-    const store = createMemoryStore();
-    if (typeof store.setUser === 'function') {
-      await store.setUser({ userId: 'usr-1', active: true });
-    }
-
-    const service = createAffiliationService({ store });
-    try {
-      const initial = await service.listActivePrograms('usr-1');
-      assert.ok(initial.length >= 0);
-    } catch (err) {
-      assert.ok(err.status === 401 || err.status === 403 || err.code === 'NOT_AUTHENTICATED');
-    }
+    const updated = await setProgramActiveState(mockDb, 42, false, 'Admin');
+    assert.strictEqual(updated.programId, 42);
+    assert.strictEqual(updated.isActive, false);
   });
 
   await t.test('Unauthorized Role Blocked', async () => {
-    const store = createMemoryStore();
-    const service = createAffiliationService({ store });
-
     await assert.rejects(
       async () => {
-        await service.listActivePrograms('nonexistent-user');
+        await createProgram(
+          mockDb,
+          { name: 'Unauthorized Program', departmentId: 10 },
+          'Case Worker'
+        );
       },
-      (err) => err.status === 401 || err.status === 403 || err.code === 'NOT_AUTHENTICATED' || true
+      (err) => err.statusCode === 403 && err.message.includes('Unauthorized')
     );
   });
 });

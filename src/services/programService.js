@@ -16,7 +16,7 @@ function checkAuthorization(userRole) {
 /**
  * Creates a new program.
  */
-async function createProgram(db, { name, description, departmentId }, userRole) {
+export async function createProgram(db, { name, description, departmentId }, userRole) {
   checkAuthorization(userRole);
 
   if (!name || !departmentId) {
@@ -36,10 +36,9 @@ async function createProgram(db, { name, description, departmentId }, userRole) 
 }
 
 /**
- * Updates program details or toggles active state (discontinue/reactivate).
- * Preserves stable identity without deleting existing history.
+ * Updates program details.
  */
-async function updateProgram(db, { programId, name, description, departmentId, isActive }, userRole) {
+export async function updateProgram(db, { programId, name, description, departmentId, isActive }, userRole) {
   checkAuthorization(userRole);
 
   const now = new Date().toISOString();
@@ -58,9 +57,9 @@ async function updateProgram(db, { programId, name, description, departmentId, i
 }
 
 /**
- * Discontinues a program (soft-disable by setting is_active = false).
+ * Discontinues/Reactivates a program.
  */
-async function setProgramActiveState(db, programId, isActive, userRole) {
+export async function setProgramActiveState(db, programId, isActive, userRole) {
   checkAuthorization(userRole);
 
   const now = new Date().toISOString();
@@ -69,9 +68,3 @@ async function setProgramActiveState(db, programId, isActive, userRole) {
 
   return { programId, isActive, updatedAtUtc: now };
 }
-
-module.exports = {
-  createProgram,
-  updateProgram,
-  setProgramActiveState
-};
