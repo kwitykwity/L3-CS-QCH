@@ -15,8 +15,9 @@ import {
   firstInvalidField, toRequestBody, validateReferralForm,
 } from '../public/referral/validation.js';
 import {
-  MESSAGES, interpretCheckResponse, interpretSubmitResponse, sendingState,
+  CONFLICT_NOT_FOUND, MESSAGES, interpretCheckResponse, interpretSubmitResponse, isConfirmation, sendingState,
 } from '../public/referral/submission.js';
+import { interpretAffiliationSave } from '../public/referral/affiliation.js';
 import { DEFAULT_SIZE, SIZES, loadSize, normalizeSize, saveSize } from '../public/referral/textSize.js';
 import { syntheticSeed, DEV_USER_ID } from '../scripts/syntheticSeed.js';
 
@@ -122,6 +123,13 @@ describe('client and server validation agree', () => {
   });
 });
 
+const SID = '6f1d2c3b-4a5e-4f60-8a7b-9c0d1e2f3a4b';
+const OTHER_SID = '0b1c2d3e-4f50-4a61-8b72-93a4b5c6d7e8';
+const confirmation = (overrides = {}) => ({
+  referralId: 7, submissionId: SID, receivingProgramId: 3, referringProgramId: 1,
+  responseStatus: 'AWAITING_RESPONSE', createdAt: '2026-10-17T12:00:00.000Z', ...overrides,
+});
+
 describe('submission and recovery states (PRD 7.1 to 7.5)', () => {
   test('locked copy is exact, including the space before "!"', () => {
     assert.equal(MESSAGES.SENDING, 'Sending referral ...');
@@ -139,9 +147,10 @@ describe('submission and recovery states (PRD 7.1 to 7.5)', () => {
   });
 
   test('success only after the server confirms (201 RECEIVED)', () => {
-    const r = interpretSubmitResponse({ status: 201, body: { status: 'RECEIVED', referral: { referralId: 7 } } });
+    const r = interpretSubmitResponse({ status: 201, body: { status: 'RECEIVED', referral: confirmation() } }, { submissionId: SID });
     assert.equal(r.message, 'Referral received !');
     assert.equal(r.referral.referralId, 7);
+    assert.equal(r.keepInput, false, 'input is cleared only after a confirmed referral');
   });
 
   test('a 2xx without a confirmed referral is NOT treated as success', () => {
@@ -150,7 +159,7 @@ describe('submission and recovery states (PRD 7.1 to 7.5)', () => {
   });
 
   test('a retry the server already has → "Referral already received. Do not resend !"', () => {
-    const r = interpretSubmitResponse({ status: 200, body: { status: 'ALREADY_RECEIVED', referral: { referralId: 7 } } });
+    const r = interpretSubmitResponse({ status: 200, body: { status: 'ALREADY_RECEIVED', referral: confirmation() } }, { submissionId: SID });
     assert.equal(r.message, MESSAGES.ALREADY_RECEIVED);
     assert.equal(r.canResend, false);
   });
@@ -172,7 +181,7 @@ describe('submission and recovery states (PRD 7.1 to 7.5)', () => {
   }
 
   test('safe check finds it → already received', () => {
-    const r = interpretCheckResponse({ status: 200, body: { status: 'RECEIVED', referral: { referralId: 9 } } });
+    const r = interpretCheckResponse({ status: 200, body: { status: 'RECEIVED', referral: confirmation({ referralId: 9 }) } }, { submissionId: SID });
     assert.equal(r.message, MESSAGES.ALREADY_RECEIVED);
   });
 
@@ -211,14 +220,170 @@ describe('submission and recovery states (PRD 7.1 to 7.5)', () => {
     assert.equal(r.keepInput, true);
   });
 
-  test('a Submission ID conflict starts a new submission ID', () => {
-    const r = interpretSubmitResponse({ status: 409, body: { code: 'SUBMISSION_ID_CONFLICT' } });
-    assert.equal(r.newSubmissionId, true);
-    assert.equal(r.keepInput, true);
+  test('an unexpected-field refusal is a validation error, not an unknown outcome', () => {
+    const r = interpretSubmitResponse({ status: 400, body: { code: 'UNEXPECTED_FIELD' } });
+    assert.equal(r.state, 'INVALID');
+    assert.deepEqual(r.fieldErrors, []);
   });
 
   test('signed-out keeps input', () => {
     assert.equal(interpretSubmitResponse({ status: 401, body: {} }).keepInput, true);
+  });
+});
+
+describe('confirmation must be complete and match the Submission ID (PRD 7.2)', () => {
+  for (const [label, referral] of [
+    ['no referral', undefined],
+    ['null referral', null],
+    ['referral is a string', 'ok'],
+    ['missing referralId', confirmation({ referralId: undefined })],
+    ['referralId 0', confirmation({ referralId: 0 })],
+    ['referralId as text', confirmation({ referralId: '7' })],
+    ['fractional referralId', confirmation({ referralId: 7.5 })],
+    ['missing submissionId', confirmation({ submissionId: undefined })],
+    ['a different submissionId', confirmation({ submissionId: OTHER_SID })],
+  ]) {
+    test(`201 RECEIVED with ${label} → not confirmed, input kept, safe check`, () => {
+      const r = interpretSubmitResponse({ status: 201, body: { status: 'RECEIVED', referral } }, { submissionId: SID });
+      assert.equal(r.state, 'NOT_CONFIRMED');
+      assert.equal(r.keepInput, true);
+      assert.equal(r.needsCheck, true);
+    });
+    test(`200 ALREADY_RECEIVED with ${label} → not confirmed`, () => {
+      const r = interpretSubmitResponse({ status: 200, body: { status: 'ALREADY_RECEIVED', referral } }, { submissionId: SID });
+      assert.equal(r.state, 'NOT_CONFIRMED');
+      assert.equal(r.keepInput, true);
+    });
+    test(`safe check RECEIVED with ${label} → still unknown, check again`, () => {
+      const r = interpretCheckResponse({ status: 200, body: { status: 'RECEIVED', referral } }, { submissionId: SID });
+      assert.equal(r.state, 'NOT_CONFIRMED');
+      assert.equal(r.next, 'CHECK_AGAIN');
+      assert.equal(r.keepInput, true);
+    });
+  }
+
+  test('Submission ID comparison ignores letter case, like the server', () => {
+    assert.equal(isConfirmation(confirmation({ submissionId: SID.toUpperCase() }), SID), true);
+  });
+
+  test('without a known Submission ID nothing counts as confirmed', () => {
+    assert.equal(interpretSubmitResponse({ status: 201, body: { status: 'RECEIVED', referral: confirmation() } }).state, 'NOT_CONFIRMED');
+  });
+});
+
+describe('Submission ID conflict recovery (PRD 7.3, 7.4)', () => {
+  test('a conflict keeps the Submission ID, locks the form and checks the original attempt first', () => {
+    const r = interpretSubmitResponse({ status: 409, body: { code: 'SUBMISSION_ID_CONFLICT' } }, { submissionId: SID });
+    assert.equal(r.state, 'CONFLICT_CHECK');
+    assert.equal(r.needsCheck, true);
+    assert.equal(r.afterConflict, true);
+    assert.equal(r.formLocked, true);
+    assert.equal(r.canResend, false);
+    assert.equal(r.keepInput, true);
+    assert.equal(r.newSubmissionId, undefined, 'never replaces the ID by itself');
+  });
+
+  test('the check finds the earlier referral → "Referral already received. Do not resend !"', () => {
+    const r = interpretCheckResponse({ status: 200, body: { status: 'RECEIVED', referral: confirmation() } }, { submissionId: SID, afterConflict: true });
+    assert.equal(r.message, MESSAGES.ALREADY_RECEIVED);
+    assert.equal(r.canResend, false);
+  });
+
+  test('the check finds nothing → explicit "Send as a new referral" action, input kept, no resend of the same ID', () => {
+    const r = interpretCheckResponse({ status: 200, body: { status: 'NOT_RECEIVED', referral: null } }, { submissionId: SID, afterConflict: true });
+    assert.equal(r.state, 'CONFLICT');
+    assert.equal(r.message, CONFLICT_NOT_FOUND);
+    assert.equal(r.next, 'NEW_SUBMISSION');
+    assert.equal(r.canResend, false);
+    assert.equal(r.keepInput, true);
+  });
+
+  test('the check cannot be completed → still not confirmed, check again', () => {
+    const r = interpretCheckResponse({ networkError: true }, { submissionId: SID, afterConflict: true });
+    assert.equal(r.message, MESSAGES.NOT_CONFIRMED);
+    assert.equal(r.next, 'CHECK_AGAIN');
+    assert.equal(r.canResend, false);
+  });
+
+  test('end to end against the real API: an edited resend with the same ID that already committed is found, not duplicated', async () => {
+    const store = createMemoryReferralStore(syntheticSeed());
+    const app = createApp({ affiliationStore: store, referralStore: store, resolveIdentity: () => ({ userId: DEV_USER_ID }) });
+    const { body: current } = await request(app).get('/api/me/affiliation');
+    await request(app).put('/api/me/affiliation').send({ programId: 1, version: current.version }).expect(200);
+
+    const submissionId = randomUUID();
+    await request(app).post('/api/referrals').send(toRequestBody(validForm(), { submissionId, receivingProgramId: 3 })).expect(201);
+    const edited = await request(app).post('/api/referrals')
+      .send(toRequestBody(validForm({ notes: 'Synthetic edit' }), { submissionId, receivingProgramId: 3 }));
+    const conflict = interpretSubmitResponse({ status: edited.status, body: edited.body }, { submissionId });
+    assert.equal(conflict.state, 'CONFLICT_CHECK');
+
+    const check = await request(app).get(`/api/referrals/submissions/${submissionId}`);
+    const result = interpretCheckResponse({ status: check.status, body: check.body }, { submissionId, afterConflict: true });
+    assert.equal(result.state, 'ALREADY_RECEIVED');
+    assert.equal(store._referrals.length, 1);
+  });
+
+  test('end to end: a real 201 confirmation passes the completeness check', async () => {
+    const store = createMemoryReferralStore(syntheticSeed());
+    const app = createApp({ affiliationStore: store, referralStore: store, resolveIdentity: () => ({ userId: DEV_USER_ID }) });
+    const { body: current } = await request(app).get('/api/me/affiliation');
+    await request(app).put('/api/me/affiliation').send({ programId: 1, version: current.version }).expect(200);
+    const submissionId = randomUUID();
+    const res = await request(app).post('/api/referrals').send(toRequestBody(validForm(), { submissionId, receivingProgramId: 3 }));
+    assert.equal(interpretSubmitResponse({ status: res.status, body: res.body }, { submissionId }).state, 'RECEIVED');
+  });
+});
+
+describe('affiliation save handler (PRD 3.9, 9.4, 13.4)', () => {
+  const program = (programId, name) => ({ programId, name, site: null, departmentId: 1, departmentName: 'Synthetic Dept' });
+
+  test('saved → shows the server affiliation and replaces any earlier message', () => {
+    const r = interpretAffiliationSave({ status: 200, body: { status: 'SET', program: program(1, 'Early Childhood Playgroup'), version: 'v2' } });
+    assert.equal(r.state, 'SAVED');
+    assert.equal(r.affiliation.version, 'v2');
+    assert.equal(r.tone, 'success');
+    assert.match(r.message, /saved: Early Childhood Playgroup/);
+  });
+
+  test('changed elsewhere → current affiliation from the server, not a success message', () => {
+    const current = { status: 'SET', program: program(3, 'Adult Evening Classes'), version: 'v5' };
+    const r = interpretAffiliationSave({ status: 409, body: { code: 'AFFILIATION_CHANGED', current } });
+    assert.equal(r.state, 'CHANGED_ELSEWHERE');
+    assert.deepEqual(r.affiliation, current, 'the page switches to the authoritative state and its new version');
+    assert.notEqual(r.tone, 'success');
+    assert.match(r.message, /changed elsewhere and is now Adult Evening Classes/);
+    assert.match(r.message, /Nothing was saved/);
+    assert.equal(r.fieldError, r.message);
+  });
+
+  test('changed elsewhere to no affiliation still explains and asks to choose', () => {
+    const r = interpretAffiliationSave({ status: 409, body: { code: 'AFFILIATION_CHANGED', current: { status: 'NOT_SET', program: null, version: 'v3' } } });
+    assert.equal(r.state, 'CHANGED_ELSEWHERE');
+    assert.match(r.message, /Choose again/);
+  });
+
+  for (const [label, response] of [
+    ['network failure', { networkError: true }],
+    ['server error', { status: 500, body: null }],
+    ['200 without a version', { status: 200, body: { status: 'SET', program: program(1, 'x') } }],
+    ['409 without current', { status: 409, body: { code: 'AFFILIATION_CHANGED' } }],
+  ]) {
+    test(`${label} → not saved, the page keeps its current affiliation`, () => {
+      const r = interpretAffiliationSave(response);
+      assert.equal(r.state, 'FAILED');
+      assert.equal(r.affiliation, null);
+      assert.equal(r.tone, 'error');
+    });
+  }
+
+  test('a Program that cannot be selected says so', () => {
+    assert.equal(interpretAffiliationSave({ status: 422, body: { code: 'PROGRAM_NOT_SELECTABLE' } }).state, 'NOT_SELECTABLE');
+  });
+
+  test('app.js routes every save result through the handler and replaces the status message', () => {
+    const app = read('app.js');
+    assert.match(app, /const result = interpretAffiliationSave\(res\);\s*showStatus\(result\.message, result\.tone/);
   });
 });
 
@@ -285,6 +450,37 @@ describe('page structure, accessibility and privacy', () => {
     }
   });
 
+  test('field error order matches the form, so focus goes to the first invalid field on screen', () => {
+    const onScreen = [...html.matchAll(/id="(participantName|contactMethod|contactValue|referralContext|participantZip|notes)"/g)].map((m) => m[1]);
+    assert.deepEqual(onScreen, ['participantName', 'contactMethod', 'contactValue', 'referralContext', 'participantZip', 'notes']);
+    const errors = validateReferralForm(validForm({ referralContext: '', participantZip: '12' }));
+    assert.ok(errors.referralContext && errors.participantZip);
+    assert.equal(firstInvalidField(errors), 'referralContext', 'the need comes before ZIP on the form');
+  });
+
+  test('privacy hints describe who can see the text (creator and authorized receiving staff)', () => {
+    assert.doesNotMatch(html, /Shared only with the receiving Program/);
+    assert.equal((html.match(/Visible to you and to staff authorized for the receiving Program\./g) ?? []).length, 2);
+  });
+
+  test('a focused button keeps readable text on the light focus background (PRD 14.2)', () => {
+    const css = read('referral.css');
+    assert.match(css, /\.btn:focus-visible[^{]*\{[^}]*color: var\(--text\)/);
+    // --text on --focus-bg must meet WCAG AA (4.5:1) in both themes.
+    const lum = (hex) => {
+      const [r, g, b] = hex.match(/[0-9a-f]{2}/gi).map((h) => parseInt(h, 16) / 255)
+        .map((c) => (c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4));
+      return 0.2126 * r + 0.7152 * g + 0.0722 * b;
+    };
+    const ratio = (a, b) => { const [x, y] = [lum(a), lum(b)].sort((p, q) => q - p); return (x + 0.05) / (y + 0.05); };
+    const blocks = css.split('@media (prefers-color-scheme: dark)');
+    for (const block of blocks) {
+      const text = block.match(/--text: (#[0-9a-f]{6})/i)[1];
+      const focusBg = block.match(/--focus-bg: (#[0-9a-f]{6})/i)[1];
+      assert.ok(ratio(text, focusBg) >= 4.5, `${text} on ${focusBg}`);
+    }
+  });
+
   test('no DOB, SSN or address fields (PRD 5.2)', () => {
     assert.doesNotMatch(html, /birth|dob|ssn|social security|address line|street/i);
   });
@@ -318,7 +514,7 @@ describe('page structure, accessibility and privacy', () => {
     const page = await request(app).get('/referral/');
     assert.equal(page.status, 200);
     assert.match(page.text, /Direct Referral/);
-    for (const file of ['app.js', 'api.js', 'validation.js', 'submission.js', 'textSize.js', 'referral.css']) {
+    for (const file of ['app.js', 'api.js', 'affiliation.js', 'validation.js', 'submission.js', 'textSize.js', 'referral.css']) {
       const res = await request(app).get(`/referral/${file}`);
       assert.equal(res.status, 200, file);
     }

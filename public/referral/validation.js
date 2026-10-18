@@ -32,8 +32,8 @@ export const FIELD_ORDER = Object.freeze([
   'participantName',
   'contactMethod',
   'contactValue',
-  'participantZip',
   'referralContext',
+  'participantZip',
   'notes',
 ]);
 

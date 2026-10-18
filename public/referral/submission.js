@@ -25,9 +25,33 @@ export const MESSAGES = Object.freeze({
 //   formLocked   - should the fields be read-only? (true while the outcome is unknown)
 //   keepInput    - keep the worker's entered information? (PRD 7.5)
 //   needsCheck   - run the safe status check next (PRD 7.4)
-//   newSubmissionId - start a new logical submission (new ID)
+//   afterConflict - the Submission ID was refused as already in use; the
+//                   safe check that follows decides what happens next
 //   fieldErrors  - server-reported invalid field names
-//   next         - optional follow-up the page should offer
+//   next         - optional follow-up the page should offer:
+//                  CHECK_AGAIN, NEW_SUBMISSION, CHOOSE_AFFILIATION,
+//                  RELOAD_AFFILIATION, CHOOSE_PROGRAM
+//
+// A Submission ID is never replaced automatically. Only the worker's
+// explicit "Send as a new referral" action (next: NEW_SUBMISSION) starts a
+// new logical submission, and only after the safe check has shown that the
+// original attempt was not received (PRD 7.3, 7.4).
+
+// A confirmation counts only if it is complete and matches the Submission
+// ID this page sent (PRD 7.2). Anything less leaves the outcome unknown.
+export function isConfirmation(referral, submissionId) {
+  return Boolean(
+    referral && typeof referral === 'object' &&
+    Number.isSafeInteger(referral.referralId) && referral.referralId > 0 &&
+    typeof referral.submissionId === 'string' &&
+    typeof submissionId === 'string' &&
+    referral.submissionId.toLowerCase() === submissionId.toLowerCase(),
+  );
+}
+
+const confirmed = (state, message, referral) => ({
+  state, message, tone: 'success', referral, keepInput: false, formLocked: true, canResend: false,
+});
 
 export function sendingState() {
   return { state: 'SENDING', message: MESSAGES.SENDING, tone: 'info', canResend: false, formLocked: true, keepInput: true };
@@ -44,19 +68,24 @@ const unconfirmed = () => ({
 });
 
 // response: { networkError: true } or { status, body } from the POST.
-export function interpretSubmitResponse(response) {
+// submissionId: the Submission ID this page sent.
+export function interpretSubmitResponse(response, { submissionId } = {}) {
   if (!response || response.networkError) return unconfirmed();
 
   const { status, body } = response;
   const code = body?.code;
 
   if (status === 201 && body?.status === 'RECEIVED') {
-    return { state: 'RECEIVED', message: MESSAGES.RECEIVED, tone: 'success', referral: body.referral, keepInput: false, formLocked: true, canResend: false };
+    return isConfirmation(body.referral, submissionId)
+      ? confirmed('RECEIVED', MESSAGES.RECEIVED, body.referral)
+      : unconfirmed();
   }
   if (status === 200 && body?.status === 'ALREADY_RECEIVED') {
-    return { state: 'ALREADY_RECEIVED', message: MESSAGES.ALREADY_RECEIVED, tone: 'success', referral: body.referral, keepInput: false, formLocked: true, canResend: false };
+    return isConfirmation(body.referral, submissionId)
+      ? confirmed('ALREADY_RECEIVED', MESSAGES.ALREADY_RECEIVED, body.referral)
+      : unconfirmed();
   }
-  if (status === 400 && code === 'INVALID_REQUEST') {
+  if (status === 400 && (code === 'INVALID_REQUEST' || code === 'UNEXPECTED_FIELD')) {
     return {
       state: 'INVALID', message: 'Some information needs attention. Nothing was sent.', tone: 'error',
       fieldErrors: Array.isArray(body.fields) ? body.fields : [], keepInput: true, formLocked: false, canResend: true,
@@ -82,10 +111,12 @@ export function interpretSubmitResponse(response) {
     };
   }
   if (status === 409 && code === 'SUBMISSION_ID_CONFLICT') {
-    // Should not happen with this page; start a fresh logical submission.
+    // Keep the same Submission ID and first check whether this worker's
+    // earlier attempt was received (PRD 7.4). For example, an earlier send
+    // may have committed after a check that said it had not.
     return {
-      state: 'CONFLICT', message: 'This referral could not be matched to an earlier attempt. Your information has been preserved. Review it and send again.',
-      tone: 'error', keepInput: true, formLocked: false, canResend: true, newSubmissionId: true,
+      state: 'CONFLICT_CHECK', message: MESSAGES.NOT_CONFIRMED, tone: 'error',
+      keepInput: true, formLocked: true, canResend: false, needsCheck: true, afterConflict: true,
     };
   }
   if (status === 401 || status === 403) {
@@ -98,17 +129,31 @@ export function interpretSubmitResponse(response) {
   return unconfirmed();
 }
 
+export const CONFLICT_NOT_FOUND =
+  'No earlier referral from you was found with this Submission ID. Your information has been preserved. ' +
+  'To send it, choose "Send as a new referral".';
+
 // response: { networkError: true } or { status, body } from the safe check.
-export function interpretCheckResponse(response) {
+// submissionId: the Submission ID being checked.
+// afterConflict: the server refused that Submission ID as already in use.
+export function interpretCheckResponse(response, { submissionId, afterConflict = false } = {}) {
   if (response && !response.networkError && response.status === 200) {
-    if (response.body?.status === 'RECEIVED') {
-      return { state: 'ALREADY_RECEIVED', message: MESSAGES.ALREADY_RECEIVED, tone: 'success', referral: response.body.referral, keepInput: false, formLocked: true, canResend: false };
+    if (response.body?.status === 'RECEIVED' && isConfirmation(response.body.referral, submissionId)) {
+      return confirmed('ALREADY_RECEIVED', MESSAGES.ALREADY_RECEIVED, response.body.referral);
+    }
+    if (response.body?.status === 'NOT_RECEIVED' && afterConflict) {
+      // Not this worker's referral, so resending this ID cannot succeed.
+      // Offer an explicit new submission; never switch IDs silently.
+      return {
+        state: 'CONFLICT', message: CONFLICT_NOT_FOUND, tone: 'error',
+        keepInput: true, formLocked: false, canResend: false, next: 'NEW_SUBMISSION',
+      };
     }
     if (response.body?.status === 'NOT_RECEIVED') {
       // Safe to resend with the same Submission ID (PRD 7.3, 7.4).
       return { state: 'NOT_RECEIVED', message: MESSAGES.NOT_RECEIVED, tone: 'info', keepInput: true, formLocked: false, canResend: true };
     }
   }
-  // Still unknown. Stay locked and let the worker check again.
+  // Still unknown, or an incomplete answer. Stay locked and check again.
   return { ...unconfirmed(), needsCheck: false, next: 'CHECK_AGAIN' };
 }

@@ -2,8 +2,10 @@
 //
 // Contract (cards 2 and 3):
 //   GET  /api/programs                         -> { programs: [...] }
-//   GET  /api/me/affiliation                   -> { status, program }
-//   PUT  /api/me/affiliation  { programId }    -> { status, program }
+//   GET  /api/me/affiliation                   -> { status, program, version }
+//   PUT  /api/me/affiliation  { programId, version }
+//                                              -> { status, program, version }
+//                                                 409 AFFILIATION_CHANGED { current } if stale
 //   POST /api/referrals       { ...referral }  -> 201 RECEIVED / 200 ALREADY_RECEIVED
 //   GET  /api/referrals/submissions/:id        -> { status: RECEIVED | NOT_RECEIVED }
 //

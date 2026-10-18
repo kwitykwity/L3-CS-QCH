@@ -13,6 +13,7 @@ import {
   CONTACT_METHODS, SERVER_FIELD_MESSAGES, firstInvalidField, toRequestBody, validateReferralForm,
 } from './validation.js';
 import { interpretCheckResponse, interpretSubmitResponse, sendingState } from './submission.js';
+import { interpretAffiliationSave } from './affiliation.js';
 import { SIZES, loadSize, saveSize } from './textSize.js';
 
 const $ = (id) => document.getElementById(id);
@@ -24,6 +25,7 @@ const state = {
   affiliation: null,          // { status, program } from the server
   selectedProgram: null,      // receiving Program chosen in step 1
   submissionId: null,         // one per logical referral (PRD 7.3); memory only
+  afterConflict: false,       // server said the Submission ID is already in use
   phase: 'EDITING',           // EDITING | SENDING | NOT_CONFIRMED | DONE
 };
 
@@ -68,10 +70,13 @@ function showStatus(message, tone, { focus = true } = {}) {
   if (focus) box.focus();
 }
 
+// Every new message replaces the previous one; actions that belonged to
+// the previous message are hidden too, so no stale banner remains.
 function hideStatus() {
   $('status').hidden = true;
   $('check-again').hidden = true;
   $('start-new').hidden = true;
+  $('new-submission').hidden = true;
 }
 
 // ---------------------------------------------------------------------------
@@ -144,31 +149,24 @@ async function saveAffiliation(event) {
   const res = await api.setAffiliation(Number(value), state.affiliation?.version);
   button.disabled = false;
 
-  if (!res.networkError && res.status === 200) {
-    state.affiliation = res.body;
+  // Any earlier message (for example a previous "saved") is replaced.
+  const result = interpretAffiliationSave(res);
+  showStatus(result.message, result.tone, { focus: false });
+
+  if (result.state === 'SAVED') {
+    state.affiliation = result.affiliation;
     $('affiliation-form').hidden = true;
     renderAffiliation();
-    showStatus(`Your Program affiliation is saved: ${res.body.program.name}.`, 'success', { focus: false });
     $('affiliation-heading').focus();
     return;
   }
-  if (!res.networkError && res.status === 409 && res.body?.code === 'AFFILIATION_CHANGED') {
-    // Changed elsewhere (e.g. another tab). Show the current affiliation
-    // and let the worker decide again; nothing was saved (PRD 13.4).
-    state.affiliation = res.body.current;
+  if (result.state === 'CHANGED_ELSEWHERE') {
+    // Show the authoritative affiliation; nothing was saved (PRD 13.4).
+    state.affiliation = result.affiliation;
     renderAffiliation();
-    const now = res.body.current?.program?.name;
-    setFieldError('affiliation-select', 'affiliation-error', now
-      ? `Your affiliation was changed elsewhere and is now ${now}. Choose again if you want to change it.`
-      : 'Your affiliation was changed elsewhere. Choose again.');
-    if (!$('affiliation-form').hidden) $('affiliation-select').focus();
-    else showStatus(`Your affiliation was changed elsewhere and is now ${now}.`, 'info');
-    return;
+    if ($('affiliation-form').hidden) openAffiliationForm({ cancellable: true });
   }
-  const message = res.body?.code === 'PROGRAM_NOT_SELECTABLE'
-    ? 'That Program cannot be selected. Choose another Program.'
-    : 'Your affiliation was not saved. Try again.';
-  setFieldError('affiliation-select', 'affiliation-error', message);
+  setFieldError('affiliation-select', 'affiliation-error', result.fieldError);
   $('affiliation-select').focus();
 }
 
@@ -361,6 +359,7 @@ function resetReferral() {
   clearFieldErrors();
   state.selectedProgram = null;
   state.submissionId = null;
+  state.afterConflict = false;
   state.phase = 'EDITING';
   setLocked(false);
   setSendButton({ enabled: true });
@@ -372,10 +371,13 @@ function resetReferral() {
 
 // Applies a result from submission.js to the page.
 async function applyResult(result) {
+  hideStatus();
   showStatus(result.message, result.tone);
   setLocked(Boolean(result.formLocked));
   setSendButton({ enabled: Boolean(result.canResend) });
   $('check-again').hidden = result.next !== 'CHECK_AGAIN';
+  $('new-submission').hidden = result.next !== 'NEW_SUBMISSION';
+  if (result.afterConflict) state.afterConflict = true;
 
   if (result.state === 'RECEIVED' || result.state === 'ALREADY_RECEIVED') {
     state.phase = 'DONE';
@@ -383,6 +385,7 @@ async function applyResult(result) {
     $('referral-form').reset();
     updateContactField();
     state.submissionId = null;
+    state.afterConflict = false;
     const id = result.referral?.referralId;
     if (id) showStatus(`${result.message} Referral ID: ${id}.`, result.tone);
     $('start-new').hidden = false;
@@ -391,8 +394,6 @@ async function applyResult(result) {
   }
 
   state.phase = result.formLocked ? 'NOT_CONFIRMED' : 'EDITING';
-
-  if (result.newSubmissionId) state.submissionId = crypto.randomUUID();
 
   if (result.state === 'INVALID') {
     const errors = {};
@@ -421,7 +422,22 @@ async function runSafeCheck() {
   $('check-again').disabled = true;
   const res = await api.checkSubmission(state.submissionId);
   $('check-again').disabled = false;
-  await applyResult(interpretCheckResponse(res));
+  await applyResult(interpretCheckResponse(res, {
+    submissionId: state.submissionId,
+    afterConflict: state.afterConflict,
+  }));
+}
+
+// Explicit worker choice after the safe check found that the original
+// Submission ID is not theirs (PRD 7.3, 7.4). Their information stays.
+function startNewSubmission() {
+  state.submissionId = crypto.randomUUID();
+  state.afterConflict = false;
+  state.phase = 'EDITING';
+  setLocked(false);
+  setSendButton({ enabled: true });
+  hideStatus();
+  showStatus('Ready to send as a new referral. Review the information, then choose Send referral.', 'info');
 }
 
 async function submitReferral(event) {
@@ -458,7 +474,7 @@ async function submitReferral(event) {
     receivingProgramId: state.selectedProgram.programId,
   });
   const res = await api.submitReferral(body);
-  await applyResult(interpretSubmitResponse(res));
+  await applyResult(interpretSubmitResponse(res, { submissionId: body.submissionId }));
 }
 
 // Enter activates only the focused button; it never submits from a text
@@ -538,6 +554,7 @@ function init() {
   $('referral-form').addEventListener('keydown', blockImplicitSubmit);
   $('cancel').addEventListener('click', confirmDiscard);
   $('check-again').addEventListener('click', runSafeCheck);
+  $('new-submission').addEventListener('click', startNewSubmission);
   $('start-new').addEventListener('click', () => {
     resetReferral();
     hideStatus();

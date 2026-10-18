@@ -32,6 +32,7 @@
       </div>
       <div class="status-actions">
         <button type="button" id="check-again" class="btn btn--secondary" hidden>Check whether it was received</button>
+        <button type="button" id="new-submission" class="btn btn--primary" hidden>Send as a new referral</button>
         <button type="button" id="start-new" class="btn btn--primary" hidden>Start a new referral</button>
       </div>
 
@@ -121,7 +122,7 @@
               <label for="referralContext">What do they need? <span class="req" aria-hidden="true">*</span></label>
               <textarea id="referralContext" name="referralContext" rows="4" maxlength="4000"
                 required aria-required="true" aria-describedby="referralContext-hint referralContext-error"></textarea>
-              <p id="referralContext-hint" class="muted">Shared only with the receiving Program.</p>
+              <p id="referralContext-hint" class="muted">Visible to you and to staff authorized for the receiving Program.</p>
               <p id="referralContext-error" class="field__error" hidden></p>
             </div>
 
@@ -135,7 +136,7 @@
             <div class="field">
               <label for="notes">Notes (optional)</label>
               <textarea id="notes" name="notes" rows="3" maxlength="4000" aria-describedby="notes-hint notes-error"></textarea>
-              <p id="notes-hint" class="muted">Shared only with the receiving Program.</p>
+              <p id="notes-hint" class="muted">Visible to you and to staff authorized for the receiving Program.</p>
               <p id="notes-error" class="field__error" hidden></p>
             </div>
           </fieldset>

@@ -3,7 +3,7 @@
 // Direct Referral page can be used against the real backend code before
 // Entra sign-in and Azure SQL exist.
 //
-//   npm run dev:synthetic     then open http://localhost:3000/referral/
+//   npm run dev:synthetic     then open http://127.0.0.1:3000/referral/
 //
 // Safety (PRD 15.5, 16.1, 16.2, 17.4, 18.5):
 // - Refuses to start unless NODE_ENV is exactly "development" (fail closed).
@@ -39,5 +39,5 @@ const app = createApp({
 });
 
 app.listen(config.port, '127.0.0.1', () => {
-  console.log(`QCH Connect (LOCAL DEV, SYNTHETIC DATA ONLY) on http://localhost:${config.port}/referral/`);
+  console.log(`QCH Connect (LOCAL DEV, SYNTHETIC DATA ONLY) on http://127.0.0.1:${config.port}/referral/`);
 });

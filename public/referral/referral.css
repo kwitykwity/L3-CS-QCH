@@ -164,6 +164,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible,
 .btn:focus-visible, .text-size__btn:focus-visible {
   background-color: var(--focus-bg);
 }
+/* The focus background is light, so every focused button uses the normal
+   text color on it. Without this the primary button's white label sat on
+   light gray (PRD 14.1, 14.2). Checked in light and dark themes. */
+.btn:focus-visible, .text-size__btn:focus-visible { color: var(--text); }
 input[type="radio"]:focus-visible { outline-offset: 3px; }
 h2:focus, .status:focus { outline: none; }
 h2:focus-visible, .status:focus-visible { outline: 3px solid var(--focus-ring); }
