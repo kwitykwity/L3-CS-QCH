@@ -46,11 +46,33 @@
 //       Written in the same transaction as the change it records. The store
 //       adds occurredAt (UTC) itself; callers never supply the timestamp.
 //
+// Read methods (card 6, receiving queue + authorization):
+//   getActiveGrants(userId) -> [{ permission, scopeType, programId,
+//       departmentId, grantSource, revokedAt }] from dbo.user_grants where
+//       revoked_at IS NULL. Authorization is decided by the service, not here.
+//   getReferralById(referralId) -> referral row | null
+//   listReferralsByReceivingPrograms(programIds, { stage, limit, after })
+//   listReferralsByCreator(userId, { stage, limit, after })
+//       Newest first (created_at DESC, then referral_id DESC), at most
+//       `limit` rows, filtered by stage when given (see stage.js for the
+//       exact conditions). Uses ix_referrals_inbox / ix_referrals_my_sent.
+//       `after` = { createdAt, referralId } (a page cursor, cursor.js):
+//       only rows strictly after that position, in SQL
+//         AND (created_at < @afterCreatedAt
+//              OR (created_at = @afterCreatedAt AND referral_id < @afterId))
+//       with the same ORDER BY and TOP (@limit). Scope (program IDs or
+//       creator), stage, cursor and limit are all applied in the query and
+//       all parameterized. createdAt must be returned with the full stored
+//       precision (for datetime2: CONVERT(varchar(33), created_at, 127))
+//       and the cursor value compared as datetime2, so no row is skipped or
+//       repeated between pages.
+//
 // Columns map to dbo.referrals and dbo.audit_events in
 // db/migrations/001_core_schema.sql (PR #4).
 
 import { createMemoryStore } from '../affiliation/memoryStore.js';
 import { DuplicateSubmissionError } from './errors.js';
+import { stageOf } from './stage.js';
 
 // Row locks for the in-memory store: shared locks for transaction reads,
 // exclusive locks for changes. A shared lock is held until its transaction
@@ -188,10 +210,43 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     }
   }
 
+  const grants = (seed.grants ?? []).map((g) => ({ revokedAt: null, ...g }));
+
+  // Order: createdAt DESC, referralId DESC. `after` is a cursor position
+  // { createdAt, referralId }; only rows strictly after it are returned.
+  const isAfter = (r, after) =>
+    r.createdAt < after.createdAt || (r.createdAt === after.createdAt && r.referralId < after.referralId);
+
+  function newestFirst(rows, { stage, limit, after }) {
+    return rows
+      .filter((r) => !stage || stageOf(r) === stage)
+      .filter((r) => !after || isAfter(r, after))
+      .sort((a, b) => b.createdAt.localeCompare(a.createdAt) || b.referralId - a.referralId)
+      .slice(0, limit ?? Infinity)
+      .map(copy);
+  }
+
   return {
     ...base,
     withTransaction,
     getReferralBySubmissionId,
+
+    async getActiveGrants(userId) {
+      return grants.filter((g) => g.userId === userId && g.revokedAt == null).map((g) => ({ ...g }));
+    },
+
+    async getReferralById(referralId) {
+      return copy(referrals.find((r) => r.referralId === referralId));
+    },
+
+    async listReferralsByReceivingPrograms(programIds, options = {}) {
+      const ids = new Set(programIds);
+      return newestFirst(referrals.filter((r) => ids.has(r.receivingProgramId)), options);
+    },
+
+    async listReferralsByCreator(userId, options = {}) {
+      return newestFirst(referrals.filter((r) => r.createdByUserId === userId), options);
+    },
 
     // Changes to rows a referral transaction may have read wait for that
     // transaction to end (see "Consistency of reference reads" above).
@@ -207,5 +262,11 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     _referrals: referrals,
     _referralAuditEvents: auditEvents,
     _failNextAudit() { failNextAudit = true; },
+    _grants: grants,
+    // Simulates a later receiving response so tests can cover every stage
+    // before the Respond card exists.
+    _setReferralState(referralId, fields) {
+      Object.assign(referrals.find((r) => r.referralId === referralId), fields);
+    },
   };
 }

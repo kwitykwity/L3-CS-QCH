@@ -11,7 +11,9 @@ try {
   process.exit(1);
 }
 
-const app = createApp();
+// Production wiring uses only validated configuration (PRD 18.5). DEMO
+// grants stay off here; createApp refuses them outside development/test.
+const app = createApp({ nodeEnv: config.nodeEnv, allowDemoGrants: false });
 
 app.listen(config.port, () => {
   console.log(
