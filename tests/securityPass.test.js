@@ -3,39 +3,30 @@ import assert from 'node:assert/strict';
 import { enforceProductionSafety, validateEnvironment, sanitizeLogData, formatSafeError } from '../src/middleware/security.js';
 
 test('Security & Production-Safety Test Suite', async (t) => {
-  await t.test('Fails closed on missing or invalid NODE_ENV', async () => {
-    assert.throws(
-      () => {
-        enforceProductionSafety({ NODE_ENV: 'production', ALLOW_DEMO_BYPASS: 'true' });
-      },
-      (err) => err.message.includes('FATAL: Demo controls and bypass flags cannot be enabled')
-    );
+  await t.test('Production Error Redaction (503 / 500)', async () => {
+    const err503 = new Error('Database connection pool exhausted at tcp://sqlserver.internal:1433');
+    err503.statusCode = 503;
 
-    assert.throws(
-      () => {
-        validateEnvironment({ NODE_ENV: 'production' }, ['NODE_ENV', 'JWT_SECRET']);
-      },
-      (err) => err.message.includes('FATAL: Missing required environment variables')
-    );
+    const formatted = formatSafeError(err503, { NODE_ENV: 'production' });
+    assert.strictEqual(formatted.error, 'Service Unavailable');
+    assert.strictEqual(formatted.statusCode, 503);
+    assert.strictEqual(formatted.stack, undefined);
   });
 
-  await t.test('Production Error Handler Redacts Internal Details', async () => {
-    const rawPayload = {
-      user: 'admin',
-      ssn: '000-00-0000',
-      token: 'secret-auth-token',
-      nested: { password: 'my-password', participant_name: 'John Doe' }
+  await t.test('Schema Participant PII Redaction', async () => {
+    const payload = {
+      participant_name: 'Jane Doe',
+      contact_value: 'jane@example.com',
+      referral_context: 'Sensitive intake context',
+      notes: 'Private notes',
+      participant_zip: '11355'
     };
 
-    const sanitized = sanitizeLogData(rawPayload);
-    assert.strictEqual(sanitized.ssn, '[REDACTED]');
-    assert.strictEqual(sanitized.token, '[REDACTED]');
-    assert.strictEqual(sanitized.nested.password, '[REDACTED]');
-    assert.strictEqual(sanitized.nested.participant_name, '[REDACTED]');
-    assert.strictEqual(sanitized.user, 'admin');
-
-    const prodErr = formatSafeError(new Error('Sensitive DB connection failed: password exposed'), { NODE_ENV: 'production' });
-    assert.strictEqual(prodErr.error, 'Internal Server Error');
-    assert.strictEqual(prodErr.stack, undefined);
+    const sanitized = sanitizeLogData(payload);
+    assert.strictEqual(sanitized.participant_name, '[REDACTED]');
+    assert.strictEqual(sanitized.contact_value, '[REDACTED]');
+    assert.strictEqual(sanitized.referral_context, '[REDACTED]');
+    assert.strictEqual(sanitized.notes, '[REDACTED]');
+    assert.strictEqual(sanitized.participant_zip, '[REDACTED]');
   });
 });

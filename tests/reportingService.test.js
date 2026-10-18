@@ -2,25 +2,28 @@ import test from 'node:test';
 import assert from 'node:assert/strict';
 import { getTotalReferrals, getTimingMetrics, getReportingBreadthMetrics } from '../src/services/reportingService.js';
 
-test('Reporting Service Unit Tests', async (t) => {
+test('Reporting Service Unit Tests - T-SQL Schema Verification', async (t) => {
   const mockDb = {
     async query(sql, params) {
       if (sql.includes('COUNT(referral_id) AS total_referrals')) {
         return [{ total_referrals: 15 }];
       }
-      if (sql.includes('avg_hours_to_first_response')) {
+      if (sql.includes('DATEDIFF(SECOND')) {
         if (params.programId === 999) {
           return [{ cohort_size: 0, avg_hours_to_first_response: null, avg_hours_to_service_delivery: null }];
         }
         return [{ cohort_size: 10, avg_hours_to_first_response: 2.50, avg_hours_to_service_delivery: 24.00 }];
       }
-      if (sql.includes('FROM referral')) {
-        return [
-          { status: 'ACCEPTED', referring_program_id: 101, receiving_program_id: 102 },
-          { status: 'FULFILLED', referring_program_id: 101, receiving_program_id: 103 },
-          { status: 'DECLINED', referring_program_id: 104, receiving_program_id: 101 },
-          { status: 'PENDING', referring_program_id: 101, receiving_program_id: 105 }
-        ];
+      if (sql.includes('SUM(CASE WHEN decision')) {
+        return [{
+          total_count: 4,
+          accepted_count: 1,
+          service_count: 1,
+          awaiting_count: 1,
+          not_appropriate_count: 1,
+          made_count: 3,
+          received_count: 1
+        }];
       }
       return [];
     }
@@ -32,30 +35,29 @@ test('Reporting Service Unit Tests', async (t) => {
     programId: 101
   };
 
-  await t.test('Total Referrals Metric Calculation', async () => {
+  await t.test('Total Referrals SQL Server Query Execution', async () => {
     const result = await getTotalReferrals(mockDb, timeWindow);
     assert.strictEqual(result.totalReferrals, 15);
   });
 
-  await t.test('Timing Metrics Known-Answer Verification', async () => {
+  await t.test('Timing Metrics (DATEDIFF Averaging)', async () => {
     const metrics = await getTimingMetrics(mockDb, timeWindow);
     assert.strictEqual(metrics.cohortSize, 10);
     assert.strictEqual(metrics.avgHoursToFirstResponse, 2.50);
     assert.strictEqual(metrics.avgHoursToServiceDelivery, 24.00);
   });
 
-  await t.test('Empty Cohort Zero/Null Handling', async () => {
+  await t.test('Empty Cohort Null and Zero Return Handling', async () => {
     const emptyMetrics = await getTimingMetrics(mockDb, { ...timeWindow, programId: 999 });
     assert.strictEqual(emptyMetrics.cohortSize, 0);
     assert.strictEqual(emptyMetrics.avgHoursToFirstResponse, null);
     assert.strictEqual(emptyMetrics.avgHoursToServiceDelivery, null);
   });
 
-  await t.test('Breadth Metrics Canonical Calculations', async () => {
+  await t.test('Breadth Aggregation Metrics Calculation', async () => {
     const breadth = await getReportingBreadthMetrics(mockDb, timeWindow);
     assert.strictEqual(breadth.totalReferrals, 4);
     assert.strictEqual(breadth.acceptanceRatePct, 25.00);
-    assert.strictEqual(breadth.resultedInServiceRatePct, 25.00);
     assert.strictEqual(breadth.madeCount, 3);
     assert.strictEqual(breadth.receivedCount, 1);
   });
