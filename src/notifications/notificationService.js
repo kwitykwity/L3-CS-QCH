@@ -11,15 +11,45 @@
 // - The message is generic, with no participant data (PRD 11.2).
 // - Delivery state is PENDING -> SENT or FAILED, stored separately from the
 //   referral with minimum technical metadata (PRD 11.5).
-// - Transient failures retry a bounded number of times; a claim step makes
-//   retries duplicate-safe. Permanent or repeated failures stop and are
-//   logged for monitoring (PRD 11.6).
-// - Logs carry IDs, outcome, attempt count, category and correlation ID
-//   only. Never the recipient, subject, body, or provider error text
-//   (PRD 15.3).
+// - Logs carry IDs, outcome, attempt count, category, correlation ID, and
+//   an allowlisted error kind only. Never the recipient, subject, body,
+//   provider error text, or a raw error name (PRD 15.3).
+//
+// Attempt ownership (PRD 11.6)
+// - Claiming an attempt bumps attempt_count. That number is the attempt's
+//   token: every completion (SENT, retry later, FAILED) is a conditional
+//   write that only succeeds while attempt_count still equals it. An older
+//   attempt can never overwrite a newer attempt's result.
+// - A send is bounded by sendTimeoutMs, which must be shorter than
+//   retryAfterMs. last_attempt_at + retryAfterMs is the claim's lease: a
+//   retry can only claim the delivery after the lease ends, by which time
+//   the earlier attempt has finished, timed out, or died.
+// - A send that outlives its timeout is abandoned. Its late result is
+//   ignored and never written.
+//
+// Interrupted attempts (PRD 11.6)
+// - If our own step fails after the claim (recipient lookup, status
+//   write), the attempt is recorded as INTERNAL_ERROR: retried while
+//   attempts remain, FAILED on the last one.
+// - If even that write fails, the row stays PENDING. retryPendingDeliveries()
+//   retries it like any other while attempts remain. A row stuck PENDING
+//   at maxAttempts after its lease ends is closed as FAILED / INTERRUPTED.
+//   Nothing is left PENDING forever.
+//
+// Delivery guarantee: at least once while attempts remain, never exactly
+// once. The claim stops two workers sending the same attempt, but a second
+// copy is still possible when (a) a send times out after the provider
+// already accepted it, or (b) the provider accepts it and we cannot record
+// SENT. The message is generic, so a duplicate only tells the Program twice.
 
 import { buildNewReferralMessage, NEW_REFERRAL } from './content.js';
-import { FAILURE_CATEGORIES, categoryForError, isTransient } from './errors.js';
+import {
+  FAILURE_CATEGORIES,
+  NotificationSendError,
+  categoryForError,
+  isTransient,
+  safeErrorKind,
+} from './errors.js';
 
 const CORRELATION_ID = /^[A-Za-z0-9_-]{1,64}$/;
 
@@ -32,6 +62,11 @@ function safeCorrelationId(value) {
   return typeof value === 'string' && CORRELATION_ID.test(value) ? value : null;
 }
 
+const defaultTimers = Object.freeze({
+  setTimeout: (fn, ms) => setTimeout(fn, ms),
+  clearTimeout: (handle) => clearTimeout(handle),
+});
+
 export function createNotificationService({
   store,
   sender,
@@ -39,10 +74,15 @@ export function createNotificationService({
   now = () => new Date(),
   maxAttempts = 3,
   retryAfterMs = 60_000,
+  sendTimeoutMs = 30_000,
+  timers = defaultTimers,
 } = {}) {
   if (!store || !sender) throw new Error('createNotificationService needs a store and a sender');
   if (!Number.isInteger(maxAttempts) || maxAttempts < 1) throw new Error('maxAttempts must be a positive integer');
-  if (!Number.isInteger(retryAfterMs) || retryAfterMs < 0) throw new Error('retryAfterMs must be a non-negative integer');
+  if (!Number.isInteger(retryAfterMs) || retryAfterMs < 1) throw new Error('retryAfterMs must be a positive integer');
+  if (!Number.isInteger(sendTimeoutMs) || sendTimeoutMs < 1 || sendTimeoutMs >= retryAfterMs) {
+    throw new Error('sendTimeoutMs must be a positive integer smaller than retryAfterMs');
+  }
 
   function log(level, fields) {
     const line = Object.entries(fields)
@@ -53,8 +93,28 @@ export function createNotificationService({
   }
 
   function logUnexpected(where, err, referralId) {
-    const name = typeof err?.name === 'string' ? err.name : 'UnknownError';
-    log('error', { event: 'internal_error', where, referral: referralId, error: name });
+    log('error', { event: 'internal_error', where, referral: referralId, error: safeErrorKind(err) });
+  }
+
+  // Resolves when the sender accepts, rejects with the sender's error, or
+  // rejects with TIMEOUT after sendTimeoutMs. After a timeout the send is
+  // abandoned: its late result is swallowed and never acted on.
+  function sendWithTimeout(message) {
+    let handle;
+    const timeout = new Promise((resolve, reject) => {
+      handle = timers.setTimeout(
+        () => reject(new NotificationSendError(FAILURE_CATEGORIES.TIMEOUT)),
+        sendTimeoutMs,
+      );
+    });
+    const sending = Promise.resolve().then(() => sender.send(message));
+    sending.catch(() => {}); // a late failure must not become an unhandled rejection
+    return Promise.race([sending, timeout]).finally(() => timers.clearTimeout(handle));
+  }
+
+  async function currentOutcome(claimed) {
+    const current = await store.getDeliveryByReferral(claimed.referralId, claimed.notificationType);
+    return current?.status ?? 'PENDING';
   }
 
   async function attemptDelivery(delivery) {
@@ -68,39 +128,97 @@ export function createNotificationService({
       return { outcome: current?.status ?? 'PENDING', deliveryId: delivery.deliveryId };
     }
 
+    const attempt = claimed.attemptCount;
+    const owned = { deliveryId: claimed.deliveryId, attempt };
     const base = {
       delivery: claimed.deliveryId,
       referral: claimed.referralId,
       type: claimed.notificationType,
-      attempt: claimed.attemptCount,
+      attempt,
       correlation: claimed.correlationId,
     };
 
-    const recipient = await store.getRecipientForReferral(claimed.referralId);
-    if (!recipient) {
-      await store.markDeliveryFailed({ deliveryId: claimed.deliveryId, failureCategory: FAILURE_CATEGORIES.NO_RECIPIENT });
-      log('warn', { ...base, outcome: 'FAILED', category: FAILURE_CATEGORIES.NO_RECIPIENT });
-      return { outcome: 'FAILED', deliveryId: claimed.deliveryId };
+    // Every result is written only if this attempt still owns the row.
+    async function finish(kind, failureCategory = null) {
+      let written;
+      if (kind === 'SENT') written = await store.markDeliverySent(owned);
+      else if (kind === 'RETRY') written = await store.recordTransientFailure({ ...owned, failureCategory });
+      else written = await store.markDeliveryFailed({ ...owned, failureCategory });
+
+      if (!written) {
+        log('warn', { ...base, event: 'stale_attempt', result: kind });
+        return { outcome: await currentOutcome(claimed), deliveryId: claimed.deliveryId };
+      }
+      const outcome = kind === 'RETRY' ? 'PENDING' : kind;
+      const level = kind === 'FAILED' ? 'warn' : 'info';
+      log(level, { ...base, outcome: kind === 'RETRY' ? 'RETRY_LATER' : kind, category: failureCategory });
+      return { outcome, deliveryId: claimed.deliveryId };
     }
 
-    const { subject, body } = buildNewReferralMessage();
+    let accepted = false;
     try {
-      await sender.send({ to: recipient, subject, body });
+      const recipient = await store.getRecipientForReferral(claimed.referralId);
+      if (!recipient) return await finish('FAILED', FAILURE_CATEGORIES.NO_RECIPIENT);
+
+      const { subject, body } = buildNewReferralMessage();
+      try {
+        await sendWithTimeout({ to: recipient, subject, body });
+        accepted = true;
+      } catch (err) {
+        const category = categoryForError(err);
+        const retry = isTransient(category) && attempt < maxAttempts;
+        return await finish(retry ? 'RETRY' : 'FAILED', category);
+      }
+
+      return await finish('SENT');
     } catch (err) {
-      const category = categoryForError(err);
-      if (isTransient(category) && claimed.attemptCount < maxAttempts) {
-        await store.recordTransientFailure({ deliveryId: claimed.deliveryId, failureCategory: category });
-        log('info', { ...base, outcome: 'RETRY_LATER', category });
+      // Our own step failed after the claim.
+      logUnexpected('attemptDelivery', err, claimed.referralId);
+      try {
+        if (accepted) {
+          // The provider took the message; only recording SENT failed.
+          // Try once more. If that fails too, the row stays PENDING and a
+          // retry may send a second copy (see header).
+          return await finish('SENT');
+        }
+        const retry = attempt < maxAttempts;
+        return await finish(retry ? 'RETRY' : 'FAILED', FAILURE_CATEGORIES.INTERNAL_ERROR);
+      } catch (writeErr) {
+        logUnexpected('attemptDelivery.record', writeErr, claimed.referralId);
+        log('warn', { ...base, event: 'result_not_recorded', accepted });
         return { outcome: 'PENDING', deliveryId: claimed.deliveryId };
       }
-      await store.markDeliveryFailed({ deliveryId: claimed.deliveryId, failureCategory: category });
-      log('warn', { ...base, outcome: 'FAILED', category });
-      return { outcome: 'FAILED', deliveryId: claimed.deliveryId };
     }
+  }
 
-    await store.markDeliverySent({ deliveryId: claimed.deliveryId });
-    log('info', { ...base, outcome: 'SENT' });
-    return { outcome: 'SENT', deliveryId: claimed.deliveryId };
+  // Closes rows left PENDING at maxAttempts after their lease ended: the
+  // last attempt never recorded a result. Conditional on attempt_count, so
+  // a late result from that attempt cannot be overwritten afterwards.
+  async function closeInterrupted(lastAttemptBefore, limit, counts) {
+    const stuck = await store.listInterruptedDeliveries({ maxAttempts, lastAttemptBefore, limit });
+    for (const delivery of stuck) {
+      try {
+        const closed = await store.markDeliveryFailed({
+          deliveryId: delivery.deliveryId,
+          attempt: delivery.attemptCount,
+          failureCategory: FAILURE_CATEGORIES.INTERRUPTED,
+        });
+        if (!closed) continue; // something else finished it first
+        counts.FAILED += 1;
+        log('warn', {
+          delivery: delivery.deliveryId,
+          referral: delivery.referralId,
+          type: delivery.notificationType,
+          attempt: delivery.attemptCount,
+          correlation: delivery.correlationId,
+          outcome: 'FAILED',
+          category: FAILURE_CATEGORIES.INTERRUPTED,
+        });
+      } catch (err) {
+        logUnexpected('closeInterrupted', err, delivery.referralId);
+        counts.ERROR += 1;
+      }
+    }
   }
 
   return {
@@ -131,18 +249,24 @@ export function createNotificationService({
       }
     },
 
-    // Retries PENDING deliveries whose last attempt is at least
-    // retryAfterMs old, up to maxAttempts each. Meant to run on a timer.
-    // Resolves to counts by outcome. Never rejects.
+    // Meant to run on a timer. Closes interrupted deliveries, then retries
+    // PENDING deliveries whose lease (last attempt + retryAfterMs) has
+    // ended, up to maxAttempts each. Resolves to counts by outcome. Never
+    // rejects.
     async retryPendingDeliveries({ limit = 50 } = {}) {
       const counts = { SENT: 0, PENDING: 0, FAILED: 0, ERROR: 0 };
+      const lastAttemptBefore = new Date(now().getTime() - retryAfterMs);
+
+      try {
+        await closeInterrupted(lastAttemptBefore, limit, counts);
+      } catch (err) {
+        logUnexpected('retryPendingDeliveries.closeInterrupted', err, null);
+        counts.ERROR += 1;
+      }
+
       let due;
       try {
-        due = await store.listRetryableDeliveries({
-          maxAttempts,
-          lastAttemptBefore: new Date(now().getTime() - retryAfterMs),
-          limit,
-        });
+        due = await store.listRetryableDeliveries({ maxAttempts, lastAttemptBefore, limit });
       } catch (err) {
         logUnexpected('retryPendingDeliveries', err, null);
         counts.ERROR += 1;

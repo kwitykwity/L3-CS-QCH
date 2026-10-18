@@ -17,11 +17,26 @@ export const FAILURE_CATEGORIES = Object.freeze({
   AUTH_FAILED: 'AUTH_FAILED',
   // The sender rejected the request itself (other 4xx). Not retried.
   REJECTED: 'REJECTED',
+  // The send did not finish within sendTimeoutMs. Retried. The provider
+  // may still have accepted it, so a retry can deliver a second copy.
+  TIMEOUT: 'TIMEOUT',
+  // Our own step failed after the claim (recipient lookup, status write).
+  // Retried while attempts remain.
+  INTERNAL_ERROR: 'INTERNAL_ERROR',
+  // The last allowed attempt never recorded a result (for example the
+  // process stopped). Closed by the retry sweep. Whether an email went out
+  // is unknown. Not retried.
+  INTERRUPTED: 'INTERRUPTED',
   // Anything we could not classify. Not retried.
   UNKNOWN: 'UNKNOWN',
 });
 
-const TRANSIENT = new Set([FAILURE_CATEGORIES.THROTTLED, FAILURE_CATEGORIES.UNAVAILABLE]);
+const TRANSIENT = new Set([
+  FAILURE_CATEGORIES.THROTTLED,
+  FAILURE_CATEGORIES.UNAVAILABLE,
+  FAILURE_CATEGORIES.TIMEOUT,
+  FAILURE_CATEGORIES.INTERNAL_ERROR,
+]);
 
 export function isTransient(category) {
   return TRANSIENT.has(category);
@@ -54,4 +69,17 @@ export function categoryForHttpStatus(status) {
 // sender classified it with NotificationSendError.
 export function categoryForError(err) {
   return err instanceof NotificationSendError ? err.category : FAILURE_CATEGORIES.UNKNOWN;
+}
+
+// Error kinds that may appear in logs. Anything else, including a custom
+// error name that could carry arbitrary text, is logged as OtherError
+// (PRD 15.3).
+const LOGGABLE_ERROR_KINDS = new Set([
+  'Error', 'TypeError', 'RangeError', 'ReferenceError', 'SyntaxError',
+  'NotificationSendError',
+]);
+
+export function safeErrorKind(err) {
+  const name = err?.name;
+  return typeof name === 'string' && LOGGABLE_ERROR_KINDS.has(name) ? name : 'OtherError';
 }

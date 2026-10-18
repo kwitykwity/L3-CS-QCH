@@ -26,17 +26,27 @@
 //          WHERE delivery_id = @id AND status = 'PENDING'
 //            AND attempt_count = @expectedAttemptCount
 //       0 rows -> null (someone else claimed it, or it is no longer PENDING).
-//   markDeliverySent({ deliveryId }) -> delivery | null
-//       status = 'SENT', sent_at = SYSUTCDATETIME(), failure_category = NULL,
-//       only WHERE status = 'PENDING'.
-//   markDeliveryFailed({ deliveryId, failureCategory }) -> delivery | null
-//       status = 'FAILED', only WHERE status = 'PENDING'. Stops retries.
-//   recordTransientFailure({ deliveryId, failureCategory }) -> delivery | null
-//       Stays PENDING with the latest category, only WHERE status = 'PENDING'.
+//   The attempt number returned by a claim is that attempt's token. Every
+//   completion below is ONE conditional update that only succeeds while
+//   the row is still PENDING at that same attempt, so an older attempt can
+//   never overwrite a newer attempt's result:
+//          WHERE delivery_id = @id AND status = 'PENDING'
+//            AND attempt_count = @attempt
+//   0 rows -> null (a newer attempt owns the row, or it is finished).
+//   markDeliverySent({ deliveryId, attempt }) -> delivery | null
+//       status = 'SENT', sent_at = SYSUTCDATETIME(), failure_category = NULL.
+//   markDeliveryFailed({ deliveryId, attempt, failureCategory }) -> delivery | null
+//       status = 'FAILED'. Stops retries.
+//   recordTransientFailure({ deliveryId, attempt, failureCategory }) -> delivery | null
+//       Stays PENDING with the latest category.
 //   listRetryableDeliveries({ maxAttempts, lastAttemptBefore, limit }) -> [delivery]
 //       PENDING rows with attempt_count < maxAttempts whose last attempt is
-//       older than lastAttemptBefore, oldest first.
+//       older than lastAttemptBefore (the lease has ended), oldest first.
 //       Uses ix_notifications_status (status, last_attempt_at).
+//   listInterruptedDeliveries({ maxAttempts, lastAttemptBefore, limit }) -> [delivery]
+//       PENDING rows with attempt_count >= maxAttempts whose last attempt
+//       is older than lastAttemptBefore: the final attempt never recorded
+//       a result. Same index.
 //   getDeliveryByReferral(referralId, notificationType) -> delivery | null
 //
 // A delivery row holds IDs, status, counts, timestamps, a category and a
@@ -58,9 +68,25 @@ export function createMemoryDeliveryStore(
   const copy = (row) => (row ? { ...row } : null);
   const key = (referralId, type) => `${referralId}:${type}`;
 
+  // Test helper state: the next N calls to the named method throw.
+  const failNext = new Map();
+  function maybeFail(method) {
+    const left = failNext.get(method) ?? 0;
+    if (left > 0) {
+      failNext.set(method, left - 1);
+      throw new Error('simulated store failure');
+    }
+  }
+
   function pending(deliveryId) {
     const row = deliveries.get(deliveryId);
     return row && row.status === 'PENDING' ? row : null;
+  }
+
+  // The row, only if it is PENDING and still owned by this attempt.
+  function owned(deliveryId, attempt) {
+    const row = pending(deliveryId);
+    return row && Number.isInteger(attempt) && row.attemptCount === attempt ? row : null;
   }
 
   function checkRow(row) {
@@ -75,6 +101,7 @@ export function createMemoryDeliveryStore(
     },
 
     async getRecipientForReferral(referralId) {
+      maybeFail('getRecipientForReferral');
       const referral = referralsById.get(referralId);
       if (!referral) return null;
       const program = programsById.get(referral.receivingProgramId);
@@ -113,8 +140,9 @@ export function createMemoryDeliveryStore(
       return copy(row);
     },
 
-    async markDeliverySent({ deliveryId }) {
-      const row = pending(deliveryId);
+    async markDeliverySent({ deliveryId, attempt }) {
+      maybeFail('markDeliverySent');
+      const row = owned(deliveryId, attempt);
       if (!row) return null;
       row.status = 'SENT';
       row.sentAt = now();
@@ -123,8 +151,9 @@ export function createMemoryDeliveryStore(
       return copy(row);
     },
 
-    async markDeliveryFailed({ deliveryId, failureCategory }) {
-      const row = pending(deliveryId);
+    async markDeliveryFailed({ deliveryId, attempt, failureCategory }) {
+      maybeFail('markDeliveryFailed');
+      const row = owned(deliveryId, attempt);
       if (!row) return null;
       row.status = 'FAILED';
       row.failureCategory = failureCategory;
@@ -132,8 +161,9 @@ export function createMemoryDeliveryStore(
       return copy(row);
     },
 
-    async recordTransientFailure({ deliveryId, failureCategory }) {
-      const row = pending(deliveryId);
+    async recordTransientFailure({ deliveryId, attempt, failureCategory }) {
+      maybeFail('recordTransientFailure');
+      const row = owned(deliveryId, attempt);
       if (!row) return null;
       row.failureCategory = failureCategory;
       return copy(row);
@@ -149,9 +179,22 @@ export function createMemoryDeliveryStore(
         .map(copy);
     },
 
+    async listInterruptedDeliveries({ maxAttempts, lastAttemptBefore, limit }) {
+      return [...deliveries.values()]
+        .filter((d) => d.status === 'PENDING'
+          && d.attemptCount >= maxAttempts
+          && d.lastAttemptAt !== null && d.lastAttemptAt < lastAttemptBefore)
+        .sort((a, b) => a.lastAttemptAt - b.lastAttemptAt || a.deliveryId - b.deliveryId)
+        .slice(0, limit)
+        .map(copy);
+    },
+
     async getDeliveryByReferral(referralId, notificationType) {
       const id = byReferralAndType.get(key(referralId, notificationType));
       return id ? copy(deliveries.get(id)) : null;
     },
+
+    // Test helper. Not part of the store contract.
+    _failNext(method, times = 1) { failNext.set(method, times); },
   };
 }

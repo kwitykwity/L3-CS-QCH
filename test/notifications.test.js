@@ -54,7 +54,41 @@ function scriptedSender(failures = []) {
   };
 }
 
-function setup({ sender, programs, maxAttempts = 3, retryAfterMs = 60_000 } = {}) {
+// Timers the test fires by hand, so slow sends are deterministic.
+function manualTimers() {
+  const pending = [];
+  return {
+    pending,
+    setTimeout(fn, ms) { const handle = { fn, ms, cleared: false }; pending.push(handle); return handle; },
+    clearTimeout(handle) { if (handle) handle.cleared = true; },
+    fireAll() { for (const h of pending.splice(0)) if (!h.cleared) h.fn(); },
+  };
+}
+
+// Lets queued promise callbacks run.
+const settle = () => new Promise((resolve) => setImmediate(resolve));
+
+// A sender whose first call waits until the test settles it.
+function slowFirstSender() {
+  const sent = [];
+  let call = 0;
+  let release;
+  return {
+    sent,
+    get calls() { return call; },
+    resolveFirst: () => release.resolve(),
+    rejectFirst: (err) => release.reject(err),
+    async send(message) {
+      call += 1;
+      if (call === 1) {
+        await new Promise((resolve, reject) => { release = { resolve, reject }; });
+      }
+      sent.push(message);
+    },
+  };
+}
+
+function setup({ sender, programs, maxAttempts = 3, retryAfterMs = 60_000, sendTimeoutMs, timers } = {}) {
   const c = clock();
   const store = createMemoryDeliveryStore(
     {
@@ -73,6 +107,8 @@ function setup({ sender, programs, maxAttempts = 3, retryAfterMs = 60_000 } = {}
   const logger = captureLogger();
   const service = createNotificationService({
     store, sender: out, logger, now: c.now, maxAttempts, retryAfterMs,
+    ...(sendTimeoutMs ? { sendTimeoutMs } : {}),
+    ...(timers ? { timers } : {}),
   });
   return { store, sender: out, logger, service, clock: c };
 }
@@ -335,4 +371,205 @@ test('HTTP statuses map to failure categories', () => {
 
 test('an unknown category passed to NotificationSendError becomes UNKNOWN', () => {
   assert.equal(new NotificationSendError('MADE_UP').category, FAILURE_CATEGORIES.UNKNOWN);
+});
+
+// ---------------------------------------------------------------------------
+// Review fix 1: attempt ownership (PRD 11.6)
+// ---------------------------------------------------------------------------
+
+test('sendTimeoutMs must be shorter than retryAfterMs, so a send ends before its lease', () => {
+  const { store, sender } = setup();
+  assert.throws(() => createNotificationService({ store, sender, retryAfterMs: 60_000, sendTimeoutMs: 60_000 }), /sendTimeoutMs/);
+  assert.throws(() => createNotificationService({ store, sender, retryAfterMs: 0 }), /retryAfterMs/);
+});
+
+test('a completion only succeeds for the attempt that owns the row', async () => {
+  const { store, clock: c } = setup();
+  const { delivery } = await store.getOrCreateDelivery({ referralId: 101, notificationType: NEW_REFERRAL });
+  const first = await store.claimDeliveryAttempt({ deliveryId: delivery.deliveryId, expectedAttemptCount: 0 });
+  c.advance(60_001);
+  const second = await store.claimDeliveryAttempt({ deliveryId: delivery.deliveryId, expectedAttemptCount: 1 });
+  assert.equal(first.attemptCount, 1);
+  assert.equal(second.attemptCount, 2);
+
+  const id = delivery.deliveryId;
+  assert.equal(await store.markDeliverySent({ deliveryId: id, attempt: 1 }), null);
+  assert.equal(await store.markDeliveryFailed({ deliveryId: id, attempt: 1, failureCategory: 'UNKNOWN' }), null);
+  assert.equal(await store.recordTransientFailure({ deliveryId: id, attempt: 1, failureCategory: 'THROTTLED' }), null);
+  assert.equal((await store.getDeliveryByReferral(101, NEW_REFERRAL)).status, 'PENDING', 'the old attempt changed nothing');
+
+  assert.equal((await store.markDeliverySent({ deliveryId: id, attempt: 2 })).status, 'SENT');
+});
+
+test('slow send: it times out as TIMEOUT, a later retry sends, and the late result is ignored', async () => {
+  const sender = slowFirstSender();
+  const timers = manualTimers();
+  const { service, store, logger, clock: c } = setup({ sender, timers, sendTimeoutMs: 30_000 });
+
+  const pendingNotify = service.notifyReferralCommitted({ referralId: 101 });
+  await settle();
+  assert.equal(timers.pending[0].ms, 30_000, 'the send is bounded');
+  timers.fireAll(); // the first send is still hanging
+  const first = await pendingNotify;
+
+  assert.equal(first.outcome, 'PENDING');
+  let delivery = await store.getDeliveryByReferral(101, NEW_REFERRAL);
+  assert.equal(delivery.failureCategory, FAILURE_CATEGORIES.TIMEOUT);
+
+  // Still inside the lease: no second attempt.
+  c.advance(30_000);
+  await service.retryPendingDeliveries();
+  assert.equal(sender.calls, 1);
+
+  // Lease over: attempt 2 sends.
+  c.advance(30_001);
+  const counts = await service.retryPendingDeliveries();
+  assert.equal(counts.SENT, 1);
+
+  // The abandoned first send finishes late. Nothing changes.
+  sender.resolveFirst();
+  await settle();
+  delivery = await store.getDeliveryByReferral(101, NEW_REFERRAL);
+  assert.equal(delivery.status, 'SENT');
+  assert.equal(delivery.attemptCount, 2);
+  assert.equal(delivery.failureCategory, null);
+  assert.ok(logger.lines.every((l) => !l.line.includes('stale_attempt')), 'the late send never tries to write');
+});
+
+test('slow send: a late failure after timeout is swallowed and does not overwrite SENT', async () => {
+  const sender = slowFirstSender();
+  const timers = manualTimers();
+  const { service, store, clock: c } = setup({ sender, timers, sendTimeoutMs: 30_000 });
+
+  const pendingNotify = service.notifyReferralCommitted({ referralId: 101 });
+  await settle();
+  timers.fireAll();
+  await pendingNotify;
+  c.advance(60_001);
+  await service.retryPendingDeliveries();
+
+  sender.rejectFirst(new NotificationSendError(FAILURE_CATEGORIES.AUTH_FAILED));
+  await settle();
+  const delivery = await store.getDeliveryByReferral(101, NEW_REFERRAL);
+  assert.equal(delivery.status, 'SENT');
+  assert.equal(delivery.failureCategory, null);
+});
+
+test('late completion: an older attempt that finishes after a newer claim is rejected and logged', async () => {
+  const { store, logger, clock: c } = setup();
+  // While attempt 1 is sending, another worker claims attempt 2.
+  const sender = {
+    async send() {
+      c.advance(60_001);
+      const d = await store.getDeliveryByReferral(101, NEW_REFERRAL);
+      await store.claimDeliveryAttempt({ deliveryId: d.deliveryId, expectedAttemptCount: d.attemptCount });
+    },
+  };
+  const service = createNotificationService({ store, sender, logger, now: c.now });
+
+  const result = await service.notifyReferralCommitted({ referralId: 101 });
+  assert.equal(result.outcome, 'PENDING', 'reports the row as it really is');
+  const delivery = await store.getDeliveryByReferral(101, NEW_REFERRAL);
+  assert.equal(delivery.status, 'PENDING');
+  assert.equal(delivery.attemptCount, 2, 'attempt 2 still owns the row');
+  assert.ok(logger.lines.some((l) => l.line.includes('event=stale_attempt') && l.line.includes('attempt=1')));
+});
+
+// ---------------------------------------------------------------------------
+// Review fix 2: interrupted attempts (PRD 11.6)
+// ---------------------------------------------------------------------------
+
+test('recipient lookup fails: INTERNAL_ERROR, stays PENDING, and a later retry sends', async () => {
+  const { service, store, sender, clock: c } = setup();
+  store._failNext('getRecipientForReferral');
+
+  const first = await service.notifyReferralCommitted({ referralId: 101 });
+  assert.equal(first.outcome, 'PENDING');
+  assert.equal((await store.getDeliveryByReferral(101, NEW_REFERRAL)).failureCategory, FAILURE_CATEGORIES.INTERNAL_ERROR);
+  assert.equal(sender.list().length, 0);
+
+  c.advance(60_001);
+  await service.retryPendingDeliveries();
+  assert.equal((await store.getDeliveryByReferral(101, NEW_REFERRAL)).status, 'SENT');
+  assert.equal(sender.list().length, 1);
+});
+
+test('recipient lookup fails on the last attempt: ends FAILED, never stuck PENDING', async () => {
+  const { service, store } = setup({ maxAttempts: 1 });
+  store._failNext('getRecipientForReferral');
+
+  const result = await service.notifyReferralCommitted({ referralId: 101 });
+  assert.equal(result.outcome, 'FAILED');
+  const delivery = await store.getDeliveryByReferral(101, NEW_REFERRAL);
+  assert.equal(delivery.status, 'FAILED');
+  assert.equal(delivery.failureCategory, FAILURE_CATEGORIES.INTERNAL_ERROR);
+});
+
+test('recording SENT fails once: it is retried right away, with no second email', async () => {
+  const { service, store, sender } = setup();
+  store._failNext('markDeliverySent');
+
+  const result = await service.notifyReferralCommitted({ referralId: 101 });
+  assert.equal(result.outcome, 'SENT');
+  assert.equal(sender.list().length, 1);
+});
+
+test('recording a transient failure fails: the row stays retryable and a later retry sends', async () => {
+  const sender = scriptedSender([new NotificationSendError(FAILURE_CATEGORIES.THROTTLED)]);
+  const { service, store, clock: c } = setup({ sender });
+  store._failNext('recordTransientFailure', 2);
+
+  const first = await service.notifyReferralCommitted({ referralId: 101 });
+  assert.equal(first.outcome, 'PENDING');
+
+  c.advance(60_001);
+  await service.retryPendingDeliveries();
+  assert.equal((await store.getDeliveryByReferral(101, NEW_REFERRAL)).status, 'SENT');
+});
+
+test('status writes fail on the last attempt: the sweep closes it as INTERRUPTED after the lease', async () => {
+  const { service, store, sender, logger, clock: c } = setup({ maxAttempts: 1 });
+  store._failNext('markDeliverySent', 2);
+
+  const result = await service.notifyReferralCommitted({ referralId: 101 });
+  assert.equal(result.outcome, 'PENDING');
+  assert.ok(logger.lines.some((l) => l.line.includes('event=result_not_recorded') && l.line.includes('accepted=true')));
+
+  // Too early: the lease has not ended.
+  c.advance(30_000);
+  await service.retryPendingDeliveries();
+  assert.equal((await store.getDeliveryByReferral(101, NEW_REFERRAL)).status, 'PENDING');
+
+  c.advance(30_001);
+  const counts = await service.retryPendingDeliveries();
+  assert.equal(counts.FAILED, 1);
+  const delivery = await store.getDeliveryByReferral(101, NEW_REFERRAL);
+  assert.equal(delivery.status, 'FAILED');
+  assert.equal(delivery.failureCategory, FAILURE_CATEGORIES.INTERRUPTED);
+  assert.equal(sender.list().length, 1, 'the sweep never sends');
+  assert.ok(logger.lines.some((l) => l.level === 'warn' && l.line.includes('category=INTERRUPTED')));
+});
+
+// ---------------------------------------------------------------------------
+// Review fix 3: safe logging (PRD 15.3)
+// ---------------------------------------------------------------------------
+
+test('an error name carrying sensitive text is logged as OtherError, never verbatim', async () => {
+  const { store, sender } = setup();
+  const marker = `${PARTICIPANT.participantName} ${PARTICIPANT.contactValue}`;
+  const broken = {
+    ...store,
+    async getOrCreateDelivery() {
+      const err = new Error('boom');
+      err.name = marker;
+      throw err;
+    },
+  };
+  const logger = captureLogger();
+  const service = createNotificationService({ store: broken, sender, logger });
+
+  await service.notifyReferralCommitted({ referralId: 101 });
+  assert.ok(logger.lines.some((l) => l.line.includes('error=OtherError')));
+  assert.ok(logger.lines.every((l) => !l.line.includes(PARTICIPANT.participantName)
+    && !l.line.includes(PARTICIPANT.contactValue)));
 });

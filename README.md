@@ -100,19 +100,41 @@ How it behaves:
 - Each delivery is one `notification_deliveries` row: `PENDING`, then `SENT`
   or `FAILED`, with IDs, counts, timestamps, a failure category, and a
   correlation ID only (PRD 11.5).
-- `THROTTLED` and `UNAVAILABLE` failures stay `PENDING` and are retried by
-  `retryPendingDeliveries()`, at least `retryAfterMs` apart (default 60s), up
-  to `maxAttempts` (default 3). Every other failure ends `FAILED` at once.
-  A claim step stops two workers from sending the same delivery.
-- Logs hold IDs, outcome, attempt, category, and correlation ID. Never the
-  recipient, subject, body, or provider error text (PRD 15.3). Final failures
-  log at `warn` for monitoring.
+- `THROTTLED`, `UNAVAILABLE`, `TIMEOUT`, and `INTERNAL_ERROR` failures stay
+  `PENDING` and are retried by `retryPendingDeliveries()`, at least
+  `retryAfterMs` apart (default 60s), up to `maxAttempts` (default 3). Every
+  other failure ends `FAILED` at once.
+- Attempt ownership: claiming an attempt bumps `attempt_count`, and every
+  result is written only while the row is still at that attempt. An older
+  attempt can never overwrite a newer one's result.
+- Each send is cut off after `sendTimeoutMs` (default 30s), which must be
+  shorter than `retryAfterMs`. So a retry can only claim the row after the
+  previous attempt has finished, timed out, or died. A timed-out send's late
+  result is ignored.
+- Interrupted attempts: if our own step fails after the claim (recipient
+  lookup, status write), the attempt is recorded as `INTERNAL_ERROR` and
+  retried, or `FAILED` on the last attempt. If even that write fails, the
+  retry run picks the row up later. A row stuck `PENDING` at `maxAttempts`
+  is closed as `FAILED` / `INTERRUPTED`. Nothing stays `PENDING` forever.
+- Logs hold IDs, outcome, attempt, category, correlation ID, and an
+  allowlisted error kind (`Error`, `TypeError`, ... or `OtherError`). Never
+  the recipient, subject, body, provider error text, or a raw error name
+  (PRD 15.3). Final failures log at `warn` for monitoring.
 - `simulatedOutbox.js` keeps messages in memory for development, tests, and
   demos (PRD 16.4). It refuses to start unless `NODE_ENV` is `development` or
   `test`.
 
-Known limit: if the process stops after the mail provider accepts a message
-but before the row is marked `SENT`, a retry can send it a second time.
+Delivery guarantee: **at least once while attempts remain, not exactly
+once.** The claim stops two workers sending the same attempt, but the
+Program can still get a second copy when:
+
+- a send times out after the mail provider had already accepted it (the
+  provider's answer is unknown, so we retry), or
+- the provider accepts the message and we cannot record `SENT`.
+
+An `INTERRUPTED` row means the last attempt's outcome is unknown: the email
+may or may not have gone out. The message is generic, so a duplicate only
+tells the Program twice.
 
 Remaining tasks, not done here:
 
