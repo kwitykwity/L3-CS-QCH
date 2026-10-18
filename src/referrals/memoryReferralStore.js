@@ -95,6 +95,24 @@
 //          WHERE referral_id=@id AND response_status='AWAITING_RESPONSE'
 //          so two concurrent responses can never both succeed.
 //
+// Service outcome and corrections (card 8):
+//   Every referral row carries `version` (dbo.referrals.row_version,
+//   ROWVERSION): an opaque token that changes on every update. Callers
+//   only compare it (PRD 9.4).
+//   tx.updateReferral({ referralId, when, set, setNow, setNowIfNull })
+//       -> updated row, or null when a condition in `when` no longer holds
+//          (nothing is written). ONE conditional update:
+//          UPDATE dbo.referrals SET <set>, <setNow> = SYSUTCDATETIME(),
+//                 <setNowIfNull> = COALESCE(<col>, SYSUTCDATETIME()),
+//                 updated_at = SYSUTCDATETIME()
+//          WHERE referral_id = @id AND <each `when` column = @value>
+//          `when` may include { version } (row_version = @version) for
+//          corrections, or current state values (decision, service_outcome)
+//          for first-time recording. A second writer to the same row waits
+//          for the first transaction, then re-checks its conditions.
+//          setNowIfNull is how first_resulted_in_service_at is set once and
+//          never rewritten by a later correction (PRD 12.4).
+//
 // Columns map to dbo.referrals and dbo.audit_events in
 // db/migrations/001_core_schema.sql (PR #4).
 
@@ -161,7 +179,13 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   let nextReferralId = 1;
   let failNextAudit = false;
 
-  const copy = (row) => (row ? { ...row } : null);
+  const copy = (row) => (row ? withVersion({ ...row }) : null);
+  // The public, opaque version token (dbo.referrals.row_version).
+  function withVersion(row) {
+    if (!row) return null;
+    const { rowVersion, ...rest } = row;
+    return rowVersion === undefined ? row : { ...rest, rowVersion, version: `v${rowVersion}` };
+  }
 
   async function getReferralBySubmissionId(submissionId) {
     return copy(referrals.find((r) => r.submissionId === submissionId));
@@ -178,8 +202,29 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       if (!committed) return null;
       const row = { ...committed };
       for (const u of staged.updates) if (u.referralId === referralId) Object.assign(row, u.fields);
-      return row;
+      return withVersion(row);
     };
+
+    // Row write lock, held until this transaction ends (like the X lock an
+    // UPDATE takes). Reentrant within the same transaction.
+    const heldRows = new Set();
+    async function lockRowForWrite(referralId) {
+      if (heldRows.has(referralId)) return;
+      while (responseInFlight.has(referralId)) {
+        await responseInFlight.get(referralId).promise;
+      }
+      let settle;
+      const promise = new Promise((resolve) => { settle = resolve; });
+      responseInFlight.set(referralId, { promise });
+      staged.responseLocks.push({ referralId, settle });
+      heldRows.add(referralId);
+    }
+
+    function stageUpdate(referralId, row, fields) {
+      const all = { ...fields, rowVersion: row.rowVersion + 1, updatedAt: now().toISOString() };
+      staged.updates.push({ referralId, fields: all });
+      return withVersion({ ...row, ...all });
+    }
 
     // Locking read: the row stays locked until this transaction ends.
     const lockingRead = (kind, read) => async (id) => {
@@ -213,9 +258,10 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
         inFlight.set(row.submissionId, { promise });
         staged.locks.push({ submissionId: row.submissionId, settle });
         // Like an IDENTITY column: IDs are never reused, gaps are possible.
-        const saved = { ...row, referralId: nextReferralId++, createdAt: now().toISOString() };
+        const createdAt = now().toISOString();
+        const saved = { ...row, referralId: nextReferralId++, createdAt, updatedAt: createdAt, rowVersion: 1 };
         staged.referrals.push(saved);
-        return { ...saved };
+        return withVersion(saved);
       },
 
       async getReferralById(referralId) {
@@ -229,27 +275,32 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
         // Like UPDATE ... WHERE response_status = 'AWAITING_RESPONSE': a
         // second responder waits for the first transaction, then finds the
         // row already RESPONDED (0 rows updated) unless the first rolled back.
-        while (responseInFlight.has(referralId)) {
-          await responseInFlight.get(referralId).promise;
-        }
+        await lockRowForWrite(referralId);
         const row = currentRow(referralId);
         if (!row || row.responseStatus !== 'AWAITING_RESPONSE') return null;
 
-        let settle;
-        const promise = new Promise((resolve) => { settle = resolve; });
-        responseInFlight.set(referralId, { promise });
-        staged.responseLocks.push({ referralId, settle });
-
-        const fields = {
+        return stageUpdate(referralId, row, {
           responseStatus: 'RESPONDED',
           decision,
           notAppropriateReasonId,
           notAppropriateExplanation,
           respondedByUserId,
           firstRespondedAt: now().toISOString(),
-        };
-        staged.updates.push({ referralId, fields });
-        return { ...row, ...fields };
+        });
+      },
+
+      async updateReferral({ referralId, when = {}, set = {}, setNow = [], setNowIfNull = [] }) {
+        await lockRowForWrite(referralId);
+        const row = currentRow(referralId);
+        if (!row) return null;
+        for (const [key, value] of Object.entries(when)) {
+          if ((row[key] ?? null) !== value) return null; // 0 rows updated
+        }
+        const stamp = now().toISOString();
+        const fields = { ...set };
+        for (const key of setNow) fields[key] = stamp;
+        for (const key of setNowIfNull) fields[key] = row[key] ?? stamp;
+        return stageUpdate(referralId, row, fields);
       },
 
       async appendAuditEvent(event) {
