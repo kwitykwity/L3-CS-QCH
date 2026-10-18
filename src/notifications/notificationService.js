@@ -22,17 +22,23 @@
 //   attempt can never overwrite a newer attempt's result.
 // - last_attempt_at + retryAfterMs is the claim's lease: a retry can only
 //   claim the delivery after the lease ends.
-// - The whole claim-to-send window is bounded, not just the send. An
-//   attempt may only START a send before its send deadline:
+// - An attempt may only START a send before its send deadline:
 //     claim start + retryAfterMs - sendTimeoutMs
-//   and only while it still owns the row (re-checked just before sending).
-//   The send itself is cut off after sendTimeoutMs. So a send always ends
-//   before the lease does, and an expired or superseded attempt never
-//   starts a send. If the deadline has passed (for example the recipient
-//   lookup stalled), the attempt sends nothing and records CLAIM_EXPIRED,
-//   which is retried normally.
-// - A send that outlives its timeout is abandoned. Its late result is
-//   ignored and never written.
+//   and only while it still owns the row. Order before sending:
+//     1. recipient lookup, 2. ownership re-read, 3. deadline check and
+//     sender.send() together in one synchronous function
+//     (startSendBefore, which is deliberately not async).
+//   The deadline is checked AFTER every await, and nothing can be awaited
+//   between that check and the call to sender.send(), so a slow lookup or
+//   a slow ownership read can never carry an expired attempt into a send.
+//   Past the deadline the attempt sends nothing and records CLAIM_EXPIRED
+//   (retried, or FAILED on the last attempt). Superseded: nothing is sent.
+// - We stop WAITING for a send after sendTimeoutMs, and abort its
+//   AbortSignal. Aborting is best-effort: JavaScript cannot force the
+//   sender's work to stop, and the provider may already have the message.
+//   So a timed-out send can still finish, at the provider, after the lease
+//   ends and while a newer attempt is sending. Its late result is ignored
+//   and never written.
 //
 // Interrupted attempts (PRD 11.6)
 // - If our own step fails after the claim (recipient lookup, status
@@ -44,12 +50,15 @@
 //   Nothing is left PENDING forever.
 //
 // Delivery guarantee: at least once while attempts remain, never exactly
-// once. Two attempts can never be sending at the same time, and an attempt
-// that lost its claim never starts a send. A second copy is still possible
-// only through provider-acceptance uncertainty: (a) a send times out after
-// the provider already accepted it, or (b) the provider accepts it and we
-// cannot record SENT. The message is generic, so such a duplicate only
-// tells the Program twice.
+// once. What IS guaranteed: an attempt never STARTS a send after its
+// deadline or after losing its claim, so two attempts never start sending
+// for the same lease. What is NOT guaranteed: that a started send has
+// stopped by the time a newer attempt starts. A second copy is still
+// possible through provider-acceptance uncertainty: (a) a send times out
+// (we stop waiting) but the provider accepts it anyway, possibly while a
+// retry is also sending, or (b) the provider accepts it and we cannot
+// record SENT. The message is generic, so such a duplicate only tells the
+// Program twice.
 
 import { buildNewReferralMessage, NEW_REFERRAL } from './content.js';
 import {
@@ -105,19 +114,31 @@ export function createNotificationService({
     log('error', { event: 'internal_error', where, referral: referralId, error: safeErrorKind(err) });
   }
 
-  // Resolves when the sender accepts, rejects with the sender's error, or
-  // rejects with TIMEOUT after sendTimeoutMs. After a timeout the send is
-  // abandoned: its late result is swallowed and never acted on.
-  function sendWithTimeout(message) {
+  // The only place a send starts. Deliberately NOT async: the deadline
+  // check and the sender.send() call run in one synchronous step, so no
+  // await can ever sit between them.
+  // Returns null (and sends nothing) if the deadline has passed. Otherwise
+  // returns a promise that resolves when the sender accepts, rejects with
+  // the sender's error, or rejects with TIMEOUT after sendTimeoutMs. On
+  // timeout we stop waiting and abort the signal, but cannot force the
+  // send to stop (see header). Its late result is swallowed.
+  function startSendBefore(deadlineMs, message) {
+    if (now().getTime() > deadlineMs) return null;
+    const controller = new AbortController();
+    let sending;
+    try {
+      sending = Promise.resolve(sender.send(message, { signal: controller.signal }));
+    } catch (err) {
+      sending = Promise.reject(err);
+    }
+    sending.catch(() => {}); // a late failure must not become an unhandled rejection
     let handle;
     const timeout = new Promise((resolve, reject) => {
-      handle = timers.setTimeout(
-        () => reject(new NotificationSendError(FAILURE_CATEGORIES.TIMEOUT)),
-        sendTimeoutMs,
-      );
+      handle = timers.setTimeout(() => {
+        controller.abort();
+        reject(new NotificationSendError(FAILURE_CATEGORIES.TIMEOUT));
+      }, sendTimeoutMs);
     });
-    const sending = Promise.resolve().then(() => sender.send(message));
-    sending.catch(() => {}); // a late failure must not become an unhandled rejection
     return Promise.race([sending, timeout]).finally(() => timers.clearTimeout(handle));
   }
 
@@ -173,20 +194,23 @@ export function createNotificationService({
       const recipient = await store.getRecipientForReferral(claimed.referralId);
       if (!recipient) return await finish('FAILED', FAILURE_CATEGORIES.NO_RECIPIENT);
 
-      // Last gate before any send: the claim must be fresh and still ours.
-      if (now().getTime() > sendDeadlineMs) {
-        log('warn', { ...base, event: 'claim_expired_before_send' });
-        return await finish(attempt < maxAttempts ? 'RETRY' : 'FAILED', FAILURE_CATEGORIES.CLAIM_EXPIRED);
-      }
+      // Still ours? Superseded attempts send nothing.
       const current = await store.getDeliveryByReferral(claimed.referralId, claimed.notificationType);
       if (!current || current.status !== 'PENDING' || current.attemptCount !== attempt) {
         log('warn', { ...base, event: 'superseded_before_send' });
         return { outcome: current?.status ?? 'PENDING', deliveryId: claimed.deliveryId };
       }
 
+      // Last gate, after every await: checked and sent in one synchronous
+      // step inside startSendBefore().
       const { subject, body } = buildNewReferralMessage();
+      const sending = startSendBefore(sendDeadlineMs, { to: recipient, subject, body });
+      if (!sending) {
+        log('warn', { ...base, event: 'claim_expired_before_send' });
+        return await finish(attempt < maxAttempts ? 'RETRY' : 'FAILED', FAILURE_CATEGORIES.CLAIM_EXPIRED);
+      }
       try {
-        await sendWithTimeout({ to: recipient, subject, body });
+        await sending;
         accepted = true;
       } catch (err) {
         const category = categoryForError(err);

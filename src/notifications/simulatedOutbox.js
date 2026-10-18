@@ -7,8 +7,12 @@
 // production.
 //
 // Sender contract (the Microsoft Graph sender must meet it too):
-//   send({ to, subject, body }) -> resolves when the message is accepted,
-//   throws NotificationSendError(category) when it is not.
+//   send({ to, subject, body }, { signal }) -> resolves when the message is
+//   accepted, throws NotificationSendError(category) when it is not.
+//   `signal` is an AbortSignal the service aborts when it stops waiting
+//   (sendTimeoutMs). The Graph sender should pass it to its HTTP request so
+//   the request is cancelled where possible. Aborting is best-effort: the
+//   provider may already have accepted the message.
 
 const ALLOWED_ENVS = Object.freeze(['development', 'test']);
 

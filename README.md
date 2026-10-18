@@ -119,15 +119,20 @@ How it behaves:
 - Attempt ownership: claiming an attempt bumps `attempt_count`, and every
   result is written only while the row is still at that attempt. An older
   attempt can never overwrite a newer one's result.
-- The whole claim-to-send window is bounded. An attempt may only start a
-  send before `claim start + retryAfterMs - sendTimeoutMs`, and only if it
-  still owns the row (checked right before sending). The send itself is cut
-  off after `sendTimeoutMs` (default 30s, must be shorter than
-  `retryAfterMs`). So a send always ends before the claim's lease does, and
-  an expired or superseded attempt never starts a send. If the recipient
-  lookup stalls past that point, nothing is sent and the attempt records
-  `CLAIM_EXPIRED` (retried normally). A timed-out send's late result is
-  ignored.
+- An attempt may only **start** a send before
+  `claim start + retryAfterMs - sendTimeoutMs`, and only if it still owns
+  the row. The ownership re-read comes first; the deadline is checked after
+  it, in the same synchronous step that calls `sender.send()`, so a slow
+  recipient lookup or ownership read can never carry an expired attempt into
+  a send. Past the deadline nothing is sent and the attempt records
+  `CLAIM_EXPIRED` (retried, or `FAILED` on the last attempt). A superseded
+  attempt sends nothing.
+- After `sendTimeoutMs` (default 30s, must be shorter than `retryAfterMs`)
+  the app **stops waiting** for the send and aborts its `AbortSignal`. That
+  is best-effort: it cannot force the send to stop, and the provider may
+  already have the message. So a timed-out send can still complete at the
+  provider after the lease ends, even while a newer attempt is sending. Its
+  late result is ignored and never written.
 - Interrupted attempts: if our own step fails after the claim (recipient
   lookup, status write), the attempt is recorded as `INTERNAL_ERROR` and
   retried, or `FAILED` on the last attempt. If even that write fails, the
@@ -142,12 +147,13 @@ How it behaves:
   `test`.
 
 Delivery guarantee: **at least once while attempts remain, not exactly
-once.** Two attempts are never sending at the same time, and an attempt
-that lost its claim never starts a send. The only remaining duplicates come
-from provider-acceptance uncertainty, when:
+once.** Guaranteed: an attempt never *starts* a send after its deadline or
+after losing its claim. Not guaranteed: that a started send has stopped
+before a newer attempt starts. The remaining duplicates come from
+provider-acceptance uncertainty, when:
 
-- a send times out after the mail provider had already accepted it (the
-  provider's answer is unknown, so we retry), or
+- a send times out (we stop waiting) but the mail provider accepts it
+  anyway, possibly while a retry is also sending, or
 - the provider accepts the message and we cannot record `SENT`.
 
 An `INTERRUPTED` row means the last attempt's outcome is unknown: the email

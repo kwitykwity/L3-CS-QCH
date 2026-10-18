@@ -616,7 +616,8 @@ test('stalled lookup: attempt 1 pauses past its lease, attempt 2 sends, released
   const delivery = await store.getDeliveryByReferral(101, NEW_REFERRAL);
   assert.equal(delivery.status, 'SENT');
   assert.equal(delivery.attemptCount, 2);
-  assert.ok(logger.lines.some((l) => l.line.includes('event=claim_expired_before_send') && l.line.includes('attempt=1')));
+  // Attempt 2 already owns the row, so the ownership re-read stops attempt 1.
+  assert.ok(logger.lines.some((l) => l.line.includes('event=superseded_before_send') && l.line.includes('attempt=1')));
 });
 
 test('stalled lookup past the send deadline with no retry yet: nothing sent, CLAIM_EXPIRED, later retry sends once', async () => {
@@ -685,4 +686,106 @@ test('a claim that expires on the last attempt ends FAILED / CLAIM_EXPIRED, not 
   const delivery = await store.getDeliveryByReferral(101, NEW_REFERRAL);
   assert.equal(delivery.failureCategory, FAILURE_CATEGORIES.CLAIM_EXPIRED);
   assert.equal(sender.calls, 0);
+});
+
+// ---------------------------------------------------------------------------
+// Re-review fix: the deadline is checked after the ownership read
+// ---------------------------------------------------------------------------
+
+// Wraps a store so the FIRST ownership read (getDeliveryByReferral) waits
+// until the test releases it.
+function pausedFirstOwnershipRead(store) {
+  let reached; let release;
+  const reachedP = new Promise((r) => { reached = r; });
+  const gate = new Promise((r) => { release = r; });
+  let calls = 0;
+  const wrapped = {
+    ...store,
+    async getDeliveryByReferral(referralId, type) {
+      calls += 1;
+      const row = await store.getDeliveryByReferral(referralId, type);
+      if (calls === 1) { reached(); await gate; }
+      return row;
+    },
+  };
+  return { wrapped, reachedP, release };
+}
+
+test('delayed ownership read: the read says "still ours" but returns after the deadline, so nothing is sent', async () => {
+  const { store, clock: c } = setup();
+  const sender = scriptedSender();
+  const logger = captureLogger();
+  const { wrapped, reachedP, release } = pausedFirstOwnershipRead(store);
+  const service = createNotificationService({ store: wrapped, sender, logger, now: c.now });
+
+  const first = service.notifyReferralCommitted({ referralId: 101 });
+  await reachedP;        // the row was read while attempt 1 still owned it
+  c.advance(30_001);     // ...but the read only returns after the send deadline
+  release();
+
+  assert.equal((await first).outcome, 'PENDING');
+  assert.equal(sender.calls, 0, 'the deadline is rechecked after the ownership read');
+  const delivery = await store.getDeliveryByReferral(101, NEW_REFERRAL);
+  assert.equal(delivery.failureCategory, FAILURE_CATEGORIES.CLAIM_EXPIRED);
+  assert.ok(logger.lines.some((l) => l.line.includes('event=claim_expired_before_send')));
+
+  c.advance(60_001);
+  await service.retryPendingDeliveries();
+  assert.equal(sender.calls, 1, 'the next attempt sends once');
+});
+
+test('delayed ownership read past the lease while a retry sends: the stale attempt sends nothing', async () => {
+  const { store, clock: c } = setup();
+  const sender = scriptedSender();
+  const { wrapped, reachedP, release } = pausedFirstOwnershipRead(store);
+  const service = createNotificationService({ store: wrapped, sender, logger: captureLogger(), now: c.now });
+
+  const first = service.notifyReferralCommitted({ referralId: 101 });
+  await reachedP;
+  c.advance(60_001);
+  await service.retryPendingDeliveries(); // attempt 2 sends
+  release();                              // attempt 1's (stale) read returns "still ours"
+  await first;
+
+  assert.equal(sender.calls, 1, 'only attempt 2 sent');
+  assert.equal((await store.getDeliveryByReferral(101, NEW_REFERRAL)).status, 'SENT');
+});
+
+test('nothing is awaited between the deadline check and sender.send()', async () => {
+  const { store, clock: c } = setup();
+  const seen = [];
+  // The clock moves forward a little on every reading. If any await sat
+  // between the final check and the send, extra readings would show up.
+  let reads = 0;
+  const now = () => { reads += 1; return c.now(); };
+  const sender = { async send() { seen.push(reads); } };
+  const service = createNotificationService({ store, sender, logger: captureLogger(), now });
+  await service.notifyReferralCommitted({ referralId: 101 });
+  const readsAtSend = seen[0];
+  // Readings: claim start, final deadline check. The send follows directly.
+  assert.equal(readsAtSend, 2);
+});
+
+test('on timeout the sender is asked to abort, and the late result is still ignored', async () => {
+  let signal;
+  let finish;
+  const sender = {
+    send(message, options) {
+      signal = options.signal;
+      return new Promise((resolve) => { finish = resolve; });
+    },
+  };
+  const timers = manualTimers();
+  const { store, clock: c } = setup();
+  const service = createNotificationService({ store, sender, logger: captureLogger(), now: c.now, timers });
+
+  const pendingNotify = service.notifyReferralCommitted({ referralId: 101 });
+  await settle();
+  assert.equal(signal.aborted, false);
+  timers.fireAll();
+  assert.equal((await pendingNotify).outcome, 'PENDING');
+  assert.equal(signal.aborted, true, 'abort is requested (best-effort)');
+  finish(); // the provider finishes anyway
+  await settle();
+  assert.equal((await store.getDeliveryByReferral(101, NEW_REFERRAL)).failureCategory, FAILURE_CATEGORIES.TIMEOUT);
 });
