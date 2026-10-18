@@ -21,14 +21,21 @@ export function validateEnvironment(env = process.env, requiredKeys = ['NODE_ENV
 
 export function sanitizeLogData(data) {
   if (typeof data !== 'object' || data === null) return data;
-  const sanitized = { ...data };
-  const sensitiveKeys = ['password', 'token', 'ssn', 'dob', 'client_name', 'email'];
+  
+  if (Array.isArray(data)) {
+    return data.map(item => sanitizeLogData(item));
+  }
 
-  for (const key of Object.keys(sanitized)) {
+  const sanitized = {};
+  const sensitiveKeys = ['password', 'token', 'ssn', 'dob', 'client_name', 'email', 'participant_name', 'notes', 'phone'];
+
+  for (const [key, value] of Object.entries(data)) {
     if (sensitiveKeys.includes(key.toLowerCase())) {
       sanitized[key] = '[REDACTED]';
-    } else if (typeof sanitized[key] === 'object') {
-      sanitized[key] = sanitizeLogData(sanitized[key]);
+    } else if (typeof value === 'object' && value !== null) {
+      sanitized[key] = sanitizeLogData(value);
+    } else {
+      sanitized[key] = value;
     }
   }
   return sanitized;
@@ -36,9 +43,10 @@ export function sanitizeLogData(data) {
 
 export function formatSafeError(err, env = process.env) {
   const isProd = env.NODE_ENV === 'production';
+  const statusCode = err.statusCode || err.status || 500;
   return {
-    error: isProd && (!err.statusCode || err.statusCode === 500) ? 'Internal Server Error' : err.message,
-    statusCode: err.statusCode || 500,
+    error: isProd && statusCode === 500 ? 'Internal Server Error' : (err.message || 'An error occurred'),
+    statusCode,
     ...(isProd ? {} : { stack: err.stack })
   };
 }

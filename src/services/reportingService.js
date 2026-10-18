@@ -4,7 +4,7 @@
  */
 
 export async function getTotalReferrals(db, { startDate, endDate, departmentId, programId }) {
-  let query = "SELECT COUNT(referral_id) AS total_referrals FROM referrals WHERE created_at_utc >= @startDate AND created_at_utc <= @endDate";
+  let query = "SELECT COUNT(referral_id) AS total_referrals FROM referral WHERE created_at_utc >= @startDate AND created_at_utc <= @endDate";
   const params = { startDate, endDate };
 
   if (programId) {
@@ -22,36 +22,47 @@ export async function getTotalReferrals(db, { startDate, endDate, departmentId, 
 }
 
 export async function getTimingMetrics(db, { startDate, endDate, departmentId, programId }) {
-  let baseQuery = [
-    "SELECT",
-    "  r.referral_id,",
-    "  r.created_at_utc,",
-    "  MIN(CASE WHEN h.new_status IN ('Acknowledged', 'Accepted', 'In Review', 'Declined') THEN h.changed_at_utc END) AS first_response_utc,",
-    "  MIN(CASE WHEN h.new_status IN ('Service Delivered', 'Completed') THEN h.changed_at_utc END) AS service_delivered_utc",
-    "FROM referrals r",
-    "LEFT JOIN referral_status_history h ON r.referral_id = h.referral_id",
-    "WHERE r.created_at_utc >= @startDate AND r.created_at_utc <= @endDate"
-  ].join(" ");
-
+  let baseQuery = `
+    SELECT 
+      AVG(JULIANDAY(first_response_at_utc) - JULIANDAY(created_at_utc)) * 24.0 AS avg_hours_to_first_response,
+      AVG(JULIANDAY(service_delivered_at_utc) - JULIANDAY(created_at_utc)) * 24.0 AS avg_hours_to_service_delivery,
+      COUNT(referral_id) AS cohort_size
+    FROM referral
+    WHERE created_at_utc >= @startDate AND created_at_utc <= @endDate
+  `;
   const params = { startDate, endDate };
 
   if (programId) {
-    baseQuery += " AND (r.referring_program_id = @programId OR r.receiving_program_id = @programId)";
+    baseQuery += " AND (referring_program_id = @programId OR receiving_program_id = @programId)";
     params.programId = programId;
   } else if (departmentId) {
-    baseQuery += " AND (r.referring_department_id = @departmentId OR r.receiving_department_id = @departmentId)";
+    baseQuery += " AND (referring_department_id = @departmentId OR receiving_department_id = @departmentId)";
     params.departmentId = departmentId;
   }
 
-  baseQuery += " GROUP BY r.referral_id, r.created_at_utc";
+  const result = await db.query(baseQuery, params);
+  const row = result && result[0] ? result[0] : {};
 
-  const rows = await db.query(baseQuery, params);
-  return rows;
+  return {
+    cohortSize: Number(row.cohort_size || 0),
+    avgHoursToFirstResponse: row.avg_hours_to_first_response !== null && row.avg_hours_to_first_response !== undefined ? Number(Number(row.avg_hours_to_first_response).toFixed(2)) : null,
+    avgHoursToServiceDelivery: row.avg_hours_to_service_delivery !== null && row.avg_hours_to_service_delivery !== undefined ? Number(Number(row.avg_hours_to_service_delivery).toFixed(2)) : null
+  };
 }
 
 export async function getReportingBreadthMetrics(db, { startDate, endDate, departmentId, programId }) {
-  const query = "SELECT * FROM referrals WHERE created_at_utc >= @startDate AND created_at_utc <= @endDate";
-  const rows = await db.query(query, { startDate, endDate });
+  let query = "SELECT status, referring_program_id, receiving_program_id, referring_department_id, receiving_department_id FROM referral WHERE created_at_utc >= @startDate AND created_at_utc <= @endDate";
+  const params = { startDate, endDate };
+
+  if (programId) {
+    query += " AND (referring_program_id = @programId OR receiving_program_id = @programId)";
+    params.programId = programId;
+  } else if (departmentId) {
+    query += " AND (referring_department_id = @departmentId OR receiving_department_id = @departmentId)";
+    params.departmentId = departmentId;
+  }
+
+  const rows = await db.query(query, params);
 
   let totalCount = rows.length;
   let acceptedCount = 0;
@@ -62,10 +73,10 @@ export async function getReportingBreadthMetrics(db, { startDate, endDate, depar
   let receivedCount = 0;
 
   for (const row of rows) {
-    if (row.status === 'Accepted') acceptedCount++;
-    if (row.status === 'Service Delivered') serviceCount++;
-    if (row.status === 'Pending') awaitingResponseCount++;
-    if (row.status === 'Declined') notAppropriateCount++;
+    if (row.status === 'ACCEPTED' || row.status === 'Accepted') acceptedCount++;
+    if (row.status === 'FULFILLED' || row.status === 'Service Delivered') serviceCount++;
+    if (row.status === 'PENDING' || row.status === 'In Review') awaitingResponseCount++;
+    if (row.status === 'DECLINED' || row.status === 'Not Appropriate') notAppropriateCount++;
 
     if (programId) {
       if (row.referring_program_id === programId) madeCount++;
@@ -81,8 +92,8 @@ export async function getReportingBreadthMetrics(db, { startDate, endDate, depar
 
   return {
     totalReferrals: totalCount,
-    acceptanceRatePct: totalCount ? Number(((acceptedCount / totalCount) * 100).toFixed(2)) : 0,
-    resultedInServiceRatePct: totalCount ? Number(((serviceCount / totalCount) * 100).toFixed(2)) : 0,
+    acceptanceRatePct: totalCount > 0 ? Number(((acceptedCount / totalCount) * 100).toFixed(2)) : 0,
+    resultedInServiceRatePct: totalCount > 0 ? Number(((serviceCount / totalCount) * 100).toFixed(2)) : 0,
     awaitingResponseCount,
     notAppropriateCount,
     madeCount,
