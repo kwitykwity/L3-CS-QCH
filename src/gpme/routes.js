@@ -10,6 +10,10 @@
 //              plausible: [...], possible: [...], notCheckedForNeedCount }
 //        503 { status: "UNABLE_TO_MATCH", ruleVersion }  technical failure
 //
+// Query parameters: neither route accepts any. Anything in the query
+// string is refused with a fixed 400 UNEXPECTED_FIELD that never echoes the
+// parameter's name or value (PRD 10.3, 10.4).
+//
 // Why POST for a read: the inputs (age range, ZIP, need) describe a
 // participant, so they must never go in a URL or query string (PRD 5.5).
 // The request changes nothing and stores nothing (PRD 5.3).
@@ -42,6 +46,11 @@ export function createGpmeRouter({ store, resolveIdentity }) {
     }
     if (!service) return next(gpmeErrors.storeUnavailable());
     req.userId = identity.userId;
+    next();
+  });
+
+  router.use((req, res, next) => {
+    if (Object.keys(req.query ?? {}).length > 0) return next(gpmeErrors.unexpectedField());
     next();
   });
 

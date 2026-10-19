@@ -21,8 +21,20 @@
 //         ageMin, ageMax    programs.age_min, programs.age_max
 //         serviceAreaState  programs.service_area_state (same four states)
 //         serviceAreaZips   program_service_area_zips.zip_code
-//       The store rejects Program facts that break the rules in
-//       src/gpme/programFacts.js (for example SET with no ZIP codes).
+//       Reads never validate or throw on these facts: GPME reads them
+//       through readMatchingFacts(), which treats inconsistent facts as
+//       NOT_ON_FILE. So bad matching data can never stop the store, Program
+//       listing, affiliation, or Direct Referral from working (PRD 8.8).
+//
+//   updateProgramMatchingFacts({ programId, ...facts }) -> program | null
+//       The WRITE path for matching facts (Program maintenance). Validates
+//       with findMatchingFactProblems() and throws InvalidMatchingFactsError
+//       (nothing written) if the facts break the rules, for example
+//       serviceAreaState SET with no ZIP codes. null if no such Program.
+//       Azure SQL requirement: the state columns and the
+//       program_service_area_zips rows change in ONE transaction, after
+//       this validation, so the state/ZIP rule (which the database cannot
+//       CHECK across tables) holds for every committed edit.
 //
 //   updateUserProgramAffiliation({ userId, expectedVersion, fromProgramId,
 //                                  toProgramId, actorUserId, correlationId })
@@ -47,7 +59,23 @@
 
 import { findMatchingFactProblems } from '../gpme/programFacts.js';
 
+const MATCHING_FACT_KEYS = Object.freeze([
+  'needCategoryIds', 'ageLimitState', 'ageMin', 'ageMax', 'serviceAreaState', 'serviceAreaZips',
+]);
+
+// Thrown by updateProgramMatchingFacts. Fixed message, never Program data.
+export class InvalidMatchingFactsError extends Error {
+  constructor() {
+    super('invalid Program matching facts');
+    this.name = 'InvalidMatchingFactsError';
+  }
+}
+
+const copyList = (value) => (Array.isArray(value) ? [...value] : value);
+
 // Program matching facts default to "not on file" (migration 003 defaults).
+// Existing rows are loaded as they are, even if inconsistent: validation
+// belongs to the write path, and GPME reads them fail-safe.
 function withMatchingFacts(program) {
   const row = {
     needCategoryIds: [],
@@ -58,20 +86,16 @@ function withMatchingFacts(program) {
     serviceAreaZips: [],
     ...program,
   };
-  if (findMatchingFactProblems(row).length > 0) {
-    // Fixed message: never echo Program data.
-    throw new Error('invalid Program matching facts');
-  }
-  row.needCategoryIds = [...row.needCategoryIds];
-  row.serviceAreaZips = [...row.serviceAreaZips];
+  row.needCategoryIds = copyList(row.needCategoryIds);
+  row.serviceAreaZips = copyList(row.serviceAreaZips);
   return row;
 }
 
 function copyProgram(program) {
   return {
     ...program,
-    needCategoryIds: [...program.needCategoryIds],
-    serviceAreaZips: [...program.serviceAreaZips],
+    needCategoryIds: copyList(program.needCategoryIds),
+    serviceAreaZips: copyList(program.serviceAreaZips),
   };
 }
 
@@ -123,6 +147,17 @@ export function createMemoryStore(
 
     async listActivePrograms() {
       return activeProgramRows();
+    },
+
+    async updateProgramMatchingFacts({ programId, ...facts }) {
+      const program = programsById.get(programId);
+      if (!program) return null;
+      const next = { ...program };
+      for (const key of MATCHING_FACT_KEYS) if (key in facts) next[key] = facts[key];
+      if (findMatchingFactProblems(next).length > 0) throw new InvalidMatchingFactsError();
+      // Validated first, then applied as one change (like one transaction).
+      Object.assign(program, withMatchingFacts(next));
+      return copyProgram(program);
     },
 
     async listNeedCategories() {

@@ -294,10 +294,27 @@ describe('state rules and Direct Referral independence (T17, T18)', () => {
     assert.deepEqual(findMatchingFactProblems({ ageLimitState: 'UNKNOWN' }), ['ageLimitState']);
     assert.deepEqual(findMatchingFactProblems({}), []);
 
-    assert.throws(
-      () => createMemoryStore({ programs: [{ programId: 1, serviceAreaState: 'SET', serviceAreaZips: [] }] }),
-      /invalid Program matching facts/,
-    );
+  });
+
+  test('T17 the Program write path rejects inconsistent facts and writes nothing', async () => {
+    const store = seedStore();
+    const before = await store.getProgram(2);
+    for (const facts of [
+      { serviceAreaState: 'SET', serviceAreaZips: [] },
+      { serviceAreaState: 'OTHER_LIMIT', serviceAreaZips: ['99901'] },
+      { ageLimitState: 'SET', ageMin: null, ageMax: null },
+      { ageLimitState: 'NO_RESTRICTION', ageMin: 18, ageMax: 24 },
+    ]) {
+      await assert.rejects(store.updateProgramMatchingFacts({ programId: 2, ...facts }), (err) => {
+        assert.equal(err.name, 'InvalidMatchingFactsError');
+        assert.equal(err.message, 'invalid Program matching facts');
+        return true;
+      });
+      assert.deepEqual(await store.getProgram(2), before, 'nothing written');
+    }
+    const updated = await store.updateProgramMatchingFacts({ programId: 2, serviceAreaState: 'NO_RESTRICTION', serviceAreaZips: [] });
+    assert.equal(updated.serviceAreaState, 'NO_RESTRICTION');
+    assert.equal(await store.updateProgramMatchingFacts({ programId: 999, serviceAreaState: 'NOT_ON_FILE' }), null);
   });
 
   test('T17 the SQL migration defines the same states and CHECKs', async () => {
@@ -518,5 +535,83 @@ describe('GPME HTTP routes', () => {
       .post('/api/gpme/match')
       .send({ needCategoryIds: [2], participantZip: 'x'.repeat(5000) });
     assert.equal(res.status, 400);
+  });
+});
+
+// --------------------------------------------------------------------------
+// Re-review fixes (Christina, 755a64f)
+// --------------------------------------------------------------------------
+
+// Program 2's matching facts are inconsistent (SET with no ZIP codes), as
+// if bad data were already in the database.
+const BROKEN_PROGRAMS = PROGRAMS.map((p) => (p.programId === 2
+  ? { ...p, serviceAreaState: 'SET', serviceAreaZips: [] }
+  : p));
+
+describe('inconsistent matching facts never block Direct Referral (PRD 8.8)', () => {
+  test('both stores start with inconsistent facts present', () => {
+    assert.doesNotThrow(() => createMemoryStore({ departments: DEPARTMENTS, programs: BROKEN_PROGRAMS, users: USERS }));
+    assert.doesNotThrow(() => createMemoryReferralStore({ departments: DEPARTMENTS, programs: BROKEN_PROGRAMS, users: USERS }));
+  });
+
+  test('HTTP: Direct Referral to the Program with inconsistent facts succeeds', async () => {
+    const store = createMemoryReferralStore({
+      departments: DEPARTMENTS,
+      programs: BROKEN_PROGRAMS,
+      users: USERS,
+      needCategories: NEED_CATEGORIES,
+    });
+    const app = createApp({ affiliationStore: store, referralStore: store, resolveIdentity: () => ({ userId: 100 }) });
+
+    const programs = await request(app).get('/api/programs');
+    assert.equal(programs.status, 200);
+    assert.ok(programs.body.programs.some((p) => p.programId === 2));
+
+    const res = await request(app).post('/api/referrals').send({
+      submissionId: randomUUID(),
+      receivingProgramId: 2,
+      participantName: 'Synthetic Person Epsilon',
+      contactMethod: 'NOT_AVAILABLE',
+      referralContext: 'Synthetic context',
+    });
+    assert.equal(res.status, 201);
+    assert.equal(res.body.status, 'RECEIVED');
+  });
+
+  test('HTTP: GPME still works and reads the inconsistent Program as not on file', async () => {
+    const store = createMemoryStore({ departments: DEPARTMENTS, programs: BROKEN_PROGRAMS, users: USERS, needCategories: NEED_CATEGORIES });
+    const res = await request(appFor(store)).post('/api/gpme/match').send(input([EMPLOYMENT], [19, 20], '99999'));
+    assert.equal(res.status, 200);
+    const p2 = res.body.possible.find((p) => p.programId === 2);
+    assert.ok(p2, 'never removed on bad data');
+    assert.ok(p2.explanations.includes('Service area not on file'));
+  });
+});
+
+describe('GPME routes refuse query parameters (PRD 10.3, 10.4)', () => {
+  const MARKER = 'SyntheticMarkerZeta';
+  for (const [method, path] of [['get', '/api/gpme/need-categories'], ['post', '/api/gpme/match']]) {
+    for (const query of [`?userId=5`, `?${MARKER}=1`, `?needCategoryIds=2`, `?x=${MARKER}`]) {
+      test(`${method.toUpperCase()} ${path}${query} -> 400 UNEXPECTED_FIELD, no echo`, async () => {
+        const req = request(appFor(seedStore()))[method](`${path}${query}`);
+        const res = method === 'post' ? await req.send(T2_INPUT) : await req;
+        assert.equal(res.status, 400);
+        assert.equal(res.body.code, 'UNEXPECTED_FIELD');
+        assert.equal(res.headers['cache-control'], 'no-store');
+        const body = JSON.stringify(res.body);
+        assert.doesNotMatch(body, new RegExp(`${MARKER}|userId|needCategoryIds|\\bx\\b`));
+      });
+    }
+  }
+
+  test('without a query string both routes still work', async () => {
+    const app = appFor(seedStore());
+    assert.equal((await request(app).get('/api/gpme/need-categories')).status, 200);
+    assert.equal((await request(app).post('/api/gpme/match').send(T2_INPUT)).status, 200);
+  });
+
+  test('query check runs after sign-in: no identity still gets 401', async () => {
+    const res = await request(appFor(seedStore(), null)).get('/api/gpme/need-categories?userId=5');
+    assert.equal(res.status, 401);
   });
 });
