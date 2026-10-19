@@ -10,6 +10,7 @@ creates an Azure resource.
 | -------------------------------------- | ----------------------------------------------------- | ---------------------------------- | ------------------ |
 | `db/migrations/001_core_schema.sql`    | Creates 19 tables, their indexes, and 2 triggers      | Every database                     | No                 |
 | `db/migrations/002_reference_data.sql` | Adds the 4 departments and 5 Not Appropriate reasons  | Every database                     | No                 |
+| `db/migrations/003_gpme_matching_states.sql` | Adds GPME age and service-area states; renames the ZIP table | Every database        | No                 |
 | `db/seeds/dev_synthetic_seed.sql`      | Adds made-up service categories for dev and demos     | Development only, never production | Yes                |
 
 ## Run order
@@ -17,7 +18,9 @@ creates an Azure resource.
 1. Run `001_core_schema.sql` first. 002 inserts into tables that 001 creates.
 2. Run `002_reference_data.sql` second, and only after 001 finished with no
    errors.
-3. Run `dev_synthetic_seed.sql` last, only in development, and only after 002.
+3. Run `003_gpme_matching_states.sql` third, and only after 002 finished with
+   no errors.
+4. Run `dev_synthetic_seed.sql` last, only in development, and only after 003.
 
 Run each migration one time per database, starting from an empty database.
 
@@ -26,6 +29,7 @@ Run each migration one time per database, starting from an empty database.
 ```bash
 sqlcmd -S <server> -d <database> <auth flags> -I -b -i db/migrations/001_core_schema.sql
 sqlcmd -S <server> -d <database> <auth flags> -I -b -i db/migrations/002_reference_data.sql
+sqlcmd -S <server> -d <database> <auth flags> -I -b -i db/migrations/003_gpme_matching_states.sql
 ```
 
 For any QCH database, the server, database name, and sign-in details come from
@@ -100,6 +104,44 @@ SELECT COUNT(*) FROM dbo.departments;                                 -- 4
 SELECT COUNT(*) FROM dbo.not_appropriate_reasons;                     -- 5
 SELECT name FROM sys.indexes WHERE has_filter = 1;                    -- the 3 filtered indexes above
 ```
+
+After 003:
+
+```sql
+SELECT COUNT(*) FROM sys.tables WHERE schema_id = SCHEMA_ID('dbo');  -- still 19
+SELECT OBJECT_ID('dbo.program_zip_codes');                            -- NULL (renamed)
+SELECT OBJECT_ID('dbo.program_service_area_zips');                    -- not NULL
+SELECT name FROM sys.check_constraints
+WHERE name IN ('ck_programs_age_limit_state', 'ck_programs_service_area_state',
+               'ck_programs_age_limit_values', 'ck_psaz_format');     -- 4 rows
+```
+
+### GPME state rules (test T17)
+
+Run on a throwaway dev database after 003. Each of the first two inserts must
+fail with a CHECK constraint error (547). The third must succeed. Wrap it in a
+transaction and roll back so nothing stays behind.
+
+```sql
+BEGIN TRAN;
+DECLARE @dept INT = (SELECT TOP 1 department_id FROM dbo.departments);
+
+-- 1. Must FAIL: age state SET with no ages
+INSERT dbo.programs (department_id, name, age_limit_state)
+VALUES (@dept, N'T17 range without ages', 'SET');
+
+-- 2. Must FAIL: confirmed no age limit, but ages filled in
+INSERT dbo.programs (department_id, name, age_limit_state, age_min, age_max)
+VALUES (@dept, N'T17 no limit with ages', 'NO_RESTRICTION', 18, 24);
+
+-- 3. Must SUCCEED: age state SET with a range
+INSERT dbo.programs (department_id, name, age_limit_state, age_min, age_max)
+VALUES (@dept, N'T17 valid range', 'SET', 18, 24);
+ROLLBACK;
+```
+
+Run it without `-b` so sqlcmd shows all three results instead of stopping at
+the first expected error.
 
 ## Recording what ran
 

@@ -557,6 +557,56 @@ describe('pagination: every authorized referral is reachable (PRD 9.9)', () => {
     const position = { createdAt: '2026-10-01T12:00:00.1234567Z', referralId: 42 };
     assert.deepEqual(decodeCursor(encodeCursor(position)), position);
   });
+
+  const IMPOSSIBLE_TIMESTAMPS = [
+    '2026-02-30T12:00:00Z',
+    '2026-02-29T12:00:00Z',
+    '2100-02-29T12:00:00Z',
+    '2026-04-31T12:00:00Z',
+    '2026-00-10T12:00:00Z',
+    '2026-13-01T12:00:00Z',
+    '2026-10-00T12:00:00Z',
+    '0000-01-01T00:00:00Z',
+    '2026-10-01T24:00:00Z',
+    '2026-10-01T12:60:00Z',
+    '2026-10-01T12:00:60Z',
+    '2026-02-30T12:00:00.1234567Z',
+    '2026-02-30T1200Z',
+  ];
+
+  test('decodeCursor refuses impossible calendar dates and times', () => {
+    for (const createdAt of IMPOSSIBLE_TIMESTAMPS) {
+      assert.equal(decodeCursor(encodeCursor({ createdAt, referralId: 5 })), null, createdAt);
+    }
+  });
+
+  test('decodeCursor accepts real edge dates and keeps all seven fractional digits', () => {
+    for (const createdAt of [
+      '2028-02-29T12:00:00Z',
+      '2000-02-29T00:00:00Z',
+      '2026-12-31T23:59:59.9999999Z',
+      '0001-01-01T00:00:00Z',
+      '9999-12-31T23:59:59.9999999Z',
+      '2026-10-01T12:00:00.1Z',
+    ]) {
+      const position = { createdAt, referralId: 5 };
+      assert.deepEqual(decodeCursor(encodeCursor(position)), position, createdAt);
+    }
+  });
+
+  test('HTTP: cursors with impossible timestamps return 400 INVALID_REQUEST on cursor', async () => {
+    const { store } = await big({ toEleven: 3, toTwelve: 0 });
+    const app = createApp({ referralStore: store, affiliationStore: store, resolveIdentity: () => ({ userId: RECEIVER_11 }) });
+    for (const createdAt of IMPOSSIBLE_TIMESTAMPS) {
+      const cursor = encodeCursor({ createdAt, referralId: 5 });
+      for (const path of ['/api/referrals/received', '/api/referrals/sent']) {
+        const res = await request(app).get(path).query({ cursor });
+        assert.equal(res.status, 400, `${path} ${createdAt}`);
+        assert.equal(res.body.code, 'INVALID_REQUEST', `${path} ${createdAt}`);
+        assert.deepEqual(res.body.fields, ['cursor'], `${path} ${createdAt}`);
+      }
+    }
+  });
 });
 
 describe('production startup wiring (PRD 16.1, 17.4, 18.5)', () => {

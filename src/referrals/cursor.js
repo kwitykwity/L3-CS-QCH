@@ -19,7 +19,21 @@
 const MAX_CURSOR_LENGTH = 120;
 const BASE64URL = /^[A-Za-z0-9_-]+$/;
 // UTC timestamp with 0 to 7 fractional digits (SQL datetime2 precision).
-const UTC_TIMESTAMP = /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(\.\d{1,7})?Z$/;
+const UTC_TIMESTAMP = /^(\d{4})-(\d{2})-(\d{2})T(\d{2}):(\d{2}):(\d{2})(\.\d{1,7})?Z$/;
+
+// True only for a real calendar date and time inside the datetime2 range
+// (years 0001-9999, no leap seconds). Checked on the parsed numbers, not
+// with Date, so the fractional digits are never rounded and the text the
+// store returned is kept exactly.
+function isRealTimestamp(text) {
+  const match = UTC_TIMESTAMP.exec(text);
+  if (!match) return false;
+  const [year, month, day, hour, minute, second] = match.slice(1, 7).map(Number);
+  if (year < 1 || month < 1 || month > 12 || day < 1) return false;
+  const leap = (year % 4 === 0 && year % 100 !== 0) || year % 400 === 0;
+  const daysInMonth = [31, leap ? 29 : 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31][month - 1];
+  return day <= daysInMonth && hour <= 23 && minute <= 59 && second <= 59;
+}
 
 export function encodeCursor(row) {
   return Buffer.from(JSON.stringify([row.createdAt, row.referralId]), 'utf8').toString('base64url');
@@ -39,7 +53,7 @@ export function decodeCursor(text) {
   }
   if (!Array.isArray(value) || value.length !== 2) return null;
   const [createdAt, referralId] = value;
-  if (typeof createdAt !== 'string' || !UTC_TIMESTAMP.test(createdAt)) return null;
+  if (typeof createdAt !== 'string' || !isRealTimestamp(createdAt)) return null;
   if (!Number.isSafeInteger(referralId) || referralId <= 0) return null;
   return { createdAt, referralId };
 }
