@@ -203,6 +203,20 @@ describe('request validation (allowlist)', () => {
     });
   }
 
+  for (const explanation of ['', '   ', ' \n\t ', null]) {
+    test(`Accepted with a blank explanation (${JSON.stringify(explanation)}) is accepted as "no explanation", like Not Appropriate`, () => {
+      const result = validateResponse({ decision: 'ACCEPTED', explanation });
+      assert.deepEqual(result, { ok: true, value: { decision: 'ACCEPTED', reasonId: null, explanation: null } });
+    });
+  }
+
+  test('Accepted with a real explanation or a reason is still refused', () => {
+    assert.deepEqual(validateResponse({ decision: 'ACCEPTED', explanation: 'x' }), { ok: false, fields: ['explanation'] });
+    assert.deepEqual(validateResponse({ decision: 'ACCEPTED', explanation: 0 }), { ok: false, fields: ['explanation'] });
+    assert.deepEqual(validateResponse({ decision: 'ACCEPTED', reasonId: '  ' }), { ok: false, fields: ['reasonId'] }, 'the blank rule is for explanations only');
+    assert.deepEqual(validateResponse({ decision: 'ACCEPTED', reasonId: 2, explanation: '  ' }), { ok: false, fields: ['reasonId'] });
+  });
+
   for (const [label, explanation] of [['omitted', undefined], ['null', null], ['empty', ''], ['whitespace-only', ' \n\t ']]) {
     test(`an ${label} explanation means "no explanation"`, () => {
       const body = notAppropriate();
