@@ -35,8 +35,13 @@
 //   nothing is written (PRD 9.4, 13.4).
 // - The audit event keeps the prior and new values (PRD 6.2 "prior value
 //   remains in audit history"). The Not Appropriate explanation is
-//   sensitive (PRD 5.4, 6.5) and is never copied into audit history;
-//   only whether one exists.
+//   sensitive (PRD 5.4, 6.5): it is never logged, reported, searched or
+//   notified. When a correction changes or clears it, the PRIOR text is
+//   kept in that CORRECTED event's `before` so the history is not lost
+//   (PRD 6.4, 6.5, 9.6). This is the case the schema's audit rule allows:
+//   "do not copy referral context or notes unless that field is the thing
+//   being corrected" (001_core_schema.sql). The new text lives in the row;
+//   audit records only whether one exists. No route returns audit events.
 // - first_responded_at and first_resulted_in_service_at are set once and
 //   never rewritten by a correction (PRD 12.4).
 // - Users who cannot view the referral get the same 404 as a missing
@@ -283,6 +288,8 @@ export function createOutcomeService({ store, allowDemoGrants = false }) {
       const updated = await tx.updateReferral({ referralId, when: { version }, set: next });
       if (!updated) throw await staleError(tx, referralId, canView);
 
+      const priorExplanation = row.notAppropriateExplanation ?? null;
+      const explanationCorrected = priorExplanation !== null && priorExplanation !== next.notAppropriateExplanation;
       await tx.appendAuditEvent({
         entityType: 'REFERRAL',
         entityId: referralId,
@@ -292,7 +299,9 @@ export function createOutcomeService({ store, allowDemoGrants = false }) {
           field: 'DECISION',
           decision: row.decision,
           not_appropriate_reason_id: row.notAppropriateReasonId ?? null,
-          has_explanation: Boolean(row.notAppropriateExplanation),
+          has_explanation: Boolean(priorExplanation),
+          // Only when this correction changes or clears it (see header).
+          ...(explanationCorrected ? { not_appropriate_explanation: priorExplanation } : {}),
         },
         after: {
           field: 'DECISION',

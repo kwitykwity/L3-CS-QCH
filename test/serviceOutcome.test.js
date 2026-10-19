@@ -179,18 +179,110 @@ describe('recording the service outcome (RECORD_OUTCOME)', () => {
     assert.equal((await ctx.outcomes.recordOutcome(RECORDER, ctx.id, { outcome: 'RESULTED_IN_SERVICE' })).status, 'OUTCOME_RECORDED');
   });
 
-  test('recording and a concurrent correction to Not Appropriate never leave Not Appropriate with an outcome', async () => {
-    for (let i = 0; i < 2; i += 1) {
-      const ctx = await referral({ respond: ACCEPT });
-      const version = await versionOf(ctx);
-      const ops = [
-        ctx.outcomes.recordOutcome(RECORDER, ctx.id, { outcome: 'RESULTED_IN_SERVICE' }),
-        ctx.outcomes.correctResponse(UPDATER, ctx.id, { ...NOT_APPROPRIATE, version }),
-      ];
-      if (i === 1) ops.reverse();
-      await Promise.allSettled(ops);
-      const row = ctx.row();
-      assert.ok(row.decision === 'ACCEPTED' || row.serviceOutcome === 'NOT_RECORDED', JSON.stringify(row));
+  // Controlled order (PR #14 review): the first operation is paused right
+  // after its grants read (it has already read the referral row), the
+  // second runs to completion, then the first is released.
+  function pauseAfterGrantsRead(store, userId) {
+    let reached; let release;
+    const reachedP = new Promise((r) => { reached = r; });
+    const gate = new Promise((r) => { release = r; });
+    let done = false;
+    store._afterLockingRead(async (kind, id) => {
+      if (!done && kind === 'grants' && id === userId) { done = true; reached(); await gate; }
+    });
+    return { reached: reachedP, release };
+  }
+
+  test('record wins: a decision correction that read the row first gets REFERRAL_CHANGED; Accepted + Resulted stands', async () => {
+    const ctx = await referral({ respond: ACCEPT });
+    const version = await versionOf(ctx);
+    const pause = pauseAfterGrantsRead(ctx.store, UPDATER);
+    const correcting = ctx.outcomes.correctResponse(UPDATER, ctx.id, { ...NOT_APPROPRIATE, version });
+    await pause.reached;
+
+    assert.equal((await ctx.outcomes.recordOutcome(RECORDER, ctx.id, { outcome: 'RESULTED_IN_SERVICE' })).status, 'OUTCOME_RECORDED');
+    pause.release();
+    await rejectsWith(correcting, 'REFERRAL_CHANGED');
+
+    const row = ctx.row();
+    assert.deepEqual([row.decision, row.serviceOutcome], ['ACCEPTED', 'RESULTED_IN_SERVICE']);
+    assert.deepEqual(ctx.events().map((e) => e.action), ['ACCEPTED', 'SERVICE_OUTCOME_RECORDED']);
+  });
+
+  test('correction wins: a recording that read the row first gets OUTCOME_NOT_ALLOWED; Not Appropriate + Not Recorded stands', async () => {
+    const ctx = await referral({ respond: ACCEPT });
+    const version = await versionOf(ctx);
+    const pause = pauseAfterGrantsRead(ctx.store, RECORDER);
+    const recording = ctx.outcomes.recordOutcome(RECORDER, ctx.id, { outcome: 'RESULTED_IN_SERVICE' });
+    await pause.reached;
+
+    assert.equal((await ctx.outcomes.correctResponse(UPDATER, ctx.id, { ...NOT_APPROPRIATE, version })).status, 'CORRECTED');
+    pause.release();
+    await rejectsWith(recording, 'OUTCOME_NOT_ALLOWED');
+
+    const row = ctx.row();
+    assert.deepEqual([row.decision, row.serviceOutcome, row.outcomeRecordedAt ?? null], ['NOT_APPROPRIATE', 'NOT_RECORDED', null]);
+    assert.deepEqual(ctx.events().map((e) => e.action), ['ACCEPTED', 'CORRECTED']);
+  });
+});
+
+describe('explanation history in corrections (PRD 6.4, 6.5, 9.6)', () => {
+  const NEW_TEXT = 'Synthetic replacement explanation PLUGH';
+  const corrected = (ctx) => ctx.events().filter((e) => e.action === 'CORRECTED').at(-1);
+
+  test('changing the explanation keeps the prior text in the CORRECTED event; the new text is only in the row', async () => {
+    const ctx = await referral({ respond: NOT_APPROPRIATE });
+    await ctx.outcomes.correctResponse(UPDATER, ctx.id, { decision: 'NOT_APPROPRIATE', reasonId: 2, explanation: NEW_TEXT, version: await versionOf(ctx) });
+    const event = corrected(ctx);
+    assert.equal(event.before.not_appropriate_explanation, SECRET);
+    assert.deepEqual(event.after, { field: 'DECISION', decision: 'NOT_APPROPRIATE', not_appropriate_reason_id: 2, has_explanation: true });
+    assert.equal(ctx.row().notAppropriateExplanation, NEW_TEXT);
+    assert.ok(!JSON.stringify(ctx.store._referralAuditEvents).includes('PLUGH'), 'the new text is not copied into audit');
+  });
+
+  test('correcting to Accepted clears the explanation; the prior text is kept in the CORRECTED event', async () => {
+    const ctx = await referral({ respond: NOT_APPROPRIATE });
+    await ctx.outcomes.correctResponse(UPDATER, ctx.id, { decision: 'ACCEPTED', version: await versionOf(ctx) });
+    assert.equal(ctx.row().notAppropriateExplanation, null);
+    assert.equal(corrected(ctx).before.not_appropriate_explanation, SECRET);
+    assert.equal(corrected(ctx).after.has_explanation, false);
+  });
+
+  test('removing the explanation (same reason) keeps the prior text', async () => {
+    const ctx = await referral({ respond: NOT_APPROPRIATE });
+    await ctx.outcomes.correctResponse(UPDATER, ctx.id, { decision: 'NOT_APPROPRIATE', reasonId: 2, version: await versionOf(ctx) });
+    assert.equal(corrected(ctx).before.not_appropriate_explanation, SECRET);
+  });
+
+  test('a correction that leaves the explanation unchanged copies no text', async () => {
+    const ctx = await referral({ respond: NOT_APPROPRIATE });
+    await ctx.outcomes.correctResponse(UPDATER, ctx.id, { decision: 'NOT_APPROPRIATE', reasonId: 1, explanation: SECRET, version: await versionOf(ctx) });
+    assert.equal('not_appropriate_explanation' in corrected(ctx).before, false);
+    assert.ok(!JSON.stringify(ctx.store._referralAuditEvents).includes('XYZZY'));
+  });
+
+  test('adding an explanation where there was none copies no text', async () => {
+    const ctx = await referral({ respond: ACCEPT });
+    await ctx.outcomes.correctResponse(UPDATER, ctx.id, { ...NOT_APPROPRIATE, version: await versionOf(ctx) });
+    assert.equal('not_appropriate_explanation' in corrected(ctx).before, false);
+    assert.ok(!JSON.stringify(ctx.store._referralAuditEvents).includes('XYZZY'));
+  });
+
+  test('the prior text never reaches a response or a log, even when the save fails', async (t) => {
+    const ctx = await referral({ respond: NOT_APPROPRIATE });
+    const logs = [];
+    t.mock.method(console, 'error', (...args) => logs.push(args.map(String).join(' ')));
+    t.mock.method(console, 'log', (...args) => logs.push(args.map(String).join(' ')));
+    const app = createApp({ referralStore: ctx.store, affiliationStore: ctx.store, resolveIdentity: () => ({ userId: ALL }) });
+    const ok = await request(app).post(`/api/referrals/${ctx.id}/response/correction`).send({ decision: 'ACCEPTED', version: await versionOf(ctx) });
+    assert.equal(ok.status, 200);
+    const detail = await request(app).get(`/api/referrals/${ctx.id}`);
+    ctx.store._failNextAudit();
+    const failed = await request(app).post(`/api/referrals/${ctx.id}/response/correction`)
+      .send({ ...NOT_APPROPRIATE, explanation: NEW_TEXT, version: detail.body.referral.version });
+    assert.equal(failed.status, 500);
+    for (const text of [ok.text, detail.text, failed.text, logs.join('\n')]) {
+      assert.ok(!text.includes('XYZZY') && !text.includes('PLUGH'));
     }
   });
 });
