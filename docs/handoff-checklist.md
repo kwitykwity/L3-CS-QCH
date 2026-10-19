@@ -22,8 +22,8 @@ pull request), **Not started**.
 | Authoritative source code | This repository during development; a QCH-owned repository at handoff | Draft | QCH IT repository location (19.3) |
 | Deployment documentation | `docs/deployment.md` | Draft | QCH IT deployment tooling and resource details |
 | Environment and configuration documentation | `docs/qch-it-requirements.md`, README Configuration table | Draft | QCH IT values and confirmations |
-| Database schema and migrations | `db/migrations/`, `db/README.md` | Draft | Migrations 001 and 002 merged (PR #4). Migration 003 in review (PR #15), not merged. Migration-history handling not built. |
-| Data Dictionary | Not written | Not started | Nothing blocking for the merged schema (001, 002): it can be written now. Add 003's columns only if and when PR #15 merges. |
+| Database schema and migrations | `db/migrations/`, `db/README.md` | Draft | Migrations 001 and 002 merged (PR #4); migration 003 merged (PR #15). Migration-history handling not built. |
+| Data Dictionary | Not written | Not started | Nothing blocking: the merged schema (001, 002, 003) can be documented now. |
 | Administrative instructions | Not written | Not started | Permission administration and Program management features |
 | Backup and restore procedure | Not written | Not started | QCH IT backup approach |
 | Recovery procedure | `docs/deployment.md` (app); `db/README.md` (failed migration) | Draft | QCH IT backup and restore details |

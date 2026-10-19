@@ -43,6 +43,14 @@ npm test
     and may differ. `check-runtime` is not the production check. Before
     deploying, confirm the App Service runs the Node version QCH IT
     confirmed, and that the test run above used that same version.
+  - **If QCH IT selects a production Node version other than 24.15.0,** the
+    team must first reconcile the repository with it: update the exact pin
+    in `.nvmrc`, `package.json` `engines`, `package-lock.json`, and
+    `scripts/check-runtime.js`
+    (and its test), run `npm ci` and the full `npm test` on that version,
+    and merge that change through a reviewed pull request. Only then deploy.
+    Do not deploy a version the repository and its tests were not validated
+    on.
 
 ## 2. Set the configuration
 
@@ -67,9 +75,9 @@ Migrations are applied on purpose, before the new app version starts. The app
 never changes the production schema on its own (PRD 9.8, 18.3).
 
 - Follow [`db/README.md`](../db/README.md) for run order, the required
-  `sqlcmd -I -b` flags, and what to do if a run fails partway. It covers
-  migrations 001 and 002 (merged in PR #4). Migration 003 is in review in
-  PR #15; do not apply it until it merges.
+  `sqlcmd -I -b` flags, and what to do if a run fails partway. The current
+  migrations are 001 and 002 (merged in PR #4) and 003 (merged in PR #15),
+  applied in that order.
 - Test every migration outside production first.
 - Write down which migrations were applied, to which database, from which
   commit, by whom, and when. The database does not record this itself yet

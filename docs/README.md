@@ -23,10 +23,10 @@ Elsewhere in the repository:
 
 - The README at the repository root covers setup, configuration, running,
   and tests.
-- [`db/README.md`](../db/README.md) covers database migrations 001 and 002
-  (merged in PR #4): run order, required `sqlcmd` flags, and what to do if a
-  run fails partway. Migration 003 (GPME matching states) is in review in
-  PR #15 and is not part of the documented schema until it merges.
+- [`db/README.md`](../db/README.md) covers database migrations 001, 002
+  (merged in PR #4) and 003 (GPME matching states, merged in PR #15): run
+  order, required `sqlcmd` flags, post-migration checks, and what to do if a
+  run fails partway.
 
 Still to come, once its dependency is met: the Data Dictionary, admin
 instructions, backup and restore, troubleshooting, and monitoring guidance.
