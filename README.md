@@ -91,6 +91,86 @@ The suite covers:
 - the error handler returns no stack traces or internal details, keeps valid
   4xx statuses, logs only safe metadata (never the error object or message),
   and closes the connection if a response had already started
+- new-referral notifications (card 15): see Notifications below
+
+## Notifications (card 15)
+
+`src/notifications/` sends the "new referral" email to the receiving Program
+(PRD 11.2 to 11.6). It is built and tested on its own and is **not wired in
+yet**: no route, server start-up, or referral code calls it.
+
+How it behaves:
+
+- `notifyReferralCommitted({ referralId, correlationId })` runs only after the
+  referral transaction commits (PRD 11.4). It never throws, and nothing it does
+  can change or roll back the referral (PRD 11.6).
+- The recipient is the receiving Program's `notification_email`, read
+  server-side. Callers cannot pass a recipient (PRD 11.3). A Program with no
+  email ends `FAILED` with category `NO_RECIPIENT`.
+- The message is fixed generic text with no participant data (PRD 11.2),
+  in `content.js`.
+- Each delivery is one `notification_deliveries` row: `PENDING`, then `SENT`
+  or `FAILED`, with IDs, counts, timestamps, a failure category, and a
+  correlation ID only (PRD 11.5).
+- `THROTTLED`, `UNAVAILABLE`, `TIMEOUT`, `CLAIM_EXPIRED`, and `INTERNAL_ERROR` failures stay
+  `PENDING` and are retried by `retryPendingDeliveries()`, at least
+  `retryAfterMs` apart (default 60s), up to `maxAttempts` (default 3). Every
+  other failure ends `FAILED` at once.
+- Attempt ownership: claiming an attempt bumps `attempt_count`, and every
+  result is written only while the row is still at that attempt. An older
+  attempt can never overwrite a newer one's result.
+- An attempt may only **start** a send before
+  `claim start + retryAfterMs - sendTimeoutMs`, and only if it still owns
+  the row. The ownership re-read comes first; the deadline is checked after
+  it, in the same synchronous step that calls `sender.send()`, so a slow
+  recipient lookup or ownership read can never carry an expired attempt into
+  a send. Past the deadline nothing is sent and the attempt records
+  `CLAIM_EXPIRED` (retried, or `FAILED` on the last attempt). A superseded
+  attempt sends nothing.
+- After `sendTimeoutMs` (default 30s, must be shorter than `retryAfterMs`)
+  the app **stops waiting** for the send and aborts its `AbortSignal`. That
+  is best-effort: it cannot force the send to stop, and the provider may
+  already have the message. So a timed-out send can still complete at the
+  provider after the lease ends, even while a newer attempt is sending. Its
+  late result is ignored and never written.
+- Interrupted attempts: if our own step fails after the claim (recipient
+  lookup, status write), the attempt is recorded as `INTERNAL_ERROR` and
+  retried, or `FAILED` on the last attempt. If even that write fails, the
+  retry run picks the row up later. A row stuck `PENDING` at `maxAttempts`
+  is closed as `FAILED` / `INTERRUPTED`. Nothing stays `PENDING` forever.
+- Logs hold IDs, outcome, attempt, category, correlation ID, and an
+  allowlisted error kind (`Error`, `TypeError`, ... or `OtherError`). Never
+  the recipient, subject, body, provider error text, or a raw error name
+  (PRD 15.3). Final failures log at `warn` for monitoring.
+- `simulatedOutbox.js` keeps messages in memory for development, tests, and
+  demos (PRD 16.4). It refuses to start unless `NODE_ENV` is `development` or
+  `test`.
+
+Delivery guarantee: **at least once while attempts remain, not exactly
+once.** Guaranteed: an attempt never *starts* a send after its deadline or
+after losing its claim. Not guaranteed: that a started send has stopped
+before a newer attempt starts. The remaining duplicates come from
+provider-acceptance uncertainty, when:
+
+- a send times out (we stop waiting) but the mail provider accepts it
+  anyway, possibly while a retry is also sending, or
+- the provider accepts the message and we cannot record `SENT`.
+
+An `INTERRUPTED` row means the last attempt's outcome is unknown: the email
+may or may not have gone out. The message is generic, so a duplicate only
+tells the Program twice.
+
+Remaining tasks, not done here:
+
+- Call `notifyReferralCommitted()` from the Direct Referral transaction once
+  PR #8 merges.
+- The Microsoft Graph sender, once QCH IT provides the shared mailbox and app
+  registration (`NOTIFICATION_MAILBOX` and the `AZURE_*` values). It will use
+  `categoryForHttpStatus()` to classify failures.
+- The Azure SQL store, meeting the contract documented in
+  `memoryDeliveryStore.js`.
+- A timer that runs `retryPendingDeliveries()` in the hosted app.
+- Azure Monitor / Application Insights alerts on final failures (PRD 11.6).
 
 ## Endpoints
 
@@ -131,5 +211,6 @@ The database side (state columns, `program_service_area_zips`) is migration
 ## Scope of this scaffold
 
 Deliberately **not** built here: database code, schema, or migrations; Azure
-resource provisioning; referrals; matching; reporting; notifications; Entra
-sign-in; roles and permissions. Any data used for demos must be synthetic.
+resource provisioning; referrals; matching; reporting; Entra sign-in; roles
+and permissions. Notifications exist as a standalone module, not yet wired in
+(see Notifications above). Any data used for demos must be synthetic.

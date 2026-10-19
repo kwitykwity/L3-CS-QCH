@@ -23,7 +23,11 @@ const publicDir = path.join(
 //   affiliationStore, the Program data store.
 // - resolveIdentity(req) -> { userId } | null: supplied by the future Entra
 //   sign-in. Without one, /api routes answer 401 (fail closed).
-export function createApp({ affiliationStore, referralStore, resolveIdentity } = {}) {
+// - allowDemoGrants: honor DEMO permission grants. Defaults to false. Turning
+//   it on also requires nodeEnv 'development' or 'test'; anything else,
+//   including no nodeEnv, throws at start-up (PRD 16.1, 17.4).
+// - nodeEnv: the validated NODE_ENV from loadConfig().
+export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false, nodeEnv } = {}) {
   const app = express();
 
   // Don't advertise the framework or its version.
@@ -37,7 +41,7 @@ export function createApp({ affiliationStore, referralStore, resolveIdentity } =
 
   app.use(
     '/api/referrals',
-    createReferralRouter({ store: referralStore, resolveIdentity }),
+    createReferralRouter({ store: referralStore, resolveIdentity, allowDemoGrants, nodeEnv }),
   );
 
   app.use(

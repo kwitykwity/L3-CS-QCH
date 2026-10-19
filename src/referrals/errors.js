@@ -40,6 +40,17 @@ export const referralErrors = Object.freeze({
       'SUBMISSION_ID_CONFLICT',
       'This Submission ID is already in use. Check whether the earlier referral was received before sending a new one.',
     ),
+  // Used both for "does not exist" and "you may not see it" (PRD 3.3).
+  referralNotFound: () =>
+    new ReferralError(404, 'REFERRAL_NOT_FOUND', 'Referral not found.'),
+  notAuthorizedForProgram: () =>
+    new ReferralError(403, 'NOT_AUTHORIZED', 'You do not have access to referrals for that Program.'),
+  notAuthorizedToRespond: () =>
+    new ReferralError(403, 'NOT_AUTHORIZED', 'You do not have permission to respond to referrals for this Program.'),
+  alreadyResponded: () =>
+    new ReferralError(409, 'ALREADY_RESPONDED', 'This referral already has a response. Reload it to see the current response.'),
+  reasonNotSelectable: () =>
+    new ReferralError(422, 'REASON_NOT_SELECTABLE', 'That reason cannot be selected. Choose another reason.'),
   storeUnavailable: () =>
     new ReferralError(503, 'NOT_CONFIGURED', 'This service is not available.'),
 });
