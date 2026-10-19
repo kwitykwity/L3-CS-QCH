@@ -48,8 +48,14 @@ export function validateResponse(body) {
 
   const { decision } = body;
   if (decision === 'ACCEPTED') {
-    // A reason or explanation only belongs to Not Appropriate.
-    const extra = ['reasonId', 'explanation'].filter((k) => body[k] !== undefined && body[k] !== null && body[k] !== '');
+    // A reason or explanation only belongs to Not Appropriate. A blank or
+    // whitespace-only explanation means "no explanation", exactly as it
+    // does for Not Appropriate.
+    const absent = (v) => v === undefined || v === null || v === '';
+    const blankText = (v) => absent(v) || (typeof v === 'string' && v.trim() === '');
+    const extra = [];
+    if (!absent(body.reasonId)) extra.push('reasonId');
+    if (!blankText(body.explanation)) extra.push('explanation');
     if (extra.length > 0) return { ok: false, fields: extra };
     return { ok: true, value: { decision, reasonId: null, explanation: null } };
   }
