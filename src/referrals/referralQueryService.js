@@ -11,7 +11,9 @@
 //   never include contact details or notes.
 
 import { errors as affiliationErrors } from '../affiliation/errors.js';
-import { receivingProgramIds, referralAccess } from '../authorization/referralAccess.js';
+import {
+  RESPOND, programIdsWithCapability, receivingProgramIds, referralAccess,
+} from '../authorization/referralAccess.js';
 import { referralErrors } from './errors.js';
 import { stageOf } from './stage.js';
 import { encodeCursor } from './cursor.js';
@@ -48,7 +50,21 @@ export function createReferralQueryService({ store, allowDemoGrants = false }) {
     };
   }
 
-  async function listItem(row, nameOf, { includeNeed }) {
+  // Not Appropriate reason label for display, looked up once per request.
+  // The reason returns to the initiating worker (PRD 2.3, 6.5).
+  function reasonNamer() {
+    const cache = new Map();
+    return async (reasonId) => {
+      if (reasonId == null) return null;
+      if (!cache.has(reasonId)) {
+        const reason = await store.getNotAppropriateReason(reasonId);
+        cache.set(reasonId, { reasonId, label: reason?.label ?? null });
+      }
+      return cache.get(reasonId);
+    };
+  }
+
+  async function listItem(row, nameOf, { includeNeed, reasonOf }) {
     const item = {
       referralId: row.referralId,
       createdAt: row.createdAt,
@@ -59,6 +75,9 @@ export function createReferralQueryService({ store, allowDemoGrants = false }) {
       decision: row.decision ?? null,
       serviceOutcome: row.serviceOutcome,
       stage: stageOf(row),
+      // Standard reason label only; the free-text explanation is sensitive
+      // and appears only on the single-referral view.
+      notAppropriateReason: await reasonOf(row.notAppropriateReasonId),
     };
     if (includeNeed) item.referralContext = row.referralContext;
     return item;
@@ -86,7 +105,8 @@ export function createReferralQueryService({ store, allowDemoGrants = false }) {
     const rows = await store.listReferralsByReceivingPrograms(scope, { stage, after, limit: LIST_LIMIT + 1 });
     const { items, hasMore, nextCursor } = page(rows);
     const referrals = [];
-    for (const row of items) referrals.push(await listItem(row, nameOf, { includeNeed: true }));
+    const reasonOf = reasonNamer();
+    for (const row of items) referrals.push(await listItem(row, nameOf, { includeNeed: true, reasonOf }));
     return { programs, referrals, hasMore, nextCursor };
   }
 
@@ -96,7 +116,8 @@ export function createReferralQueryService({ store, allowDemoGrants = false }) {
     const nameOf = programNamer();
     const { items, hasMore, nextCursor } = page(await store.listReferralsByCreator(userId, { stage, after, limit: LIST_LIMIT + 1 }));
     const referrals = [];
-    for (const row of items) referrals.push(await listItem(row, nameOf, { includeNeed: false }));
+    const reasonOf = reasonNamer();
+    for (const row of items) referrals.push(await listItem(row, nameOf, { includeNeed: false, reasonOf }));
     return { referrals, hasMore, nextCursor };
   }
 
@@ -105,8 +126,11 @@ export function createReferralQueryService({ store, allowDemoGrants = false }) {
     const row = await store.getReferralById(referralId);
     if (!row) throw referralErrors.referralNotFound();
 
-    const access = referralAccess(userId, row, await receivingIdsFor(userId));
+    const grants = await store.getActiveGrants(userId);
+    const access = referralAccess(userId, row, receivingProgramIds(grants, { allowDemoGrants }));
     if (!access.canView) throw referralErrors.referralNotFound(); // same answer as "does not exist"
+    const canRespond = row.responseStatus === 'AWAITING_RESPONSE' &&
+      programIdsWithCapability(grants, RESPOND, { allowDemoGrants }).has(row.receivingProgramId);
 
     const nameOf = programNamer();
     const creator = await store.getUser(row.createdByUserId);
@@ -128,10 +152,14 @@ export function createReferralQueryService({ store, allowDemoGrants = false }) {
         decision: row.decision ?? null,
         serviceOutcome: row.serviceOutcome,
         stage: stageOf(row),
+        firstRespondedAt: row.firstRespondedAt ?? null,
+        notAppropriateReason: await reasonNamer()(row.notAppropriateReasonId),
+        // Sensitive like Notes (PRD 6.5): only on this authorized view.
+        notAppropriateExplanation: row.notAppropriateExplanation ?? null,
       },
       // Lets the UI show this referral read-only or with receiving actions
       // (PRD 3.7). The backend re-checks every action on its own.
-      viewerAccess: { asCreator: access.asCreator, asReceiver: access.asReceiver },
+      viewerAccess: { asCreator: access.asCreator, asReceiver: access.asReceiver, canRespond },
     };
   }
 

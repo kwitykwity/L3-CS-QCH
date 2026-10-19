@@ -45,6 +45,12 @@ export const referralErrors = Object.freeze({
     new ReferralError(404, 'REFERRAL_NOT_FOUND', 'Referral not found.'),
   notAuthorizedForProgram: () =>
     new ReferralError(403, 'NOT_AUTHORIZED', 'You do not have access to referrals for that Program.'),
+  notAuthorizedToRespond: () =>
+    new ReferralError(403, 'NOT_AUTHORIZED', 'You do not have permission to respond to referrals for this Program.'),
+  alreadyResponded: () =>
+    new ReferralError(409, 'ALREADY_RESPONDED', 'This referral already has a response. Reload it to see the current response.'),
+  reasonNotSelectable: () =>
+    new ReferralError(422, 'REASON_NOT_SELECTABLE', 'That reason cannot be selected. Choose another reason.'),
   storeUnavailable: () =>
     new ReferralError(503, 'NOT_CONFIGURED', 'This service is not available.'),
 });
