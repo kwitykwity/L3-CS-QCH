@@ -10,6 +10,7 @@
 // Query parameters are allowlisted; anything else -> 400 (PRD 10.3).
 
 import express from 'express';
+import { AffiliationError, errors as affiliationErrors } from '../affiliation/errors.js';
 import { ReferralError, referralErrors } from '../referrals/errors.js';
 import { createReportingService } from './reportingService.js';
 import { PERIOD_TYPES, parseDateText } from './periods.js';
@@ -54,10 +55,15 @@ export function createReportingRouter({ store, resolveIdentity, now }) {
     next();
   });
 
-  router.use((req, res, next) => {
+  router.use(async (req, res, next) => {
     const identity = resolveIdentity ? resolveIdentity(req) : null;
-    if (!identity || !Number.isSafeInteger(identity.userId)) return next(referralErrors.notAuthenticated());
+    if (!identity || !Number.isSafeInteger(identity.userId) || identity.userId <= 0) {
+      return next(referralErrors.notAuthenticated());
+    }
     if (!service) return next(referralErrors.storeUnavailable());
+
+    const user = await store.getUser(identity.userId);
+    if (!user || !user.isActive) return next(affiliationErrors.userNotActive());
     next();
   });
 
@@ -66,7 +72,7 @@ export function createReportingRouter({ store, resolveIdentity, now }) {
   });
 
   router.use((err, req, res, next) => {
-    if (err instanceof ReferralError) {
+    if (err instanceof ReferralError || err instanceof AffiliationError) {
       const body = { error: err.message, code: err.code };
       if (err.fields) body.fields = err.fields;
       return res.status(err.status).json(body);

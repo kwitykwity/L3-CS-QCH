@@ -178,7 +178,9 @@ describe('Total Referrals known answers (PRD 12.4)', () => {
   test('Department history: moving a Program later does not change past counts', async () => {
     const store = await seeded();
     // Rows keep the Department stored at creation (PRD 12.4). Re-point Program 10 afterwards.
-    (await store.getProgram(10)).departmentId = 2;
+    assert.equal((await store.getProgram(10)).departmentId, 1);
+    store._setProgramDepartment(10, 2);
+    assert.equal((await store.getProgram(10)).departmentId, 2);
     const res = await total(store, { period: 'YEARLY', date: '2026-10-18', departmentId: 1 });
     assert.equal(res.body.value, 7);
   });
@@ -253,4 +255,39 @@ describe('response and access rules', () => {
       assert.equal(res.body.value, undefined);
     }
   });
+});
+
+describe('reporting application access boundary', () => {
+  for (const userId of [0, -1, 1.5, '100', Number.MAX_SAFE_INTEGER + 1]) {
+    test(`invalid identity ${userId} returns 401 without a report`, async () => {
+      const store = build();
+      const res = await request(appFor(store, undefined, () => ({ userId })))
+        .get('/api/reports/total-referrals')
+        .query({ period: 'MONTHLY' });
+      assert.equal(res.status, 401);
+      assert.equal(res.body.code, 'NOT_AUTHENTICATED');
+      assert.equal(res.body.value, undefined);
+    });
+  }
+
+  for (const [label, users] of [
+    ['nonexistent', []],
+    ['inactive', [{ userId: 999, isActive: false }]],
+  ]) {
+    test(`${label} user returns 403 before counting referrals`, async () => {
+      const store = createMemoryReferralStore({ users });
+      let counted = false;
+      store.countReferrals = async () => {
+        counted = true;
+        return 0;
+      };
+      const res = await request(appFor(store, undefined, () => ({ userId: 999 })))
+        .get('/api/reports/total-referrals')
+        .query({ period: 'MONTHLY' });
+      assert.equal(res.status, 403);
+      assert.equal(res.body.code, 'USER_NOT_ACTIVE');
+      assert.equal(res.body.value, undefined);
+      assert.equal(counted, false);
+    });
+  }
 });
