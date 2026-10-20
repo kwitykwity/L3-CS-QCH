@@ -18,6 +18,11 @@
 //   GET /api/referrals/sent?stage=                   my submitted referrals
 //   GET /api/referrals/:referralId                   one referral (creator or
 //                                                    authorized receiver; else 404)
+//   GET  /api/referrals/not-appropriate-reasons      configured active reasons
+//   POST /api/referrals/:referralId/response
+//        { "decision": "ACCEPTED" } or
+//        { "decision": "NOT_APPROPRIATE", "reasonId": n, "explanation"?: "..." }
+//        200 { status: "RESPONDED", referral } | 403 | 404 | 409 ALREADY_RESPONDED
 //   stage: AWAITING_RESPONSE | ACCEPTED_OUTCOME_PENDING | COMPLETE
 //   Query parameters are allowlisted; anything else (e.g. userId) -> 400.
 //
@@ -30,6 +35,7 @@ import { AffiliationError } from '../affiliation/errors.js';
 import { ReferralError, referralErrors } from './errors.js';
 import { createReferralService } from './referralService.js';
 import { createReferralQueryService } from './referralQueryService.js';
+import { createResponseService } from './responseService.js';
 import { STAGES } from './stage.js';
 import { MAX_BODY_BYTES } from './validateReferral.js';
 import { decodeCursor } from './cursor.js';
@@ -78,6 +84,7 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
   const router = express.Router();
   const service = store ? createReferralService({ store }) : null;
   const queries = store ? createReferralQueryService({ store, allowDemoGrants }) : null;
+  const responses = store ? createResponseService({ store, allowDemoGrants }) : null;
 
   // Protected responses must not be cached (PRD 5.5).
   router.use((req, res, next) => {
@@ -118,6 +125,20 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
 
   router.get('/sent', async (req, res) => {
     res.json(await queries.listSent(req.userId, readQuery(req.query, ['stage', 'cursor'])));
+  });
+
+  router.get('/not-appropriate-reasons', async (req, res) => {
+    readQuery(req.query, []);
+    res.json(await responses.listReasons(req.userId));
+  });
+
+  router.post('/:referralId/response', async (req, res) => {
+    readQuery(req.query, []);
+    const referralId = toId(req.params.referralId);
+    if (referralId === null) throw referralErrors.referralNotFound();
+    res.json(await responses.respond(req.userId, referralId, req.body, {
+      correlationId: req.correlationId,
+    }));
   });
 
   router.get('/:referralId', async (req, res) => {

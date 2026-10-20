@@ -94,6 +94,14 @@ sqlcmd -S <server> -d master <auth flags> -b -Q "DROP DATABASE [<database>]"
 sqlcmd -S <server> -d master <auth flags> -b -Q "CREATE DATABASE [<database>]"
 ```
 
+## Audit verification
+
+See [the audit coverage and instructions](AUDIT_VERIFICATION.md) and the
+[repeatable SQL check](checks/referral_audit.sql).
+Run the check after the migrations on an isolated synthetic test database,
+using a test administrator identity to exercise the append-only trigger.
+Runtime permission enforcement is a separate check.
+
 ## Check that it worked
 
 On a fresh database, after 001 and 002:
