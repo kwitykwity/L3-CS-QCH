@@ -95,7 +95,31 @@
 //          WHERE referral_id=@id AND response_status='AWAITING_RESPONSE'
 //          so two concurrent responses can never both succeed.
 //
-// Columns map to dbo.referrals and dbo.audit_events in
+// Program maintenance (card 14A):
+//   tx.lockProgramForUpdate(programId) -> program | null
+//       Reads the Program for a change. Only one transaction at a time may
+//       hold a Program for update; a second one waits until the first
+//       commits or rolls back. Plain readers (for example a referral being
+//       created) are not blocked by it. In Azure SQL:
+//         SELECT ... FROM dbo.programs WITH (UPDLOCK, ROWLOCK)
+//           WHERE program_id = @programId
+//   tx.getUser, tx.getActiveGrants, tx.getDepartment
+//       Locking reads held until the transaction ends (REPEATABLEREAD, as
+//       above), so a user deactivation, grant revocation, or Department
+//       change that starts during a Program change waits for it.
+//   tx.updateProgram({ programId, expectedVersion, set }) -> program | null
+//       ONE conditional update, only on a Program this transaction holds
+//       for update:
+//         UPDATE dbo.programs SET ..., updated_at = SYSUTCDATETIME()
+//           WHERE program_id = @id AND row_version = @expectedVersion
+//       0 rows -> null (the row changed since the caller read it); nothing
+//       is written. The change becomes visible only at commit, together
+//       with its audit event (tx.appendAuditEvent, same transaction). At
+//       commit it waits for any transaction that has read the Program
+//       (for example a referral checking that it is ACTIVE), so such a
+//       transaction commits against the state it read (PRD 9.3, 9.4).
+//
+// Columns map to dbo.referrals, dbo.programs and dbo.audit_events in
 // db/migrations/001_core_schema.sql (PR #4).
 
 import { createMemoryStore } from '../affiliation/memoryStore.js';
@@ -140,7 +164,21 @@ function createRowLocks() {
     }
   }
 
-  return { shared, exclusive, releaseShared };
+  // Turns this owner's shared lock into an exclusive one, waiting for every
+  // OTHER reader to finish (like SQL lock conversion). Callers must already
+  // hold the row's update intent, so two owners never upgrade the same row
+  // at once and this cannot deadlock. Returns a function that releases it.
+  async function upgrade(key, owner) {
+    const row = entry(key);
+    while (row.writer || [...row.readers].some((r) => r !== owner)) await waitFor(row);
+    row.writer = true;
+    return () => {
+      row.writer = false;
+      wakeAll(row);
+    };
+  }
+
+  return { shared, exclusive, releaseShared, upgrade };
 }
 
 export function createMemoryReferralStore(seed = {}, { now = () => new Date() } = {}) {
@@ -158,6 +196,8 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   const inFlight = new Map();
   // referral ID -> in-flight first response (same waiting rule as above).
   const responseInFlight = new Map();
+  // program ID -> the transaction holding it for update (UPDLOCK).
+  const programUpdateHeld = new Map();
   let nextReferralId = 1;
   let failNextAudit = false;
 
@@ -168,7 +208,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   }
 
   async function withTransaction(fn) {
-    const staged = { referrals: [], audit: [], locks: [], updates: [], responseLocks: [] };
+    const staged = { referrals: [], audit: [], locks: [], updates: [], responseLocks: [], programUpdates: [], programHolds: [] };
     const owner = Symbol('transaction');
 
     // Committed row with this transaction's own staged changes applied.
@@ -252,6 +292,34 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
         return { ...row, ...fields };
       },
 
+      async lockProgramForUpdate(programId) {
+        if (!staged.programHolds.some((h) => h.programId === programId)) {
+          while (programUpdateHeld.has(programId)) {
+            await programUpdateHeld.get(programId).promise;
+          }
+          let settle;
+          const promise = new Promise((resolve) => { settle = resolve; });
+          programUpdateHeld.set(programId, { promise, owner });
+          staged.programHolds.push({ programId, settle });
+        }
+        return tx.getProgram(programId);
+      },
+
+      async updateProgram({ programId, expectedVersion, set }) {
+        if (!staged.programHolds.some((h) => h.programId === programId)) {
+          throw new Error('updateProgram requires lockProgramForUpdate first');
+        }
+        if (staged.programUpdates.some((u) => u.programId === programId)) {
+          throw new Error('one Program update per transaction');
+        }
+        const current = await base.getProgram(programId);
+        if (!current || current.version !== expectedVersion) return null; // 0 rows updated
+        staged.programUpdates.push({ programId, fields: { ...set } });
+        // The version the row will have once this transaction commits.
+        const nextVersion = `v${Number(current.version.slice(1)) + 1}`;
+        return { ...current, ...set, version: nextVersion, updatedAt: now().toISOString() };
+      },
+
       async appendAuditEvent(event) {
         if (failNextAudit) {
           failNextAudit = false;
@@ -264,6 +332,10 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     };
 
     const release = () => {
+      for (const { programId, settle } of staged.programHolds) {
+        programUpdateHeld.delete(programId);
+        settle();
+      }
       locks.releaseShared(owner);
       for (const { submissionId, settle } of staged.locks) {
         inFlight.delete(submissionId);
@@ -277,6 +349,16 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
 
     try {
       const result = await fn(tx);
+      // Program changes wait for other readers of those rows to finish
+      // (lock conversion), then everything below is applied in one step.
+      const writeReleases = [];
+      for (const { programId } of staged.programUpdates) {
+        writeReleases.push(await locks.upgrade(`program:${programId}`, owner));
+      }
+      for (const { programId, fields } of staged.programUpdates) {
+        base._applyProgramChange(programId, fields);
+      }
+      writeReleases.forEach((done) => done());
       referrals.push(...staged.referrals);
       for (const { referralId, fields } of staged.updates) {
         Object.assign(referrals.find((r) => r.referralId === referralId), fields);
@@ -358,6 +440,9 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     _setDepartmentStatus: (departmentId, status) =>
       locks.exclusive(`department:${departmentId}`, async () => base._setDepartmentStatus(departmentId, status)),
     _afterLockingRead(fn) { afterLockingRead = fn; },
+    // Deactivates a user, waiting for any transaction that has read them.
+    _setUserActive: (userId, isActive) =>
+      locks.exclusive(`user:${userId}`, async () => base._setUserActive(userId, isActive)),
     // Revokes a user's grants for one capability, waiting for any response
     // transaction that has read that user's grants (like an UPDATE).
     _revokeGrants: (userId, permission) =>
