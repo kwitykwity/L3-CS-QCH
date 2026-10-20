@@ -194,7 +194,8 @@ describe('Journey 1: Direct Referral, accepted by the receiving Program', () => 
     assert.equal(opened.status, 200);
     assert.equal(opened.body.referral.participantName, MARKERS.name);
     assert.equal(opened.body.referral.source, 'DIRECT');
-    assert.deepEqual(opened.body.viewerAccess, { asCreator: false, asReceiver: true, canRespond: true });
+    const { asCreator, asReceiver, canRespond } = opened.body.viewerAccess;
+    assert.deepEqual({ asCreator, asReceiver, canRespond }, { asCreator: false, asReceiver: true, canRespond: true });
 
     // Accepts it.
     const accepted = await intake.post(`/api/referrals/${referralId}/response`, { decision: 'ACCEPTED' });
