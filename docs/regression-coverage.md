@@ -5,7 +5,8 @@ waits on other work. Final Technical PRD 14 (accessibility and
 interaction), 17.2 (critical end-to-end tests), 17.3 (authorization) and
 17.7 (accessibility interaction tests).
 
-**Status: first slice.** It covers everything merged on `main` as of
+**Status: first slice.** It covers Direct Referral, the receiving queue
+and response, and Program maintenance slice 14A, on `main` as of
 October 20, 2026. Each area marked *waiting* gets its journey when the
 pull request named in it merges. The same rule as the security suite
 applies: a merged workflow is not done until it has a journey here.
@@ -41,7 +42,9 @@ against Azure SQL; that waits on the Azure SQL store.
 | Receiving lifecycle: queue and response | Journeys 1, 2, 3, 6 | No screen yet | Covered at API level |
 | Receiving lifecycle: outcome and corrections | Not yet | No screen yet | *Waiting:* #14 |
 | GPME E2E | Not yet | Run B | *Waiting:* #16, then #27 (add `e2e/gpme.spec.js` then) |
-| Program maintenance | Not yet | No screen yet | *Waiting:* #21, #22, #24, #25 |
+| Program maintenance 14A: Program information and lifecycle (#21, merged) | Journey 7: authorized edit, refusals for other roles, stale-version refusal, discontinue / reactivate, effect on new referral choices, preserved referral history, audit evidence | No screen yet | Covered at API level |
+| Program maintenance 14B: configurable fields and values (#22, #24, merged) | Not yet | No screen yet | *Pending:* next slice of this card |
+| Program maintenance 14C: create / move Programs, Department lifecycle (#25, merged) | Not yet | No screen yet | *Pending:* next slice of this card |
 | P0 reporting | Not yet | No screen yet | *Waiting:* #18, #26 |
 | Keyboard workflows and focus | `e2e/` (Chromium, scripted keyboard) | Runs A and B in a second browser | Covered in Chromium |
 | Labels, required fields, errors | `accessibility.test.js`; axe in `e2e/` | Screen reader spot check | Covered |

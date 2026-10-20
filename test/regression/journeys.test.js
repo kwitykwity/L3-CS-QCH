@@ -7,10 +7,11 @@
 // workflow. The per-card tests check each rule on its own; these check
 // that the rules still hold together when the workflows run end to end.
 //
-// Covered here: everything merged on main (Direct Referral, receiving
-// queue, response). GPME-assisted referral (#16, #27), outcome and
-// corrections (#14), Program maintenance (#21, #22, #24, #25) and P0
-// reporting (#18, #26) get journeys here as they merge; see
+// Covered here: Direct Referral, receiving queue, response, and Program
+// maintenance slice 14A (#21). GPME-assisted referral (#16, #27), outcome
+// and corrections (#14), Program fields and organization changes (14B,
+// 14C: #22, #24, #25) and P0 reporting (#18, #26) get journeys here as
+// they merge or as the next slice of this card; see
 // docs/regression-coverage.md.
 //
 // The data store is the in-memory store. Running the same journeys
@@ -32,6 +33,7 @@ const INTAKE_VIEWER = 201; // view only for Program 11
 const OTHER_INTAKE = 300;  // view + respond for Program 12
 const ADMIN = 400;         // administers permissions; no referral access
 const LEFT = 500;          // account deactivated
+const DIRECTOR = 600;      // MANAGE_PROGRAM for Program 11 (its Program Director)
 
 const P_FAMILY = 10;       // worker's Program
 const P_ADULT_ED = 11;     // receives referrals
@@ -71,11 +73,14 @@ function organization() {
       { userId: OTHER_INTAKE, isActive: true, currentProgramId: P_HOUSING },
       { userId: ADMIN, isActive: true },
       { userId: LEFT, isActive: false },
+      { userId: DIRECTOR, isActive: true, currentProgramId: P_ADULT_ED },
     ],
     grants: [
       grant(INTAKE, 'VIEW_RECEIVED_REFERRAL', P_ADULT_ED), grant(INTAKE, 'RESPOND_TO_REFERRAL', P_ADULT_ED),
       grant(INTAKE_VIEWER, 'VIEW_RECEIVED_REFERRAL', P_ADULT_ED),
       grant(OTHER_INTAKE, 'VIEW_RECEIVED_REFERRAL', P_HOUSING), grant(OTHER_INTAKE, 'RESPOND_TO_REFERRAL', P_HOUSING),
+      grant(OTHER_INTAKE, 'MANAGE_PROGRAM', P_HOUSING), // directs another Program
+      grant(DIRECTOR, 'MANAGE_PROGRAM', P_ADULT_ED),
       grant(ADMIN, 'ADMINISTER_PERMISSIONS', null, { scopeType: 'ORG' }),
       grant(ADMIN, 'VIEW_AGGREGATE_REPORTING', null, { scopeType: 'ORG' }),
     ],
@@ -106,6 +111,7 @@ function startApp() {
     get: (url) => { current = userId; return record(request(app).get(url)); },
     post: (url, body) => { current = userId; return record(request(app).post(url).send(body)); },
     put: (url, body) => { current = userId; return record(request(app).put(url).send(body)); },
+    patch: (url, body) => { current = userId; return record(request(app).patch(url).send(body)); },
   });
   return { store, as, responses };
 }
@@ -422,3 +428,100 @@ describe('Journey 6: double clicks and races end in one result (PRD 7.3, 6.2)', 
     assert.equal(store._referralAuditEvents.filter((e) => e.entityId === id && e.action !== 'CREATED').length, 1, 'one response audit event');
   });
 });
+
+describe('Journey 7: Program maintenance, slice 14A (#21; PRD 3.6, 4.4, 6.4, 9.3, 9.4, 9.6)', () => {
+  const PROGRAM = `/api/program-management/programs/${P_ADULT_ED}`;
+  const programAudit = (store) => store._referralAuditEvents.filter((e) => e.entityType === 'PROGRAM');
+  const offered = async (user) => (await user.get('/api/programs')).body.programs.map((p) => p.programId);
+
+  test('edit -> stale edit refused -> discontinue -> new referrals stop, history stays -> reactivate, all audited', async () => {
+    const { store, as, responses } = startApp();
+    const director = as(DIRECTOR);
+    const worker = as(WORKER);
+    await chooseAffiliation(worker, P_FAMILY);
+
+    // A referral that exists before any change (history to preserve).
+    const before = await worker.post('/api/referrals', referralTo(P_ADULT_ED));
+    assert.equal(before.status, 201);
+    const historyId = before.body.referral.referralId;
+
+    // Only this Program's Director may change it. A sender, its receiving
+    // staff, another Program's Director and an administrator are refused,
+    // and nothing is written (PRD 3.6, 3.8).
+    const read = await director.get(PROGRAM);
+    assert.equal(read.status, 200);
+    const v1 = read.body.program.version;
+    for (const userId of [WORKER, INTAKE, OTHER_INTAKE, ADMIN]) {
+      const res = await as(userId).patch(PROGRAM, { version: v1, site: 'Synthetic Site Z' });
+      assert.equal(res.status, 403, `user ${userId}`);
+      assert.equal(res.body.code, 'NOT_AUTHORIZED');
+    }
+    assert.equal(programAudit(store).length, 0, 'refusals write no audit event');
+
+    // Authorized edit with the version the Director saw.
+    const edited = await director.patch(PROGRAM, { version: v1, site: 'Synthetic Site Z', eligibilityNotes: 'Synthetic notes' });
+    assert.equal(edited.status, 200);
+    assert.equal(edited.body.status, 'UPDATED');
+    assert.equal(edited.body.program.site, 'Synthetic Site Z');
+    const v2 = edited.body.program.version;
+    assert.notEqual(v2, v1);
+
+    // A second change made from the old screen is refused with the current
+    // Program; nothing is written (PRD 9.4, 13.4).
+    const stale = await director.patch(PROGRAM, { version: v1, site: 'Synthetic Site Y' });
+    assert.equal(stale.status, 409);
+    assert.equal(stale.body.code, 'PROGRAM_CHANGED');
+    assert.equal(stale.body.current.site, 'Synthetic Site Z');
+    assert.equal(stale.body.current.version, v2);
+    assert.equal((await director.get(PROGRAM)).body.program.site, 'Synthetic Site Z');
+
+    // Workers see the new information when choosing a Program.
+    const listed = (await worker.get('/api/programs')).body.programs.find((p) => p.programId === P_ADULT_ED);
+    assert.equal(listed.site, 'Synthetic Site Z');
+
+    // Discontinue: gone from new referral choices; new referrals refused.
+    const stopped = await director.post(`${PROGRAM}/discontinue`, { version: v2 });
+    assert.equal(stopped.status, 200);
+    assert.equal(stopped.body.status, 'DISCONTINUED');
+    const v3 = stopped.body.program.version;
+    assert.ok(!(await offered(worker)).includes(P_ADULT_ED));
+    const refused = await worker.post('/api/referrals', referralTo(P_ADULT_ED));
+    assert.equal(refused.status, 422);
+    assert.equal(refused.body.code, 'RECEIVING_PROGRAM_NOT_SELECTABLE');
+    assert.equal((await director.post(`${PROGRAM}/discontinue`, { version: v3 })).body.code, 'ALREADY_IN_STATUS');
+
+    // History is untouched: the earlier referral still names this Program
+    // for its sender and its receiving staff (PRD 4.4, 9.1).
+    const senderView = await worker.get(`/api/referrals/${historyId}`);
+    assert.equal(senderView.status, 200);
+    assert.equal(senderView.body.referral.receivingProgram.programId, P_ADULT_ED);
+    const queue = await as(INTAKE).get(`/api/referrals/received?programId=${P_ADULT_ED}`);
+    assert.deepEqual(queue.body.referrals.map((r) => r.referralId), [historyId]);
+
+    // Reactivate: offered again, and referrals go through.
+    const back = await director.post(`${PROGRAM}/reactivate`, { version: v3 });
+    assert.equal(back.status, 200);
+    assert.equal(back.body.status, 'REACTIVATED');
+    assert.ok((await offered(worker)).includes(P_ADULT_ED));
+    assert.equal((await worker.post('/api/referrals', referralTo(P_ADULT_ED))).status, 201);
+
+    // Audit evidence: three events, by the Director, with before and after
+    // values; the refused and stale attempts left nothing (PRD 6.4, 9.6).
+    assert.deepEqual(programAudit(store).map((e) => [e.action, e.entityId, e.actorUserId]), [
+      ['UPDATED', P_ADULT_ED, DIRECTOR],
+      ['DISCONTINUED', P_ADULT_ED, DIRECTOR],
+      ['REACTIVATED', P_ADULT_ED, DIRECTOR],
+    ]);
+    const [update, discontinue, reactivate] = programAudit(store);
+    assert.deepEqual(update.before, { site: 'Site B', eligibility_notes: null });
+    assert.deepEqual(update.after, { site: 'Synthetic Site Z', eligibility_notes: 'Synthetic notes' });
+    assert.deepEqual([discontinue.before, discontinue.after], [{ lifecycle_status: 'ACTIVE' }, { lifecycle_status: 'DISCONTINUED' }]);
+    assert.deepEqual([reactivate.before, reactivate.after], [{ lifecycle_status: 'DISCONTINUED' }, { lifecycle_status: 'ACTIVE' }]);
+
+    // Program maintenance responses are never cached (PRD 5.5).
+    for (const res of responses.filter((r) => r.req.path.startsWith('/api/program-management'))) {
+      assert.equal(res.headers['cache-control'], 'no-store');
+    }
+  });
+});
+
