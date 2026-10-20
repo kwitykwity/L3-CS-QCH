@@ -95,8 +95,88 @@
 //          WHERE referral_id=@id AND response_status='AWAITING_RESPONSE'
 //          so two concurrent responses can never both succeed.
 //
-// Columns map to dbo.referrals and dbo.audit_events in
-// db/migrations/001_core_schema.sql (PR #4).
+// Program maintenance (card 14A):
+//   tx.lockProgramForUpdate(programId) -> program | null
+//       Reads the Program for a change. Only one transaction at a time may
+//       hold a Program for update; a second one waits until the first
+//       commits or rolls back. Plain readers (for example a referral being
+//       created) are not blocked by it. In Azure SQL:
+//         SELECT ... FROM dbo.programs WITH (UPDLOCK, ROWLOCK)
+//           WHERE program_id = @programId
+//   tx.getUser, tx.getActiveGrants, tx.getDepartment
+//       Locking reads held until the transaction ends (REPEATABLEREAD, as
+//       above), so a user deactivation, grant revocation, or Department
+//       change that starts during a Program change waits for it.
+//   tx.updateProgram({ programId, expectedVersion, set }) -> program | null
+//       ONE conditional update, only on a Program this transaction holds
+//       for update:
+//         UPDATE dbo.programs SET ..., updated_at = SYSUTCDATETIME()
+//           WHERE program_id = @id AND row_version = @expectedVersion
+//       0 rows -> null (the row changed since the caller read it); nothing
+//       is written. The change becomes visible only at commit, together
+//       with its audit event (tx.appendAuditEvent, same transaction). At
+//       commit it waits for any transaction that has read the Program
+//       (for example a referral checking that it is ACTIVE), so such a
+//       transaction commits against the state it read (PRD 9.3, 9.4).
+//
+// Configurable fields (card 14B; dbo.field_definitions, dbo.field_options,
+// dbo.program_field_applicability):
+//   tx.lockFieldForUpdate(fieldId), tx.lockOptionForUpdate(optionId),
+//   tx.lockApplicabilityForUpdate(programId, fieldId) -> row | null
+//       Same rule as lockProgramForUpdate: one holder at a time
+//       (SELECT ... WITH (UPDLOCK, ROWLOCK)), held until the transaction ends.
+//       Always lock in this order to avoid deadlocks: field, then option,
+//       then applicability rows in ascending programId.
+//   tx.getField(fieldId), tx.getOption(optionId),
+//   tx.listFieldOptions(fieldId), tx.listFieldApplicability(fieldId),
+//   tx.listProgramApplicability(programId)
+//       Reads that include this transaction's own uncommitted changes.
+//   tx.insertField(row), tx.insertOption(row), tx.insertApplicability(row)
+//       -> new row (IDENTITY ids are allocated at once; gaps are possible).
+//       insertApplicability returns null if the (program, field) row
+//       already exists (primary key).
+//   tx.updateField / tx.updateOption / tx.updateApplicability
+//       ({ ...id, expectedVersion, set }) -> row | null
+//       ONE conditional UPDATE ... WHERE <id> AND row_version = @expected,
+//       only on a row this transaction holds for update; null = 0 rows.
+//   tx.listFieldValues(programId, fieldId) -> [value rows]
+//   tx.replaceFieldValues({ programId, fieldId, rows })
+//       Only while holding that (program, field) applicability row. Replaces
+//       the Program's current value rows for the field (multi-select: one
+//       row per option; every row has exactly one value column, as
+//       ck_pfv_one_value requires):
+//         DELETE dbo.program_field_values WHERE program_id = @p AND field_id = @f;
+//         INSERT dbo.program_field_values (...) VALUES (...);  -- per row
+//       in the same transaction as the applicability version bump and the
+//       audit event.
+//   Every change becomes visible only at commit, together with its audit
+//   events. Every row carries `version` (row_version).
+//
+// Organization changes (card 14C; dbo.departments, dbo.programs):
+//   tx.lockDepartmentForUpdate(departmentId) -> department | null
+//       SELECT ... WITH (UPDLOCK, ROWLOCK). Every change that can make a
+//       Program ACTIVE in a Department (create, reactivate, move in) and
+//       every Department change holds the Department first. Lock order:
+//       Program, then Department, then name keys.
+//   tx.lockDepartmentName(name) -> departmentId | null
+//   tx.lockProgramName(name, site) -> programId | null
+//       Key-range lock on the unique name (SELECT ... WITH (UPDLOCK,
+//       HOLDLOCK) WHERE name = @name [AND site = @site]) so two creates or
+//       renames to the same name can't both pass the check. Names compare
+//       case-insensitively (default collation).
+//   tx.insertDepartment({ name }), tx.insertProgram(row) -> new row
+//       Only while holding the name key (and, for a Program, its
+//       Department).
+//   tx.updateDepartment({ departmentId, expectedVersion, set }) -> row | null
+//       Conditional UPDATE on row_version, only on a held Department; a
+//       rename also needs the new name key. At commit it waits for readers
+//       of the Department (for example a referral being created).
+//   tx.listDepartmentPrograms(departmentId), tx.listDepartments()
+//       Committed rows plus this transaction's own changes, read with
+//       READCOMMITTEDLOCK (no lock kept; see lockDepartmentForUpdate).
+//
+// Columns map to dbo.referrals, dbo.programs, dbo.audit_events and the
+// field tables in db/migrations/001_core_schema.sql (PR #4).
 
 import { createMemoryStore } from '../affiliation/memoryStore.js';
 import { DuplicateSubmissionError } from './errors.js';
@@ -140,7 +220,21 @@ function createRowLocks() {
     }
   }
 
-  return { shared, exclusive, releaseShared };
+  // Turns this owner's shared lock into an exclusive one, waiting for every
+  // OTHER reader to finish (like SQL lock conversion). Callers must already
+  // hold the row's update intent, so two owners never upgrade the same row
+  // at once and this cannot deadlock. Returns a function that releases it.
+  async function upgrade(key, owner) {
+    const row = entry(key);
+    while (row.writer || [...row.readers].some((r) => r !== owner)) await waitFor(row);
+    row.writer = true;
+    return () => {
+      row.writer = false;
+      wakeAll(row);
+    };
+  }
+
+  return { shared, exclusive, releaseShared, upgrade };
 }
 
 export function createMemoryReferralStore(seed = {}, { now = () => new Date() } = {}) {
@@ -158,6 +252,41 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   const inFlight = new Map();
   // referral ID -> in-flight first response (same waiting rule as above).
   const responseInFlight = new Map();
+  // row key ("program:11", "field:5", ...) -> the transaction holding it
+  // for update (UPDLOCK).
+  const updateHeld = new Map();
+
+  // Configurable-field tables. rowVersion stands in for ROWVERSION.
+  const tables = {
+    field: { rows: new Map(), nextId: 1, idOf: (r) => r.fieldId },
+    option: { rows: new Map(), nextId: 1, idOf: (r) => r.optionId },
+    applicability: { rows: new Map(), idOf: (r) => `${r.programId}:${r.fieldId}` },
+    value: { rows: new Map(), nextId: 1, idOf: (r) => r.valueId },
+  };
+  const seedRows = (table, list, idField) => {
+    for (const row of list ?? []) {
+      const full = { ...row, rowVersion: 1 };
+      // Seeds may leave the identity column out; assign the next one.
+      if (idField && full[idField] == null) full[idField] = Math.max(table.nextId, ...list.map((r) => (r[idField] ?? 0) + 1));
+      if (idField) table.nextId = Math.max(table.nextId, full[idField] + 1);
+      table.rows.set(table.idOf(full), full);
+    }
+  };
+  seedRows(tables.field, (seed.fields ?? []).map((f) => ({
+    lifecycleStatus: 'ACTIVE', replacedByFieldId: null, discontinuedAt: null, retiredAt: null,
+    createdAt: now().toISOString(), ...f,
+  })), 'fieldId');
+  seedRows(tables.option, (seed.fieldOptions ?? []).map((o) => ({ lifecycleStatus: 'ACTIVE', displayOrder: 0, ...o })), 'optionId');
+  seedRows(tables.applicability, (seed.fieldApplicability ?? []).map((a) => ({ isRequired: false, displayOrder: 0, ...a })));
+  seedRows(tables.value, (seed.fieldValues ?? []).map((v) => ({
+    optionId: null, valueText: null, valueNumber: null, valueDate: null, valueBool: null, ...v,
+  })), 'valueId');
+
+  const publicRow = (row) => {
+    if (!row) return null;
+    const { rowVersion, ...rest } = row;
+    return { ...rest, version: `v${rowVersion}` };
+  };
   let nextReferralId = 1;
   let failNextAudit = false;
 
@@ -168,8 +297,69 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   }
 
   async function withTransaction(fn) {
-    const staged = { referrals: [], audit: [], locks: [], updates: [], responseLocks: [] };
+    const staged = {
+      referrals: [], audit: [], locks: [], updates: [], responseLocks: [], programUpdates: [], holds: [],
+      departmentInserts: [], programInserts: [], departmentUpdates: [],
+    };
+    // Uncommitted field-table rows: "table:id" -> row.
+    const overlay = new Map();
+    const holds = (key) => staged.holds.some((h) => h.key === key);
+    async function holdForUpdate(key) {
+      if (holds(key)) return;
+      while (updateHeld.has(key)) await updateHeld.get(key).promise;
+      let settle;
+      const promise = new Promise((resolve) => { settle = resolve; });
+      updateHeld.set(key, { promise, owner });
+      staged.holds.push({ key, settle });
+      // Same test hook as locking reads, with kind 'hold' and the row key.
+      if (afterLockingRead) await afterLockingRead('hold', key);
+    }
+    const rowOf = (name, id) => overlay.get(`${name}:${id}`) ?? tables[name].rows.get(id) ?? null;
+    const allRows = (name) => {
+      const byId = new Map(tables[name].rows);
+      for (const [key, row] of overlay) if (key.startsWith(`${name}:`)) byId.set(tables[name].idOf(row), row);
+      return [...byId.values()].filter((row) => !row.deleted);
+    };
+    const sortById = (a, b) => (a.fieldId ?? 0) - (b.fieldId ?? 0) || (a.optionId ?? 0) - (b.optionId ?? 0)
+      || (a.programId ?? 0) - (b.programId ?? 0);
+    function insertRow(name, idField, row) {
+      const table = tables[name];
+      const full = { ...row, rowVersion: 1 };
+      if (idField) full[idField] = table.nextId++;
+      overlay.set(`${name}:${table.idOf(full)}`, full);
+      return publicRow(full);
+    }
+    function updateRow(name, id, expectedVersion, set) {
+      if (!holds(`${name}:${id}`)) throw new Error(`update of ${name} requires holding it for update first`);
+      const current = rowOf(name, id);
+      if (!current || `v${current.rowVersion}` !== expectedVersion) return null; // 0 rows updated
+      const next = { ...current, ...set, rowVersion: current.rowVersion + 1 };
+      overlay.set(`${name}:${id}`, next);
+      return publicRow(next);
+    }
     const owner = Symbol('transaction');
+
+    // Name uniqueness keys. SQL Server's default collation compares names
+    // case-insensitively, and the UNIQUE (name, site) constraint treats
+    // NULL sites as equal to each other.
+    const nameKey = (name) => String(name).toLowerCase();
+    const programKey = (name, site) => `${nameKey(name)}\u0000${site == null ? '\u0001' : nameKey(site)}`;
+    const txDepartments = () => {
+      const rows = new Map(base._allDepartments().map((d) => [d.departmentId, d]));
+      for (const d of staged.departmentInserts) rows.set(d.departmentId, { ...d, version: 'v1' });
+      for (const { departmentId, fields } of staged.departmentUpdates) {
+        rows.set(departmentId, { ...rows.get(departmentId), ...fields });
+      }
+      return [...rows.values()].sort((a, b) => a.departmentId - b.departmentId);
+    };
+    const txPrograms = () => {
+      const rows = new Map(base._allPrograms().map((p) => [p.programId, p]));
+      for (const p of staged.programInserts) rows.set(p.programId, { ...p, version: 'v1' });
+      for (const { programId, fields } of staged.programUpdates) {
+        rows.set(programId, { ...rows.get(programId), ...fields });
+      }
+      return [...rows.values()].sort((a, b) => a.programId - b.programId);
+    };
 
     // Committed row with this transaction's own staged changes applied.
     const currentRow = (referralId) => {
@@ -252,6 +442,157 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
         return { ...row, ...fields };
       },
 
+      async lockProgramForUpdate(programId) {
+        await holdForUpdate(`program:${programId}`);
+        return tx.getProgram(programId);
+      },
+
+      async lockFieldForUpdate(fieldId) {
+        await holdForUpdate(`field:${fieldId}`);
+        return publicRow(rowOf('field', fieldId));
+      },
+      async lockOptionForUpdate(optionId) {
+        await holdForUpdate(`option:${optionId}`);
+        return publicRow(rowOf('option', optionId));
+      },
+      async lockApplicabilityForUpdate(programId, fieldId) {
+        await holdForUpdate(`applicability:${programId}:${fieldId}`);
+        return publicRow(rowOf('applicability', `${programId}:${fieldId}`));
+      },
+      async getField(fieldId) { return publicRow(rowOf('field', fieldId)); },
+      async getOption(optionId) { return publicRow(rowOf('option', optionId)); },
+      async listFieldOptions(fieldId) {
+        return allRows('option').filter((o) => o.fieldId === fieldId)
+          .sort((a, b) => a.displayOrder - b.displayOrder || a.optionId - b.optionId).map(publicRow);
+      },
+      async listFieldApplicability(fieldId) {
+        return allRows('applicability').filter((a) => a.fieldId === fieldId).sort(sortById).map(publicRow);
+      },
+      async listProgramApplicability(programId) {
+        return allRows('applicability').filter((a) => a.programId === programId).sort(sortById).map(publicRow);
+      },
+      async insertField(row) {
+        const field = insertRow('field', 'fieldId', {
+          replacedByFieldId: null, discontinuedAt: null, retiredAt: null, createdAt: now().toISOString(), ...row,
+        });
+        // field_key is UNIQUE in the schema; derived from the new ID.
+        const keyed = { ...overlay.get(`field:${field.fieldId}`), fieldKey: `field_${field.fieldId}` };
+        overlay.set(`field:${field.fieldId}`, keyed);
+        return publicRow(keyed);
+      },
+      async insertOption(row) { return insertRow('option', 'optionId', row); },
+      async insertApplicability(row) {
+        await holdForUpdate(`applicability:${row.programId}:${row.fieldId}`);
+        if (rowOf('applicability', `${row.programId}:${row.fieldId}`)) return null; // primary key
+        return insertRow('applicability', null, row);
+      },
+      async updateField({ fieldId, expectedVersion, set }) { return updateRow('field', fieldId, expectedVersion, set); },
+      async updateOption({ optionId, expectedVersion, set }) { return updateRow('option', optionId, expectedVersion, set); },
+      async updateApplicability({ programId, fieldId, expectedVersion, set }) {
+        return updateRow('applicability', `${programId}:${fieldId}`, expectedVersion, set);
+      },
+      async listFieldValues(programId, fieldId) {
+        return allRows('value').filter((v) => v.programId === programId && v.fieldId === fieldId)
+          .sort((a, b) => a.valueId - b.valueId).map(publicRow);
+      },
+      async replaceFieldValues({ programId, fieldId, rows }) {
+        if (!holds(`applicability:${programId}:${fieldId}`)) {
+          throw new Error('replaceFieldValues requires holding the applicability row for update first');
+        }
+        for (const old of allRows('value').filter((v) => v.programId === programId && v.fieldId === fieldId)) {
+          overlay.set(`value:${old.valueId}`, { ...old, deleted: true });
+        }
+        for (const row of rows) {
+          const filled = [row.optionId, row.valueText, row.valueNumber, row.valueDate, row.valueBool]
+            .filter((v) => v !== null && v !== undefined).length;
+          if (filled !== 1) throw new Error('ck_pfv_one_value');
+          insertRow('value', 'valueId', {
+            programId, fieldId, optionId: null, valueText: null, valueNumber: null, valueDate: null, valueBool: null,
+            ...row, updatedAt: now().toISOString(),
+          });
+        }
+      },
+      now: () => now().toISOString(),
+
+      async updateProgram({ programId, expectedVersion, set }) {
+        if (!holds(`program:${programId}`)) {
+          throw new Error('updateProgram requires lockProgramForUpdate first');
+        }
+        if (staged.programUpdates.some((u) => u.programId === programId)) {
+          throw new Error('one Program update per transaction');
+        }
+        const current = await base.getProgram(programId);
+        if (!current || current.version !== expectedVersion) return null; // 0 rows updated
+        staged.programUpdates.push({ programId, fields: { ...set } });
+        // The version the row will have once this transaction commits.
+        const nextVersion = `v${Number(current.version.slice(1)) + 1}`;
+        return { ...current, ...set, version: nextVersion, updatedAt: now().toISOString() };
+      },
+
+      // ----- Organization changes (card 14C) -----
+      async lockDepartmentForUpdate(departmentId) {
+        await holdForUpdate(`department:${departmentId}`);
+        return tx.getDepartment(departmentId);
+      },
+
+      // Holds the unique-name key and returns the departmentId that has
+      // the name now (this transaction's own changes included), or null.
+      async lockDepartmentName(name) {
+        const key = nameKey(name);
+        await holdForUpdate(`department-name:${key}`);
+        const match = txDepartments().find((d) => nameKey(d.name) === key);
+        return match ? match.departmentId : null;
+      },
+
+      async lockProgramName(name, site) {
+        const key = programKey(name, site);
+        await holdForUpdate(`program-name:${key}`);
+        const match = txPrograms().find((p) => programKey(p.name, p.site) === key);
+        return match ? match.programId : null;
+      },
+
+      async insertDepartment({ name }) {
+        if (!holds(`department-name:${nameKey(name)}`)) throw new Error('insertDepartment requires lockDepartmentName first');
+        const row = { departmentId: base._allocateDepartmentId(), name, lifecycleStatus: 'ACTIVE' };
+        staged.departmentInserts.push(row);
+        return { ...row, version: 'v1' };
+      },
+
+      async insertProgram(row) {
+        if (!holds(`program-name:${programKey(row.name, row.site)}`)) throw new Error('insertProgram requires lockProgramName first');
+        if (!holds(`department:${row.departmentId}`)) throw new Error('insertProgram requires lockDepartmentForUpdate first');
+        const full = { ...row, programId: base._allocateProgramId(), lifecycleStatus: 'ACTIVE' };
+        staged.programInserts.push(full);
+        return { ...full, version: 'v1', updatedAt: now().toISOString() };
+      },
+
+      async updateDepartment({ departmentId, expectedVersion, set }) {
+        if (!holds(`department:${departmentId}`)) throw new Error('updateDepartment requires lockDepartmentForUpdate first');
+        if (set.name !== undefined && !holds(`department-name:${nameKey(set.name)}`)) {
+          throw new Error('renaming a Department requires lockDepartmentName first');
+        }
+        if (staged.departmentUpdates.some((u) => u.departmentId === departmentId)) {
+          throw new Error('one Department update per transaction');
+        }
+        const current = await base.getDepartment(departmentId);
+        if (!current || current.version !== expectedVersion) return null; // 0 rows updated
+        staged.departmentUpdates.push({ departmentId, fields: { ...set } });
+        return { ...current, ...set, version: `v${Number(current.version.slice(1)) + 1}` };
+      },
+
+      // Programs in a Department, committed state plus this transaction's
+      // own changes. NOT a locking read (READCOMMITTEDLOCK in SQL): every
+      // change that makes a Program ACTIVE in a Department (create,
+      // reactivate, move in) holds that Department for update, so a caller
+      // holding the Department sees a state no one else can change.
+      async listDepartmentPrograms(departmentId) {
+        return txPrograms().filter((p) => p.departmentId === departmentId);
+      },
+
+      async listDepartments() {
+        return txDepartments();
+      },
+
       async appendAuditEvent(event) {
         if (failNextAudit) {
           failNextAudit = false;
@@ -264,6 +605,10 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     };
 
     const release = () => {
+      for (const { key, settle } of staged.holds) {
+        updateHeld.delete(key);
+        settle();
+      }
       locks.releaseShared(owner);
       for (const { submissionId, settle } of staged.locks) {
         inFlight.delete(submissionId);
@@ -277,6 +622,29 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
 
     try {
       const result = await fn(tx);
+      // Program changes wait for other readers of those rows to finish
+      // (lock conversion), then everything below is applied in one step.
+      const writeReleases = [];
+      for (const { departmentId } of staged.departmentUpdates) {
+        writeReleases.push(await locks.upgrade(`department:${departmentId}`, owner));
+      }
+      for (const { programId } of staged.programUpdates) {
+        writeReleases.push(await locks.upgrade(`program:${programId}`, owner));
+      }
+      for (const row of staged.departmentInserts) base._insertDepartment(row);
+      for (const row of staged.programInserts) base._insertProgram(row);
+      for (const { departmentId, fields } of staged.departmentUpdates) {
+        base._applyDepartmentChange(departmentId, fields);
+      }
+      for (const { programId, fields } of staged.programUpdates) {
+        base._applyProgramChange(programId, fields);
+      }
+      writeReleases.forEach((done) => done());
+      for (const [key, row] of overlay) {
+        const name = key.slice(0, key.indexOf(':'));
+        if (row.deleted) tables[name].rows.delete(tables[name].idOf(row));
+        else tables[name].rows.set(tables[name].idOf(row), row);
+      }
       referrals.push(...staged.referrals);
       for (const { referralId, fields } of staged.updates) {
         Object.assign(referrals.find((r) => r.referralId === referralId), fields);
@@ -358,6 +726,13 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     _setDepartmentStatus: (departmentId, status) =>
       locks.exclusive(`department:${departmentId}`, async () => base._setDepartmentStatus(departmentId, status)),
     _afterLockingRead(fn) { afterLockingRead = fn; },
+    _fieldRows: () => [...tables.field.rows.values()].map(publicRow),
+    _optionRows: () => [...tables.option.rows.values()].map(publicRow),
+    _applicabilityRows: () => [...tables.applicability.rows.values()].map(publicRow),
+    _valueRows: () => [...tables.value.rows.values()].map(publicRow),
+    // Deactivates a user, waiting for any transaction that has read them.
+    _setUserActive: (userId, isActive) =>
+      locks.exclusive(`user:${userId}`, async () => base._setUserActive(userId, isActive)),
     // Revokes a user's grants for one capability, waiting for any response
     // transaction that has read that user's grants (like an UPDATE).
     _revokeGrants: (userId, permission) =>
