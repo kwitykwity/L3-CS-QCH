@@ -217,7 +217,128 @@ follow the GPME Decision Proposal the team approved on Oct 18:
   tables. Read-time fail-safe handling does not replace this.
 
 The database side (state columns, `program_service_area_zips`) is migration
-003, in its own pull request.
+003 (merged in #15).
+
+## Program maintenance (card 14, slice 14A)
+
+| Method  | Path                                                      | Body                          |
+| ------- | --------------------------------------------------------- | ----------------------------- |
+| `GET`   | `/api/program-management/programs/:programId`             | none                          |
+| `PATCH` | `/api/program-management/programs/:programId`             | `{ version, site?, description?, eligibilityNotes?, scheduleNotes?, costNotes? }` |
+| `POST`  | `/api/program-management/programs/:programId/discontinue` | `{ version }`                 |
+| `POST`  | `/api/program-management/programs/:programId/reactivate`  | `{ version }`                 |
+
+- **Who:** an active user with an active `MANAGE_PROGRAM` grant at PROGRAM
+  scope for that Program (PRD 3.6). A grant for another Program, a revoked or
+  DEMO grant, admin/organization/receiving grants, DEPARTMENT or ORG scope,
+  and Program affiliation do not count. Discontinue/reactivate also uses
+  `MANAGE_PROGRAM` for that Program: the Program Director discontinues and
+  reactivates their own Program (team decision, confirmed Oct 19).
+- **How:** one transaction holds the Program for update, reads the user and
+  grants with locking reads, checks the `version` the worker last saw, writes
+  the change, and writes an audit event with before/after values. A stale
+  version gets `409 PROGRAM_CHANGED` with the current Program; nothing is
+  written. If the audit write fails, the change rolls back.
+- **Not editable here:** name, Department, notification email (routing), and
+  lifecycle status (only via discontinue/reactivate). GPME matching facts
+  are edited in a follow-up once PR #16 merges.
+- **Lifecycle (PRD 4.4):** a discontinued Program drops out of new referral
+  choices; past referrals keep it. Reactivating needs an active Department.
+  A discontinue waits for any referral already being created against it.
+- No query parameters are accepted. No schema change: the columns exist in
+  migration 001.
+
+## Configurable Program fields (card 14, slice 14B)
+
+Routes are under `/api/program-management` (see `src/programs/routes.js`):
+list and create a Program's fields, use an existing field in another
+Program, set required/optional and display order, rename, replace,
+discontinue, reactivate, retire, and manage choice options.
+
+- **Identity follows meaning (PRD 4.3):** a wording-only change is a rename
+  (same field ID). A meaning change is a replacement: the old field is
+  discontinued and points to a new field used by the same Programs. Values
+  collected under the old field stay with it.
+- **Who:** Program-level actions need `MANAGE_PROGRAM` for that Program.
+  Changing a field's definition or options needs `MANAGE_PROGRAM` for every
+  Program that uses it, so the manager of one Program can't change a field
+  another Program shares. Retiring needs `MANAGE_ORGANIZATION` at ORG scope
+  and only after the field has been discontinued for 90 days ("approximately
+  three months", team decision). Retiring deletes nothing.
+- Same transaction rules as 14A: rows held for update, version checks,
+  audit events (`FIELD`, `FIELD_OPTION`, `PROGRAM_FIELD`) in the same
+  transaction, full rollback on audit failure.
+- Only `PROGRAM_INFO` fields in this slice. No schema change.
+
+## Program field values (card 14, slice 14B-2)
+
+`PUT /api/program-management/programs/:programId/field-values/:fieldId`
+with `{ version, value }` sets a Program's value for one field. `value: null`
+clears it. Values also appear in the Program's field list (`value` on each
+field).
+
+- **Checked by data type:** TEXT (up to 2,000 characters, trimmed, line
+  breaks and tabs allowed), NUMBER (fits `DECIMAL(18,4)`), DATE
+  (`YYYY-MM-DD`, a real date), BOOLEAN, SINGLE_SELECT (an option ID), and
+  MULTI_SELECT (a list of distinct option IDs). Empty text or an empty list
+  clears the value.
+- **Options:** must belong to that field and be active. An option that was
+  already selected may stay selected after it is discontinued.
+- **Required fields** can't be cleared (`422 VALUE_REQUIRED`). The same field
+  can be required in one Program and optional in another.
+- **Discontinued fields** keep their values as history but take no new ones.
+- **Who:** `MANAGE_PROGRAM` for that Program.
+- **Version:** the field's applicability `version` for that Program. Each
+  value change (and each required/order change) moves it, so a stale save
+  gets `409 PROGRAM_CHANGED` with the current state.
+- Lock order is field, then applicability. The old values are replaced, the
+  version moves, and a `PROGRAM_FIELD` `UPDATED` audit event with the old and
+  new value is written in the same transaction. If the audit fails, nothing
+  changes. No schema change.
+
+## Creating Programs and managing Departments (card 14, slice 14C)
+
+| Method  | Path (under `/api/program-management`)        | Body |
+| ------- | --------------------------------------------- | ---- |
+| `GET`   | `/departments`                                | none (each with active and total Program counts) |
+| `POST`  | `/departments`                                | `{ name }` |
+| `PATCH` | `/departments/:departmentId`                  | `{ version, name }` (rename) |
+| `POST`  | `/departments/:departmentId/discontinue`      | `{ version }` |
+| `POST`  | `/departments/:departmentId/reactivate`       | `{ version }` |
+| `POST`  | `/programs`                                   | `{ departmentId, name, site?, description?, eligibilityNotes?, scheduleNotes?, costNotes? }` |
+| `POST`  | `/programs/:programId/move`                   | `{ version, departmentId }` |
+
+- **Who (PRD 3.6):** `MANAGE_ORGANIZATION` as an active ORG-scope grant
+  ("Create Programs, administer Department lifecycle"). `MANAGE_PROGRAM`,
+  `ADMINISTER_PERMISSIONS`, and PROGRAM-scope grants don't count.
+- **Department rule (PRD 4.4):** a Department with ACTIVE Programs can't be
+  discontinued; move or discontinue those Programs first. A discontinued
+  Department drops out of new choices, and its Programs can't be
+  reactivated until it is. Retired Departments aren't changed here.
+- **New Programs** start ACTIVE in an ACTIVE Department. Nobody manages a
+  new Program until a permission administrator grants `MANAGE_PROGRAM`.
+  Its notification email (routing) and GPME matching facts are set up
+  separately.
+- **Names are unique** like the schema says (`uq_departments_name`,
+  `uq_programs_name_site`), ignoring upper/lower case. Two people creating
+  the same name at once can't both succeed.
+- **Moving a Program** needs an ACTIVE target Department. Past referrals
+  keep their historical Department context.
+- **No race with the Department rule:** every change that can make a
+  Program ACTIVE in a Department (create, reactivate, move in) and every
+  Department change holds that Department for update first. Lock order:
+  Program, then Department, then name keys. 14A's reactivate now holds
+  the Department too.
+- Same transaction rules as 14A/14B: version checks, `DEPARTMENT` and
+  `PROGRAM` audit events in the same transaction, full rollback on audit
+  failure. No schema change.
+
+## Deployment and handoff
+
+[`docs/`](docs/README.md) holds the production deployment runbook, the list
+of everything QCH IT needs to provide, the handoff checklist, and dependency
+licenses (PRD 18, 19). `npm run licenses` lists every installed package's
+license.
 
 ## Scope of this scaffold
 
