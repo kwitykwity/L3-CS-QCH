@@ -117,6 +117,13 @@ export function createFieldService({ store, allowDemoGrants = false }) {
     return { program, grants };
   }
 
+  // Every action on an existing field refuses fields outside this slice
+  // (appliesTo other than PROGRAM_INFO), after authorization, before any
+  // write. applies_to never changes, so a plain read is enough to check it.
+  function assertSupported(field) {
+    if (field.appliesTo !== APPLIES_TO) throw programErrors.fieldNotSupported();
+  }
+
   // Field-level: field held for update, and MANAGE_PROGRAM for every
   // Program that uses it.
   async function authorizeField(tx, userId, fieldId) {
@@ -127,6 +134,7 @@ export function createFieldService({ store, allowDemoGrants = false }) {
     const usedBy = await tx.listFieldApplicability(fieldId);
     const mine = managed(grants);
     if (usedBy.length === 0 || !usedBy.every((a) => mine.has(a.programId))) throw programErrors.notAuthorized();
+    assertSupported(field);
     return { field, usedBy, grants };
   }
 
@@ -188,6 +196,8 @@ export function createFieldService({ store, allowDemoGrants = false }) {
       const uses = await tx.listProgramApplicability(programId);
       const fields = [];
       for (const use of uses) {
+        // Only PROGRAM_INFO fields belong on the Program information screen.
+        if ((await tx.getField(use.fieldId)).appliesTo !== APPLIES_TO) continue;
         const view = await fieldView(tx, use.fieldId);
         const value = valueFromRows(view.dataType, await tx.listFieldValues(programId, use.fieldId));
         fields.push({ ...view, applicability: toApplicabilityView(use), value });
@@ -223,6 +233,7 @@ export function createFieldService({ store, allowDemoGrants = false }) {
       // concurrent field change.
       const field = await tx.lockFieldForUpdate(fieldId);
       if (!field) throw programErrors.fieldNotFound();
+      assertSupported(field);
       if (field.lifecycleStatus !== 'ACTIVE') throw programErrors.fieldNotActive();
       const row = await tx.insertApplicability({ programId, fieldId, isRequired, displayOrder });
       if (!row) throw programErrors.alreadyApplied();
@@ -248,6 +259,7 @@ export function createFieldService({ store, allowDemoGrants = false }) {
       if (!positiveInt(fieldId)) throw programErrors.fieldNotFound();
       const use = await tx.lockApplicabilityForUpdate(programId, fieldId);
       if (!use) throw programErrors.fieldNotApplied();
+      assertSupported(await tx.getField(fieldId));
       if (use.version !== version) throw programErrors.programChanged(toApplicabilityView(use));
       const set = {};
       const before = {};
@@ -290,6 +302,7 @@ export function createFieldService({ store, allowDemoGrants = false }) {
       if (!field) throw programErrors.fieldNotFound();
       const use = await tx.lockApplicabilityForUpdate(programId, fieldId);
       if (!use) throw programErrors.fieldNotApplied();
+      assertSupported(field);
       // Values of discontinued or retired fields stay as history; no new ones.
       if (field.lifecycleStatus !== 'ACTIVE') throw programErrors.fieldNotActive();
       if (use.version !== version) throw programErrors.programChanged(toApplicabilityView(use));
@@ -405,6 +418,7 @@ export function createFieldService({ store, allowDemoGrants = false }) {
         field = await tx.lockFieldForUpdate(fieldId);
         if (!field) throw programErrors.fieldNotFound();
         if (!hasOrgScopeCapability(grants, MANAGE_ORGANIZATION, { allowDemoGrants })) throw programErrors.notAuthorized();
+        assertSupported(field);
       } else {
         ({ field } = await authorizeField(tx, userId, fieldId));
       }
