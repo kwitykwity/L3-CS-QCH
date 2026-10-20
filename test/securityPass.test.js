@@ -14,7 +14,7 @@ import { fileURLToPath } from 'node:url';
 import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
-import { MOUNT_POINTS, safeLocation } from '../src/errorHandler.js';
+import { MOUNT_POINTS, errorHandler, safeErrorCode, safeErrorName, safeLocation } from '../src/errorHandler.js';
 import { createMemoryReferralStore } from '../src/referrals/memoryReferralStore.js';
 import { createReferralService } from '../src/referrals/referralService.js';
 import { createResponseService } from '../src/referrals/responseService.js';
@@ -105,10 +105,51 @@ const ROUTES = [
   { method: 'get', path: '/api/referrals/not-appropriate-reasons' },
   { method: 'post', path: '/api/referrals/:referralId/response', body: () => ({ decision: 'ACCEPTED' }) },
   { method: 'get', path: '/api/referrals/:referralId' },
+
+  // Program maintenance (card 14, PRs #21, #22, #24, #25)
+  ...programRoutes(),
 ];
-const fill = (route, ctx) => route.path
-  .replace(':referralId', String(ctx.id))
-  .replace(':submissionId', ctx.submissionId);
+
+function programRoutes() {
+  const P = '/api/program-management';
+  const v = () => ({ version: 'v1' });
+  const routes = [
+    { method: 'get', path: `${P}/programs/:programId` },
+    { method: 'patch', path: `${P}/programs/:programId`, body: () => ({ version: 'v1', site: 'Synthetic Site' }) },
+    { method: 'post', path: `${P}/programs/:programId/discontinue`, body: v },
+    { method: 'post', path: `${P}/programs/:programId/reactivate`, body: v },
+    { method: 'get', path: `${P}/programs/:programId/fields` },
+    { method: 'post', path: `${P}/programs/:programId/fields`, body: () => ({ label: 'Synthetic field', dataType: 'TEXT' }) },
+    { method: 'post', path: `${P}/programs/:programId/field-applicability/:fieldId`, body: () => ({ isRequired: false }) },
+    { method: 'patch', path: `${P}/programs/:programId/field-applicability/:fieldId`, body: () => ({ version: 'v1', isRequired: true }) },
+    { method: 'put', path: `${P}/programs/:programId/field-values/:fieldId`, body: () => ({ version: 'v1', value: 'Synthetic value' }) },
+    { method: 'patch', path: `${P}/fields/:fieldId`, body: () => ({ version: 'v1', label: 'Synthetic label' }) },
+    { method: 'post', path: `${P}/fields/:fieldId/replace`, body: () => ({ version: 'v1', label: 'Synthetic label', dataType: 'TEXT' }) },
+    ...['discontinue', 'reactivate', 'retire'].map((a) => ({ method: 'post', path: `${P}/fields/:fieldId/${a}`, body: v })),
+    { method: 'post', path: `${P}/fields/:fieldId/options`, body: () => ({ label: 'Synthetic option' }) },
+    { method: 'patch', path: `${P}/fields/:fieldId/options/:optionId`, body: () => ({ version: 'v1', label: 'Synthetic option' }) },
+    ...['discontinue', 'reactivate'].map((a) => ({ method: 'post', path: `${P}/fields/:fieldId/options/:optionId/${a}`, body: v })),
+    { method: 'get', path: `${P}/departments` },
+    { method: 'post', path: `${P}/departments`, body: () => ({ name: 'Synthetic Department' }) },
+    { method: 'patch', path: `${P}/departments/:departmentId`, body: () => ({ version: 'v1', name: 'Synthetic Department' }) },
+    ...['discontinue', 'reactivate'].map((a) => ({ method: 'post', path: `${P}/departments/:departmentId/${a}`, body: v })),
+    { method: 'post', path: `${P}/programs`, body: () => ({ departmentId: 1, name: 'Synthetic Program' }) },
+    { method: 'post', path: `${P}/programs/:programId/move`, body: () => ({ version: 'v1', departmentId: 1 }) },
+  ];
+  return routes;
+}
+
+// Real IDs where the suite has them; Program-maintenance IDs point at
+// seeded rows (Program 11, Department 1) or at IDs that simply do not
+// exist (field 1, option 1), which is enough for these checks.
+const fillIds = (p, ctx = {}) => p
+  .replace(':referralId', String(ctx.id ?? 1))
+  .replace(':submissionId', ctx.submissionId ?? randomUUID())
+  .replace(':programId', '11')
+  .replace(':fieldId', '1')
+  .replace(':optionId', '1')
+  .replace(':departmentId', '1');
+const fill = (route, ctx) => fillIds(route.path, ctx);
 const send = (agent, route, ctx, { body, query } = {}) => {
   let req = agent[route.method](fill(route, ctx));
   if (query) req = req.query(query);
@@ -138,7 +179,11 @@ describe('route inventory', () => {
       }
     };
     walk(path.join(ROOT, 'src'));
-    const mounts = { 'referrals/routes.js': '/api/referrals', 'affiliation/routes.js': '/api' };
+    const mounts = {
+      'referrals/routes.js': '/api/referrals',
+      'programs/routes.js': '/api/program-management',
+      'affiliation/routes.js': '/api',
+    };
     const found = [];
     for (const file of files) {
       const rel = path.relative(path.join(ROOT, 'src'), file).replaceAll(path.sep, '/');
@@ -149,6 +194,20 @@ describe('route inventory', () => {
         assert.ok(base !== undefined, `${rel} registers routes but has no mount point in this test`);
         found.push(`${m[1]} ${base}${m[2] === '/' ? '' : m[2]}`);
       }
+      // Routes registered in a loop over fixed names, e.g.
+      //   for (const [path, method] of [['discontinue', ...], ...]) {
+      //     router.post(`/fields/:fieldId/${path}`, ...)
+      // are expanded here. Any other template path fails the test, so no
+      // route can hide from this inventory.
+      let expanded = 0;
+      for (const m of src.matchAll(/for \(const \[path, \w+\] of (\[[^\n]*\])\) \{\s*router\.(get|post|put|patch|delete)\(`([^`]+)`/g)) {
+        expanded += 1;
+        const base = mounts[rel];
+        assert.ok(base !== undefined, `${rel} registers routes but has no mount point in this test`);
+        for (const [, name] of m[1].matchAll(/\['([^']+)'/g)) found.push(`${m[2]} ${base}${m[3].replace('${path}', name)}`);
+      }
+      const templated = [...src.matchAll(/(?:router|app)\.(get|post|put|patch|delete)\(\s*`/g)].length;
+      assert.equal(templated, expanded, `${rel}: a route path built in a way this test cannot expand`);
     }
     const covered = ROUTES.map((r) => `${r.method} ${r.path}`);
     assert.deepEqual(found.sort(), covered.sort(), 'add new routes to ROUTES in test/securityPass.test.js');
@@ -227,6 +286,8 @@ describe('manipulated inputs (PRD 3.3, 10.3, 17.3)', () => {
         assert.equal(ctx.store._referrals.length, 1);
         assert.equal(ctx.store._referrals[0].responseStatus, 'AWAITING_RESPONSE');
         assert.equal((await ctx.store.getUser(RECEIVER)).currentProgramId, 11);
+        assert.equal((await ctx.store.getProgram(11)).site, null, 'no Program change');
+        assert.equal((await ctx.store.getDepartment(1)).name, 'Synthetic Dept', 'no Department change');
       }
     });
   }
@@ -406,6 +467,104 @@ describe('error logs carry the route pattern, never the request path (PRD 15.3)'
   });
 });
 
+// Christina's #23 review: err.name and err.code were logged verbatim, so
+// an error carrying participant text or a line break reached the log.
+describe('error name and code in logs are allowlisted (PRD 15.3, 15.4)', () => {
+  const SECRET = 'SyntheticSecretToken';
+  const HOSTILE = [
+    { name: M.name, code: SECRET },
+    { name: `TypeError\n[error] GET /forged -> 200 (${M.name})`, code: `ECONNRESET\r\n${SECRET}` },
+    { name: 'Error\u2028forged', code: 'ETIMEDOUT\u2029forged' },
+    { name: 'error', code: 'econnreset' }, // near misses are not on the list
+    { name: { toString: () => M.name }, code: { toString: () => SECRET } },
+    { name: ['Error'], code: 404 },
+  ];
+
+  // Calls the real handler with a fake request and response.
+  function handle(err, { method = 'GET', originalUrl = '/api/referrals/1', route = { path: '/:referralId' }, headersSent = false } = {}) {
+    const lines = [];
+    const saved = console.error;
+    console.error = (...args) => lines.push(args.map(String).join(' '));
+    const res = {
+      headersSent, statusCode: null, headers: {}, body: undefined, destroyed: false,
+      set(k, v) { this.headers[k] = v; return this; },
+      status(code) { this.statusCode = code; return this; },
+      json(b) { this.body = b; return this; },
+      destroy() { this.destroyed = true; },
+    };
+    try {
+      errorHandler(err, { method, originalUrl, route }, res, () => {});
+    } finally {
+      console.error = saved;
+    }
+    return { lines, res };
+  }
+
+  const clean = (text) => {
+    noMarker(text, 'log');
+    assert.ok(!text.includes(SECRET), `log contains ${SECRET}`);
+    assert.ok(!text.includes('forged'), 'log contains forged text');
+    assert.doesNotMatch(text, /[\r\n\u2028\u2029]/, 'log line contains a line break');
+  };
+
+  for (const [i, fields] of HOSTILE.entries()) {
+    test(`hostile name/code #${i + 1} -> one fixed log line, generic response`, () => {
+      const err = Object.assign(new Error(`message ${M.name}`), fields);
+      const { lines, res } = handle(err);
+      assert.equal(lines.length, 1);
+      clean(lines[0]);
+      assert.equal(lines[0], '[error] GET /api/referrals/:referralId -> 500 (OtherError code=OTHER)');
+      assert.deepEqual(res.body, { error: 'Internal Server Error' });
+      assert.equal(res.headers['Cache-Control'], 'no-store');
+      clean(JSON.stringify(res.body));
+    });
+  }
+
+  test('the same holds for a 4xx error and after the response has started', () => {
+    const err = Object.assign(new Error('x'), { status: 413, name: M.name, code: `${SECRET}\n` });
+    const first = handle(err);
+    clean(first.lines[0]);
+    assert.deepEqual(first.res.body, { error: 'Payload Too Large' });
+    const started = handle(err, { headersSent: true });
+    clean(started.lines[0]);
+    assert.equal(started.res.destroyed, true);
+  });
+
+  test('known names and codes are still logged, so real failures stay diagnosable', () => {
+    assert.equal(handle(Object.assign(new TypeError('x'), { code: 'ECONNRESET' })).lines[0],
+      '[error] GET /api/referrals/:referralId -> 500 (TypeError code=ECONNRESET)');
+    assert.equal(handle(new RangeError('x')).lines[0], '[error] GET /api/referrals/:referralId -> 500 (RangeError)');
+    assert.equal(safeErrorName({ name: 'ProgramError' }), 'ProgramError');
+    assert.equal(safeErrorCode({ code: 'ELOGIN' }), 'ELOGIN');
+    assert.equal(safeErrorCode({}), null);
+    assert.equal(safeErrorName(null), 'OtherError');
+    assert.equal(safeErrorName(undefined), 'OtherError');
+  });
+
+  test('an unexpected HTTP method name is not logged either', () => {
+    const { lines } = handle(new Error('x'), { method: `GET ${M.name}\n` });
+    clean(lines[0]);
+    assert.match(lines[0], /^\[error\] OTHER /);
+  });
+
+  test('through the real app: a store error carrying participant text is logged safely, answered generically', async (t) => {
+    const lines = captureConsole(t);
+    const ctx = await populated();
+    const store = {
+      ...ctx.store,
+      getReferralById: async () => {
+        throw Object.assign(new Error(M.context), { name: `${M.name}\nforged`, code: `${SECRET}\r\n` });
+      },
+    };
+    const res = await request(appAs(store, RECEIVER)).get(`/api/referrals/${ctx.id}`);
+    assert.equal(res.status, 500);
+    assert.deepEqual(res.body, { error: 'Internal Server Error' });
+    assert.equal(lines.length, 1);
+    clean(lines[0]);
+    assert.equal(lines[0], '[error] GET /api/referrals/:referralId -> 500 (OtherError code=OTHER)');
+  });
+});
+
 describe('production safety: demo controls fail closed, no fallback (PRD 16.1, 17.4, 18.5)', () => {
   test('DEMO grants cannot be turned on outside development or test', () => {
     for (const nodeEnv of ['production', 'Production', 'staging', '', undefined]) {
@@ -458,7 +617,7 @@ describe('production safety: demo controls fail closed, no fallback (PRD 16.1, 1
       const base = `http://127.0.0.1:${port}`;
       assert.equal((await fetch(`${base}/health`)).status, 200);
       for (const route of ROUTES) {
-        const url = `${base}${route.path.replace(':referralId', '1').replace(':submissionId', randomUUID())}`;
+        const url = `${base}${fillIds(route.path)}`;
         const res = await fetch(url, {
           method: route.method.toUpperCase(),
           headers: { 'Content-Type': 'application/json', 'X-User-Id': '1' },
