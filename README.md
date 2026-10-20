@@ -295,6 +295,23 @@ field).
   `PROGRAM` audit events in the same transaction, full rollback on audit
   failure. No schema change.
 
+## Referral activity report (card 12)
+
+`GET /api/reports/referral-activity?period=&date=&programId|departmentId`
+uses the same query rules and access rule as Total Referrals (any active
+signed-in user, aggregate only). It returns a summary plus breakdowns by
+Program and by Department: made, received, accepted, not appropriate,
+awaiting response, resulted in service, and the rates from PRD 12.4.
+
+- **One consistent result (PRD 12.7):** every number comes from one store
+  read (`aggregateReferrals`), so the total and the breakdowns always agree.
+- **Rates** show `CALCULATED`, `PENDING` (nothing decided yet, but some
+  could still be), or `NO_DATA`. Never 0% for "nothing decided yet".
+- **History:** Programs group by Program identity; Departments group by the
+  Department each Program had when the referral was created.
+- A period that hasn't started, or a date before 2000-01-01, is refused.
+- Service outcomes come from the Service Outcome card (#14).
+
 ## Deployment and handoff
 
 [`docs/`](docs/README.md) holds the production deployment runbook, the list

@@ -5,6 +5,13 @@
 //   programId | departmentId: optional scope, not both
 // 200 { metric, value, period, scope, partial, asOf } - aggregate only.
 //
+// GET /api/reports/referral-activity?period=&date=&programId=&departmentId=
+//   Same query rules. Card 12: summary, Program and Department breakdowns
+//   (made, received, accepted, not appropriate, awaiting, resulted in
+//   service, and their rates). A period that has not started, or a date
+//   before 2000-01-01, is a 400 on `date`.
+// 200 { metric, period, scope, summary, programs, departments, partial, asOf }
+//
 // Any signed-in user may view aggregate reporting (PRD 3.5, 3.6). Identity
 // comes only from resolveIdentity(req); without it every route answers 401.
 // Query parameters are allowlisted; anything else -> 400 (PRD 10.3).
@@ -13,6 +20,7 @@ import express from 'express';
 import { AffiliationError, errors as affiliationErrors } from '../affiliation/errors.js';
 import { ReferralError, referralErrors } from '../referrals/errors.js';
 import { createReportingService } from './reportingService.js';
+import { createReferralActivityService } from './referralActivityService.js';
 import { PERIOD_TYPES, parseDateText } from './periods.js';
 
 const POSITIVE_INT = /^[1-9][0-9]{0,15}$/;
@@ -49,6 +57,7 @@ function readQuery(query) {
 export function createReportingRouter({ store, resolveIdentity, now }) {
   const router = express.Router();
   const service = store ? createReportingService({ store, now }) : null;
+  const activity = store ? createReferralActivityService({ store, now }) : null;
 
   router.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
@@ -69,6 +78,10 @@ export function createReportingRouter({ store, resolveIdentity, now }) {
 
   router.get('/total-referrals', async (req, res) => {
     res.json(await service.getTotalReferrals(readQuery(req.query)));
+  });
+
+  router.get('/referral-activity', async (req, res) => {
+    res.json(await activity.getReferralActivity(readQuery(req.query)));
   });
 
   router.use((err, req, res, next) => {
