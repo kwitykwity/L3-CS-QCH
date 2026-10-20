@@ -181,6 +181,35 @@ Remaining tasks, not done here:
 `/health` reports availability and nothing else. Per PRD 15.3 and 9.12 it must
 never return secrets, connection strings, config values, or error details.
 
+## Program maintenance (card 14, slice 14A)
+
+| Method  | Path                                                      | Body                          |
+| ------- | --------------------------------------------------------- | ----------------------------- |
+| `GET`   | `/api/program-management/programs/:programId`             | none                          |
+| `PATCH` | `/api/program-management/programs/:programId`             | `{ version, site?, description?, eligibilityNotes?, scheduleNotes?, costNotes? }` |
+| `POST`  | `/api/program-management/programs/:programId/discontinue` | `{ version }`                 |
+| `POST`  | `/api/program-management/programs/:programId/reactivate`  | `{ version }`                 |
+
+- **Who:** an active user with an active `MANAGE_PROGRAM` grant at PROGRAM
+  scope for that Program (PRD 3.6). A grant for another Program, a revoked or
+  DEMO grant, admin/organization/receiving grants, DEPARTMENT or ORG scope,
+  and Program affiliation do not count. Discontinue/reactivate also uses
+  `MANAGE_PROGRAM` for that Program: the Program Director discontinues and
+  reactivates their own Program (team decision, confirmed Oct 19).
+- **How:** one transaction holds the Program for update, reads the user and
+  grants with locking reads, checks the `version` the worker last saw, writes
+  the change, and writes an audit event with before/after values. A stale
+  version gets `409 PROGRAM_CHANGED` with the current Program; nothing is
+  written. If the audit write fails, the change rolls back.
+- **Not editable here:** name, Department, notification email (routing), and
+  lifecycle status (only via discontinue/reactivate). GPME matching facts
+  are edited in a follow-up once PR #16 merges.
+- **Lifecycle (PRD 4.4):** a discontinued Program drops out of new referral
+  choices; past referrals keep it. Reactivating needs an active Department.
+  A discontinue waits for any referral already being created against it.
+- No query parameters are accepted. No schema change: the columns exist in
+  migration 001.
+
 ## Deployment and handoff
 
 [`docs/`](docs/README.md) holds the production deployment runbook, the list
