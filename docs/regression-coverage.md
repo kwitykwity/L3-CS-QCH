@@ -15,12 +15,20 @@ applies: a merged workflow is not done until it has a journey here.
 ```bash
 npm test                          # everything, including the regression suite
 node --test test/regression/      # just the regression suite
+
+npx playwright install chromium   # once per machine, for the browser tests
+npm run test:e2e                  # browser tests: keyboard, focus, text size, axe
 ```
+
+`npm run test:e2e` starts its own synthetic dev server on port 3217 and
+stops it afterwards. To use a Chromium that is already installed, set
+`CHROMIUM_PATH` to it.
 
 | File | What it checks |
 | --- | --- |
 | `test/regression/journeys.test.js` | Whole workflows through the integrated app over HTTP, switching between staff members |
-| `test/regression/accessibility.test.js` | Every page in `public/`: language, title, headings, labels, ids, required fields, status announcements, text size, and color contrast in both themes |
+| `test/regression/accessibility.test.js` | Every page in `public/`: language, title, headings, labels, ids, required fields, status announcements, text size, link colors, and color contrast in both themes |
+| `e2e/directReferral.spec.js` | In Chromium: Direct Referral completed by keyboard only, visible focus on every stop, Shift+Tab order, Enter safety, undo/redo, S/M/L/XL, phone width at XL, and an axe WCAG 2.2 AA scan of every page state in light and dark themes |
 
 The journeys use the in-memory store. PRD 17.2 asks for the same journeys
 against Azure SQL; that waits on the Azure SQL store.
@@ -29,16 +37,16 @@ against Azure SQL; that waits on the Azure SQL store.
 
 | Card 17 area | Automated | Manual (checklist below) | Status |
 | --- | --- | --- | --- |
-| Direct Referral E2E | Journeys 1, 4, 5, 6 | Keyboard run A | Covered |
+| Direct Referral E2E | Journeys 1, 4, 5, 6; `e2e/directReferral.spec.js` | Run A in a second browser | Covered |
 | Receiving lifecycle: queue and response | Journeys 1, 2, 3, 6 | No screen yet | Covered at API level |
 | Receiving lifecycle: outcome and corrections | Not yet | No screen yet | *Waiting:* #14 |
-| GPME E2E | Not yet | Keyboard run B | *Waiting:* #16, then #27 |
+| GPME E2E | Not yet | Run B | *Waiting:* #16, then #27 (add `e2e/gpme.spec.js` then) |
 | Program maintenance | Not yet | No screen yet | *Waiting:* #21, #22, #24, #25 |
 | P0 reporting | Not yet | No screen yet | *Waiting:* #18, #26 |
-| Keyboard workflows and focus | Structure only (tab order, button types, skip link) | Runs A and B | Manual required (PRD 17.7) |
-| Labels, required fields, errors | `accessibility.test.js` | Runs A and B | Covered |
-| Text sizing S/M/L/XL | `accessibility.test.js` (sizes, rem) | Run C | Covered |
-| Contrast (text 4.5:1, controls and focus 3:1) | `accessibility.test.js`, both themes | Run C | Covered |
+| Keyboard workflows and focus | `e2e/` (Chromium, scripted keyboard) | Runs A and B in a second browser | Covered in Chromium |
+| Labels, required fields, errors | `accessibility.test.js`; axe in `e2e/` | Screen reader spot check | Covered |
+| Text sizing S/M/L/XL | `accessibility.test.js`; `e2e/` (computed sizes, kept work, reload) | Run C step 2 (browser zoom) | Covered |
+| Contrast (text 4.5:1, controls and focus 3:1) | `accessibility.test.js` both themes; axe in `e2e/` both themes | None | Covered |
 
 ## Fixed in this pass
 
@@ -48,6 +56,11 @@ against Azure SQL; that waits on the Azure SQL store.
   where 3:1 is needed. They now use `--control-border`: at least 3.3:1 on
   the card, page and focus backgrounds in both themes. Panel borders are
   unchanged.
+- **Links used the browser's default blue (WCAG 1.4.3).** On the start
+  page in the dark theme, "Make a Direct Referral" was too dark to read on
+  the dark card (found by axe). The referral page's skip link had the same
+  problem when it appears. Both stylesheets now color links from the theme
+  (7:1 or more), and the start-page link has a visible focus outline.
 
 ## Found, not fixed here
 
@@ -55,16 +68,16 @@ against Azure SQL; that waits on the Azure SQL store.
   has no S/M/L/XL control. It is a temporary backend status page with one
   link; PRD 13.5 navigation will replace it. Whoever builds that
   navigation should give it the text-size control.
-- **Automated accessibility scanning (axe) and browser-driven keyboard
-  tests (Playwright)** are not in the repository yet. Adding them is a
-  dependency decision for the team (`docs/dependencies.md`). Until then the
-  keyboard runs below are done by hand.
+- **The browser tests run in Chromium only.** Safari and Edge, and a
+  screen reader, are covered by the short manual pass below.
 
 ## Manual keyboard checklist (PRD 14.2, 14.3, 17.7)
 
-Run on `npm run dev:synthetic` (synthetic data only) in Chrome and Safari
-or Edge, **without touching the mouse**. Record the date, browser, tester
-and any failure in the pull request.
+`e2e/` runs these steps automatically in Chromium. Before a release, do
+them once by hand on `npm run dev:synthetic` (synthetic data only) in
+**Safari or Edge**, **without touching the mouse**, and listen to steps
+A3, A4 and A7 once with a screen reader (VoiceOver: Cmd+F5). Record the
+date, browser, tester and any failure in the pull request.
 
 ### Run A: Direct Referral
 

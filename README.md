@@ -96,6 +96,14 @@ The suite covers:
   `test/regression/`: see [docs/regression-coverage.md](docs/regression-coverage.md),
   which also holds the manual keyboard checklist
 
+Browser tests (card 17: keyboard, focus, text size, and an axe
+accessibility scan) run separately, because they need a browser:
+
+```bash
+npx playwright install chromium   # once per machine
+npm run test:e2e
+```
+
 ## Notifications (card 15)
 
 `src/notifications/` sends the "new referral" email to the receiving Program

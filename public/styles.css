@@ -7,6 +7,8 @@
   --ok: #1a7f52;
   --down: #b3261e;
   --pending: #8a939c;
+  --link: #1f4f99;
+  --focus-ring: #1a1d21;
 }
 
 @media (prefers-color-scheme: dark) {
@@ -19,6 +21,8 @@
     --ok: #4ac98a;
     --down: #f27066;
     --pending: #7b848d;
+    --link: #8fb4f2;
+    --focus-ring: #e8eaed;
   }
 }
 
@@ -36,6 +40,11 @@ body {
   color: var(--text);
   font: 16px/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+/* Links follow the theme. The browser default blue was 2.4:1 on the dark
+   card (WCAG 1.4.3); these are 7:1 or more in both themes. */
+a { color: var(--link); }
+a:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; }
 
 .card {
   width: 100%;

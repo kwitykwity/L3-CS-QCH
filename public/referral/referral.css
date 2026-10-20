@@ -45,6 +45,9 @@ body {
   font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
 
+/* Links follow the theme; the browser default blue fails on the dark card. */
+a { color: var(--primary); }
+
 .skip-link {
   position: absolute;
   left: -9999px;

@@ -153,6 +153,7 @@ const PAIRS = [
   ['primary-text', 'primary', TEXT],
   ['error', 'card', TEXT], ['error', 'bg', TEXT], ['success', 'card', TEXT], ['info', 'card', TEXT],
   ['ok', 'card', TEXT], ['down', 'card', TEXT],
+  ['link', 'card', TEXT], ['link', 'bg', TEXT],
   ['focus-ring', 'card', NON_TEXT], ['focus-ring', 'bg', NON_TEXT],
   ['control-border', 'card', NON_TEXT], ['control-border', 'bg', NON_TEXT], ['control-border', 'focus-bg', NON_TEXT],
 ];
@@ -172,6 +173,12 @@ describe('color contrast in both themes', () => {
       });
     }
   }
+
+  test('every stylesheet colors its own links, so they follow the theme (the browser default fails on dark)', () => {
+    for (const { name, css } of stylesheets) {
+      assert.match(css, /(^|\})\s*a\s*\{[^}]*\bcolor:\s*var\(--(link|primary)\)/, `${name}: no theme color for links`);
+    }
+  });
 
   test('form controls draw their edges with --control-border, never the decorative --border (WCAG 1.4.11)', () => {
     for (const { name, css } of stylesheets) {
@@ -201,6 +208,17 @@ describe('text size (PRD 14.5)', () => {
     for (const { name, css } of stylesheets.filter((s) => formCss.has(s.name))) {
       const pxSizes = [...css.matchAll(/([^{}]+)\{[^}]*font(-size)?:[^;]*\b\d+px/g)].map((m) => m[1].trim());
       assert.deepEqual(pxSizes, [':root'], `${name}: only :root may set a px size`);
+    }
+  });
+});
+
+describe('test tools stay out of the shipped app', () => {
+  test('nothing in src/, public/ or scripts/ imports Playwright or axe', () => {
+    const root = path.join(import.meta.dirname, '..', '..');
+    for (const dir of ['src', 'public', 'scripts']) {
+      for (const file of walk(path.join(root, dir)).filter((f) => f.endsWith('.js'))) {
+        assert.doesNotMatch(readFileSync(file, 'utf8'), /playwright|axe-core/i, path.relative(root, file));
+      }
     }
   });
 });
