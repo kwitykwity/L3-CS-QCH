@@ -9,9 +9,10 @@
 //   development/test), ADMINISTER_PERMISSIONS, MANAGE_ORGANIZATION, a
 //   receiving grant, or the user's Program affiliation does not authorize
 //   a change (PRD 3.8, 3.9).
-// - Discontinue/reactivate uses LIFECYCLE_CAPABILITY, MANAGE_PROGRAM for
-//   now. The PRD does not name the capability for Program lifecycle; this
-//   is a TEAM DECISION pending confirmation and can change in one place.
+// - Discontinue/reactivate uses LIFECYCLE_CAPABILITY = MANAGE_PROGRAM for
+//   that Program. The PRD does not name the capability for Program
+//   lifecycle. TEAM DECISION (confirmed Oct 19): the Program Director
+//   discontinues and reactivates their own Program.
 //
 // Every change (PRD 6.4, 9.3, 9.4, 9.6):
 //   one transaction: active user + grants (locking reads), Program held for

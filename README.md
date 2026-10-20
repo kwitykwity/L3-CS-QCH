@@ -194,8 +194,8 @@ never return secrets, connection strings, config values, or error details.
   scope for that Program (PRD 3.6). A grant for another Program, a revoked or
   DEMO grant, admin/organization/receiving grants, DEPARTMENT or ORG scope,
   and Program affiliation do not count. Discontinue/reactivate also uses
-  `MANAGE_PROGRAM` for now (team decision pending; one constant in
-  `src/programs/programService.js`).
+  `MANAGE_PROGRAM` for that Program: the Program Director discontinues and
+  reactivates their own Program (team decision, confirmed Oct 19).
 - **How:** one transaction holds the Program for update, reads the user and
   grants with locking reads, checks the `version` the worker last saw, writes
   the change, and writes an audit event with before/after values. A stale
