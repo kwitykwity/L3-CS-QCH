@@ -4,8 +4,36 @@
 
 import { referralErrors } from '../referrals/errors.js';
 import { PERIOD_TYPES, REPORTING_TIME_ZONE, periodContaining, localDateOf, parseDateText, isoDate } from './periods.js';
+import { computeTimingMetrics } from './timingMetrics.js';
 
 export function createReportingService({ store, now = () => new Date() }) {
+  // Shared by every metric: the period, its scope, and "data as of".
+  async function resolve({ periodType, date, programId, departmentId }) {
+    if (!PERIOD_TYPES.includes(periodType)) throw referralErrors.invalidRequest(['period']);
+    const asOf = now();
+    const period = periodContaining(periodType, date ?? localDateOf(asOf));
+    // An unknown Program or Department is "Unknown", not "Zero" (PRD 12.6).
+    if (programId !== undefined && !(await store.getProgram(programId))) throw referralErrors.invalidRequest(['programId']);
+    if (departmentId !== undefined && !(await store.getDepartment(departmentId))) throw referralErrors.invalidRequest(['departmentId']);
+    return {
+      cohort: { from: period.start.toISOString(), to: period.end.toISOString(), programId, departmentId },
+      context: {
+        period: {
+          type: period.periodType,
+          label: period.label,
+          start: period.startDate,
+          endExclusive: period.endDate,
+          timeZone: REPORTING_TIME_ZONE,
+        },
+        scope: programId !== undefined ? { type: 'PROGRAM', programId }
+          : departmentId !== undefined ? { type: 'DEPARTMENT', departmentId }
+            : { type: 'ORGANIZATION' },
+        partial: asOf < period.end,
+        asOf: asOf.toISOString(),
+      },
+    };
+  }
+
   return {
     // Total Referrals (PRD 12.4): committed referrals whose ORIGINAL
     // submission timestamp falls in the period and the aggregate scope,
@@ -52,6 +80,18 @@ export function createReportingService({ store, now = () => new Date() }) {
         partial: asOf < period.end,
         asOf: asOf.toISOString(),
       };
+    },
+
+    // Time to First Response; Average and Median Time to Recorded Service
+    // (PRD 12.3, 12.4; card 13). Same cohort and scope as Total Referrals:
+    // referrals CREATED in the period, so a later response or outcome
+    // matures its original cohort and never moves it (PRD 12.4). Durations
+    // in milliseconds; "N/A" when nothing qualifies. See timingMetrics.js
+    // for the definitions and the decisions awaiting confirmation.
+    async getTimingMetrics(query) {
+      const { cohort, context } = await resolve(query);
+      const facts = await store.listTimingFacts(cohort);
+      return { metric: 'TIMING', ...computeTimingMetrics(facts), ...context };
     },
   };
 }
