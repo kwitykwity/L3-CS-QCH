@@ -21,11 +21,14 @@ test.describe('Direct Referral, keyboard only (PRD 14.2, 14.3)', () => {
     await page.keyboard.press('Tab');
     expect(await page.evaluate(() => document.activeElement.classList.contains('text-size__btn'))).toBe(false);
 
-    // Affiliation: the dropdown works with the arrow keys; nothing is preselected.
+    // Affiliation: nothing is preselected; the dropdown is chosen by
+    // keyboard. Typing the first letter picks an option on every platform
+    // (on macOS the arrow keys open the system menu instead).
     if (await page.locator('#affiliation-form').isVisible()) {
       await tabTo(page, 'affiliation-select');
       expect(await page.locator('#affiliation-select').inputValue()).toBe('');
-      await page.keyboard.press('ArrowDown');
+      await page.keyboard.type('E'); // "Early Childhood Playgroup (sample)"
+      expect(await page.locator('#affiliation-select').inputValue()).toBe('1');
       await tabTo(page, 'affiliation-save');
       await page.keyboard.press('Enter');
       await expect(page.locator('#affiliation-view')).toBeVisible();
