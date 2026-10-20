@@ -92,6 +92,9 @@ The suite covers:
   4xx statuses, logs only safe metadata (never the error object or message),
   and closes the connection if a response had already started
 - new-referral notifications (card 15): see Notifications below
+- the accessibility and end-to-end regression suite (card 17) in
+  `test/regression/`: see [docs/regression-coverage.md](docs/regression-coverage.md),
+  which also holds the manual keyboard checklist
 
 ## Notifications (card 15)
 
