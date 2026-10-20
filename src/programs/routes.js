@@ -17,6 +17,8 @@
 //   POST  /programs/:programId/field-applicability/:fieldId   use an existing field
 //         { isRequired?, displayOrder? }
 //   PATCH /programs/:programId/field-applicability/:fieldId   { version, isRequired?, displayOrder? }
+//   PUT   /programs/:programId/field-values/:fieldId         set or clear a value
+//         { version (from the field's applicability), value }    null clears
 //   PATCH /fields/:fieldId                                    wording-only rename { version, label }
 //   POST  /fields/:fieldId/replace                            meaning change { version, label, dataType, options? }
 //   POST  /fields/:fieldId/discontinue | reactivate | retire  { version }
@@ -124,6 +126,9 @@ export function createProgramRouter({ store, resolveIdentity, allowDemoGrants = 
   });
   router.patch('/programs/:programId/field-applicability/:fieldId', async (req, res) => {
     res.json(await fields.updateApplicability(req.userId, programIdOf(req), fieldIdOf(req), req.body, opts(req)));
+  });
+  router.put('/programs/:programId/field-values/:fieldId', async (req, res) => {
+    res.json(await fields.setFieldValue(req.userId, programIdOf(req), fieldIdOf(req), req.body, opts(req)));
   });
   router.patch('/fields/:fieldId', async (req, res) => {
     res.json(await fields.renameField(req.userId, fieldIdOf(req), req.body, opts(req)));

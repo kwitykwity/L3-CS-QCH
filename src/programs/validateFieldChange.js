@@ -149,3 +149,83 @@ export function validateApplicabilityUpdate(body) {
   if (fields.length === 0 && value.isRequired === undefined && value.displayOrder === undefined) fields.push('changes');
   return done(fields, value);
 }
+
+// ----- Field values (program_field_values) ------------------------------
+
+export const VALUE_TEXT_MAX = 2000;           // value_text NVARCHAR(2000)
+const NUMBER_LIMIT = 1e14;                     // value_number DECIMAL(18,4)
+const TEXT_CONTROL = /[\u0000-\u0008\u000B\u000C\u000E-\u001F\u007F]/;
+const DATE_PATTERN = /^(\d{4})-(\d{2})-(\d{2})$/;
+
+// { version, value }. `value` must be present; null clears it. The value
+// itself is checked against the field's data type by parseFieldValue.
+export function validateSetValue(body) {
+  const bad = shape(body, ['version', 'value']);
+  if (bad) return bad;
+  const fields = [];
+  if (!validVersion(body.version)) fields.push('version');
+  if (!('value' in body)) fields.push('value');
+  return done(fields, { version: body.version, value: body.value });
+}
+
+// Turns a request value into stored value rows for the field's data type.
+// Returns { ok: true, rows, optionIds } (rows = [] means "no value") or
+// { ok: false }. Option IDs are returned for the caller to check against
+// the field's options.
+export function parseFieldValue(dataType, value) {
+  if (value === null) return { ok: true, rows: [], optionIds: [] };
+  switch (dataType) {
+    case 'TEXT': {
+      if (typeof value !== 'string' || value.length > VALUE_TEXT_MAX) return { ok: false };
+      const text = value.trim();
+      if (text.length === 0) return { ok: true, rows: [], optionIds: [] };
+      if (TEXT_CONTROL.test(text)) return { ok: false };
+      return { ok: true, rows: [{ valueText: text }], optionIds: [] };
+    }
+    case 'NUMBER': {
+      if (typeof value !== 'number' || !Number.isFinite(value) || Math.abs(value) >= NUMBER_LIMIT) return { ok: false };
+      // At most 4 decimal places, counted from the shortest decimal text of
+      // the number (multiplying by 10^4 is not exact for large values).
+      const digits = String(Math.abs(value));
+      if (digits.includes('e') || (digits.split('.')[1] ?? '').length > 4) return { ok: false };
+      return { ok: true, rows: [{ valueNumber: value }], optionIds: [] };
+    }
+    case 'DATE': {
+      const m = typeof value === 'string' ? DATE_PATTERN.exec(value) : null;
+      if (!m) return { ok: false };
+      const [y, mo, d] = [Number(m[1]), Number(m[2]), Number(m[3])];
+      const date = new Date(Date.UTC(y, mo - 1, d));
+      if (y < 1900 || y > 2999 || date.getUTCMonth() !== mo - 1 || date.getUTCDate() !== d) return { ok: false };
+      return { ok: true, rows: [{ valueDate: value }], optionIds: [] };
+    }
+    case 'BOOLEAN':
+      return typeof value === 'boolean' ? { ok: true, rows: [{ valueBool: value }], optionIds: [] } : { ok: false };
+    case 'SINGLE_SELECT':
+      return Number.isSafeInteger(value) && value > 0
+        ? { ok: true, rows: [{ optionId: value }], optionIds: [value] }
+        : { ok: false };
+    case 'MULTI_SELECT': {
+      if (!Array.isArray(value) || value.length > OPTIONS_MAX) return { ok: false };
+      if (!value.every((id) => Number.isSafeInteger(id) && id > 0) || new Set(value).size !== value.length) return { ok: false };
+      const ids = [...value].sort((a, b) => a - b);
+      return { ok: true, rows: ids.map((optionId) => ({ optionId })), optionIds: ids };
+    }
+    default:
+      return { ok: false };
+  }
+}
+
+// The request/response shape of stored value rows for a data type.
+export function valueFromRows(dataType, rows) {
+  if (rows.length === 0) return dataType === 'MULTI_SELECT' ? [] : null;
+  const first = rows[0];
+  switch (dataType) {
+    case 'TEXT': return first.valueText;
+    case 'NUMBER': return first.valueNumber;
+    case 'DATE': return first.valueDate;
+    case 'BOOLEAN': return first.valueBool;
+    case 'SINGLE_SELECT': return first.optionId;
+    case 'MULTI_SELECT': return rows.map((r) => r.optionId).sort((a, b) => a - b);
+    default: return null;
+  }
+}
