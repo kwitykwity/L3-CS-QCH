@@ -1,6 +1,6 @@
 // GET /api/reports/total-referrals?period=&date=&programId=&departmentId=
 //   period: WEEKLY | MONTHLY | QUARTERLY | YEARLY (required)
-//   date: YYYY-MM-DD, any day inside the wanted period (default: today,
+//   date: YYYY-MM-DD, no later than today in New York (default: today,
 //         America/New_York)
 //   programId | departmentId: optional scope, not both
 // 200 { metric, value, period, scope, partial, asOf } - aggregate only.
