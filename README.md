@@ -230,8 +230,33 @@ discontinue, reactivate, retire, and manage choice options.
 - Same transaction rules as 14A: rows held for update, version checks,
   audit events (`FIELD`, `FIELD_OPTION`, `PROGRAM_FIELD`) in the same
   transaction, full rollback on audit failure.
-- Only `PROGRAM_INFO` fields in this slice. Entering field **values** for a
-  Program is the next slice. No schema change.
+- Only `PROGRAM_INFO` fields in this slice. No schema change.
+
+## Program field values (card 14, slice 14B-2)
+
+`PUT /api/program-management/programs/:programId/field-values/:fieldId`
+with `{ version, value }` sets a Program's value for one field. `value: null`
+clears it. Values also appear in the Program's field list (`value` on each
+field).
+
+- **Checked by data type:** TEXT (up to 2,000 characters, trimmed, line
+  breaks and tabs allowed), NUMBER (fits `DECIMAL(18,4)`), DATE
+  (`YYYY-MM-DD`, a real date), BOOLEAN, SINGLE_SELECT (an option ID), and
+  MULTI_SELECT (a list of distinct option IDs). Empty text or an empty list
+  clears the value.
+- **Options:** must belong to that field and be active. An option that was
+  already selected may stay selected after it is discontinued.
+- **Required fields** can't be cleared (`422 VALUE_REQUIRED`). The same field
+  can be required in one Program and optional in another.
+- **Discontinued fields** keep their values as history but take no new ones.
+- **Who:** `MANAGE_PROGRAM` for that Program.
+- **Version:** the field's applicability `version` for that Program. Each
+  value change (and each required/order change) moves it, so a stale save
+  gets `409 PROGRAM_CHANGED` with the current state.
+- Lock order is field, then applicability. The old values are replaced, the
+  version moves, and a `PROGRAM_FIELD` `UPDATED` audit event with the old and
+  new value is written in the same transaction. If the audit fails, nothing
+  changes. No schema change.
 
 ## Deployment and handoff
 

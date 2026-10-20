@@ -48,6 +48,9 @@ import {
   validateRename,
   validateReplaceField,
   validateVersionOnly,
+  validateSetValue,
+  parseFieldValue,
+  valueFromRows,
 } from './validateFieldChange.js';
 
 export const MANAGE_ORGANIZATION = 'MANAGE_ORGANIZATION';
@@ -185,7 +188,9 @@ export function createFieldService({ store, allowDemoGrants = false }) {
       const uses = await tx.listProgramApplicability(programId);
       const fields = [];
       for (const use of uses) {
-        fields.push({ ...(await fieldView(tx, use.fieldId)), applicability: toApplicabilityView(use) });
+        const view = await fieldView(tx, use.fieldId);
+        const value = valueFromRows(view.dataType, await tx.listFieldValues(programId, use.fieldId));
+        fields.push({ ...view, applicability: toApplicabilityView(use), value });
       }
       fields.sort((a, b) => a.applicability.displayOrder - b.applicability.displayOrder || a.fieldId - b.fieldId);
       return { programId, fields };
@@ -266,6 +271,60 @@ export function createFieldService({ store, allowDemoGrants = false }) {
         correlationId,
       });
       return { status: 'UPDATED', applicability: toApplicabilityView(updated) };
+    });
+  }
+
+  // Sets (or clears, with null) a Program's value for one field.
+  // Concurrency token: the Program's applicability row version for the
+  // field, which every value change bumps.
+  async function setFieldValue(userId, programId, fieldId, body, { correlationId = null } = {}) {
+    const validation = validateSetValue(body);
+    if (!validation.ok) throwInvalid(validation);
+    const { version, value } = validation.value;
+    return store.withTransaction(async (tx) => {
+      const { program } = await authorizeProgram(tx, userId, programId);
+      if (program.lifecycleStatus === 'RETIRED') throw programErrors.programRetired();
+      if (!positiveInt(fieldId)) throw programErrors.fieldNotFound();
+      // Lock order: field, then applicability.
+      const field = await tx.lockFieldForUpdate(fieldId);
+      if (!field) throw programErrors.fieldNotFound();
+      const use = await tx.lockApplicabilityForUpdate(programId, fieldId);
+      if (!use) throw programErrors.fieldNotApplied();
+      // Values of discontinued or retired fields stay as history; no new ones.
+      if (field.lifecycleStatus !== 'ACTIVE') throw programErrors.fieldNotActive();
+      if (use.version !== version) throw programErrors.programChanged(toApplicabilityView(use));
+
+      const parsed = parseFieldValue(field.dataType, value);
+      if (!parsed.ok) throw programErrors.invalidRequest(['value']);
+      if (parsed.rows.length === 0 && use.isRequired) throw programErrors.valueRequired();
+
+      const currentRows = await tx.listFieldValues(programId, fieldId);
+      const before = valueFromRows(field.dataType, currentRows);
+      const after = valueFromRows(field.dataType, parsed.rows);
+      if (JSON.stringify(before) === JSON.stringify(after)) throw programErrors.noChange();
+
+      // Options must belong to this field and be ACTIVE. An option that is
+      // already selected may stay selected after it is discontinued.
+      const options = await tx.listFieldOptions(fieldId);
+      const kept = new Set(currentRows.map((r) => r.optionId).filter((id) => id != null));
+      for (const optionId of parsed.optionIds) {
+        const option = options.find((o) => o.optionId === optionId);
+        if (!option || (option.lifecycleStatus !== 'ACTIVE' && !kept.has(optionId))) throw programErrors.optionNotSelectable();
+      }
+
+      await tx.replaceFieldValues({ programId, fieldId, rows: parsed.rows });
+      const bumped = await tx.updateApplicability({ programId, fieldId, expectedVersion: version, set: {} });
+      if (!bumped) throw programErrors.programChanged(toApplicabilityView(use));
+      await tx.appendAuditEvent({
+        entityType: 'PROGRAM_FIELD',
+        entityId: programId,
+        action: 'UPDATED',
+        actorUserId: userId,
+        before: { field_id: fieldId, value: before },
+        after: { field_id: fieldId, value: after },
+        correlationId,
+      });
+      return { status: 'UPDATED', fieldId, value: after, applicability: toApplicabilityView(bumped) };
     });
   }
 
@@ -480,6 +539,7 @@ export function createFieldService({ store, allowDemoGrants = false }) {
     createField,
     applyField,
     updateApplicability,
+    setFieldValue,
     renameField,
     replaceField,
     discontinueField: (u, f, b, o) => changeFieldLifecycle(u, f, b, 'DISCONTINUED', o),

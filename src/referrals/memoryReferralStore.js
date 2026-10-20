@@ -139,6 +139,16 @@
 //       ({ ...id, expectedVersion, set }) -> row | null
 //       ONE conditional UPDATE ... WHERE <id> AND row_version = @expected,
 //       only on a row this transaction holds for update; null = 0 rows.
+//   tx.listFieldValues(programId, fieldId) -> [value rows]
+//   tx.replaceFieldValues({ programId, fieldId, rows })
+//       Only while holding that (program, field) applicability row. Replaces
+//       the Program's current value rows for the field (multi-select: one
+//       row per option; every row has exactly one value column, as
+//       ck_pfv_one_value requires):
+//         DELETE dbo.program_field_values WHERE program_id = @p AND field_id = @f;
+//         INSERT dbo.program_field_values (...) VALUES (...);  -- per row
+//       in the same transaction as the applicability version bump and the
+//       audit event.
 //   Every change becomes visible only at commit, together with its audit
 //   events. Every row carries `version` (row_version).
 //
@@ -228,11 +238,14 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     field: { rows: new Map(), nextId: 1, idOf: (r) => r.fieldId },
     option: { rows: new Map(), nextId: 1, idOf: (r) => r.optionId },
     applicability: { rows: new Map(), idOf: (r) => `${r.programId}:${r.fieldId}` },
+    value: { rows: new Map(), nextId: 1, idOf: (r) => r.valueId },
   };
   const seedRows = (table, list, idField) => {
     for (const row of list ?? []) {
       const full = { ...row, rowVersion: 1 };
-      if (idField) table.nextId = Math.max(table.nextId, row[idField] + 1);
+      // Seeds may leave the identity column out; assign the next one.
+      if (idField && full[idField] == null) full[idField] = Math.max(table.nextId, ...list.map((r) => (r[idField] ?? 0) + 1));
+      if (idField) table.nextId = Math.max(table.nextId, full[idField] + 1);
       table.rows.set(table.idOf(full), full);
     }
   };
@@ -242,6 +255,9 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   })), 'fieldId');
   seedRows(tables.option, (seed.fieldOptions ?? []).map((o) => ({ lifecycleStatus: 'ACTIVE', displayOrder: 0, ...o })), 'optionId');
   seedRows(tables.applicability, (seed.fieldApplicability ?? []).map((a) => ({ isRequired: false, displayOrder: 0, ...a })));
+  seedRows(tables.value, (seed.fieldValues ?? []).map((v) => ({
+    optionId: null, valueText: null, valueNumber: null, valueDate: null, valueBool: null, ...v,
+  })), 'valueId');
 
   const publicRow = (row) => {
     if (!row) return null;
@@ -269,12 +285,14 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       const promise = new Promise((resolve) => { settle = resolve; });
       updateHeld.set(key, { promise, owner });
       staged.holds.push({ key, settle });
+      // Same test hook as locking reads, with kind 'hold' and the row key.
+      if (afterLockingRead) await afterLockingRead('hold', key);
     }
     const rowOf = (name, id) => overlay.get(`${name}:${id}`) ?? tables[name].rows.get(id) ?? null;
     const allRows = (name) => {
       const byId = new Map(tables[name].rows);
       for (const [key, row] of overlay) if (key.startsWith(`${name}:`)) byId.set(tables[name].idOf(row), row);
-      return [...byId.values()];
+      return [...byId.values()].filter((row) => !row.deleted);
     };
     const sortById = (a, b) => (a.fieldId ?? 0) - (b.fieldId ?? 0) || (a.optionId ?? 0) - (b.optionId ?? 0)
       || (a.programId ?? 0) - (b.programId ?? 0);
@@ -425,6 +443,27 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       async updateApplicability({ programId, fieldId, expectedVersion, set }) {
         return updateRow('applicability', `${programId}:${fieldId}`, expectedVersion, set);
       },
+      async listFieldValues(programId, fieldId) {
+        return allRows('value').filter((v) => v.programId === programId && v.fieldId === fieldId)
+          .sort((a, b) => a.valueId - b.valueId).map(publicRow);
+      },
+      async replaceFieldValues({ programId, fieldId, rows }) {
+        if (!holds(`applicability:${programId}:${fieldId}`)) {
+          throw new Error('replaceFieldValues requires holding the applicability row for update first');
+        }
+        for (const old of allRows('value').filter((v) => v.programId === programId && v.fieldId === fieldId)) {
+          overlay.set(`value:${old.valueId}`, { ...old, deleted: true });
+        }
+        for (const row of rows) {
+          const filled = [row.optionId, row.valueText, row.valueNumber, row.valueDate, row.valueBool]
+            .filter((v) => v !== null && v !== undefined).length;
+          if (filled !== 1) throw new Error('ck_pfv_one_value');
+          insertRow('value', 'valueId', {
+            programId, fieldId, optionId: null, valueText: null, valueNumber: null, valueDate: null, valueBool: null,
+            ...row, updatedAt: now().toISOString(),
+          });
+        }
+      },
       now: () => now().toISOString(),
 
       async updateProgram({ programId, expectedVersion, set }) {
@@ -483,7 +522,8 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       writeReleases.forEach((done) => done());
       for (const [key, row] of overlay) {
         const name = key.slice(0, key.indexOf(':'));
-        tables[name].rows.set(tables[name].idOf(row), row);
+        if (row.deleted) tables[name].rows.delete(tables[name].idOf(row));
+        else tables[name].rows.set(tables[name].idOf(row), row);
       }
       referrals.push(...staged.referrals);
       for (const { referralId, fields } of staged.updates) {
@@ -569,6 +609,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     _fieldRows: () => [...tables.field.rows.values()].map(publicRow),
     _optionRows: () => [...tables.option.rows.values()].map(publicRow),
     _applicabilityRows: () => [...tables.applicability.rows.values()].map(publicRow),
+    _valueRows: () => [...tables.value.rows.values()].map(publicRow),
     // Deactivates a user, waiting for any transaction that has read them.
     _setUserActive: (userId, isActive) =>
       locks.exclusive(`user:${userId}`, async () => base._setUserActive(userId, isActive)),

@@ -89,6 +89,10 @@ export const programErrors = Object.freeze({
     new ProgramError(409, 'LAST_ACTIVE_OPTION', 'A choice field needs at least one active option.'),
   duplicateOption: () =>
     new ProgramError(409, 'DUPLICATE_OPTION', 'This field already has an option with that label.'),
+  valueRequired: () =>
+    new ProgramError(422, 'VALUE_REQUIRED', 'This field is required for the Program and cannot be left empty.'),
+  optionNotSelectable: () =>
+    new ProgramError(422, 'OPTION_NOT_SELECTABLE', 'That option cannot be selected for this field.'),
   storeUnavailable: () =>
     new ProgramError(503, 'NOT_CONFIGURED', 'This service is not available.'),
 });
