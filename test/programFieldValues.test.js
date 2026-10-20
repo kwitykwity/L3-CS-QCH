@@ -27,6 +27,7 @@ const TEXT = 1; const NUMBER = 2; const DATE = 3; const BOOL = 4; const SINGLE =
 const OLD = 7;          // discontinued TEXT field, still used by Program 11
 const NOT_USED = 8;     // ACTIVE, not used by Program 11
 const OTHER_SINGLE = 9; // another choice field (owns option 20)
+const REFERRAL_Q = 10;  // REFERRAL_FORM field (not supported in this slice), used by Program 11
 
 function seed() {
   const store = createMemoryReferralStore({
@@ -56,6 +57,7 @@ function seed() {
       { fieldId: OLD, label: 'Synthetic old', dataType: 'TEXT', lifecycleStatus: 'DISCONTINUED', discontinuedAt: '2026-09-01T00:00:00.000Z' },
       { fieldId: NOT_USED, label: 'Synthetic unused', dataType: 'TEXT' },
       { fieldId: OTHER_SINGLE, label: 'Synthetic other', dataType: 'SINGLE_SELECT' },
+      { fieldId: REFERRAL_Q, label: 'Synthetic referral question', dataType: 'TEXT', appliesTo: 'REFERRAL_FORM' },
     ].map((f) => ({ fieldKey: `field_${f.fieldId}`, appliesTo: 'PROGRAM_INFO', ...f })),
     fieldOptions: [
       { optionId: 1, fieldId: SINGLE, label: 'Synthetic in person' },
@@ -74,6 +76,7 @@ function seed() {
       { programId: 11, fieldId: SINGLE, displayOrder: 5 },
       { programId: 11, fieldId: MULTI, displayOrder: 6 },
       { programId: 11, fieldId: OLD, displayOrder: 7 },
+      { programId: 11, fieldId: REFERRAL_Q, displayOrder: 8 },
       { programId: 12, fieldId: TEXT, displayOrder: 1 },
       { programId: 12, fieldId: NOT_USED, displayOrder: 2 },
       { programId: 14, fieldId: TEXT, displayOrder: 1 },
@@ -83,6 +86,7 @@ function seed() {
       { programId: 11, fieldId: SINGLE, optionId: 3 },        // a now-discontinued option, still selected
       { programId: 11, fieldId: MULTI, optionId: 12 },        // same, for multi
       { programId: 11, fieldId: OLD, valueText: 'Synthetic history' },
+      { programId: 11, fieldId: REFERRAL_Q, valueText: 'Synthetic referral answer' },
       { programId: 12, fieldId: TEXT, valueText: 'Synthetic Program 12 hours' },
     ],
   });
@@ -241,6 +245,16 @@ describe('which fields and Programs (PRD 4.3)', () => {
     const { fields } = seed();
     await rejectsWith(fields.setFieldValue(MANAGER_11, 11, NOT_USED, { version: 'v1', value: 'x' }), 'FIELD_NOT_APPLIED');
     await rejectsWith(fields.setFieldValue(MANAGER_11, 11, 999, { version: 'v1', value: 'x' }), 'FIELD_NOT_FOUND');
+  });
+
+  test('a REFERRAL_FORM field is refused and left out of the list; nothing changes', async () => {
+    const { store, fields } = seed();
+    const before = JSON.stringify([store._valueRows(), store._applicabilityRows(), audit(store)]);
+    await rejectsWith(set(fields, store, REFERRAL_Q, 'Synthetic new answer'), 'FIELD_NOT_SUPPORTED');
+    await rejectsWith(set(fields, store, REFERRAL_Q, null), 'FIELD_NOT_SUPPORTED');
+    assert.equal(JSON.stringify([store._valueRows(), store._applicabilityRows(), audit(store)]), before);
+    const { fields: list } = await fields.listProgramFields(MANAGER_11, 11);
+    assert.ok(list.every((f) => f.fieldId !== REFERRAL_Q));
   });
 
   test('a retired Program takes no new values', async () => {

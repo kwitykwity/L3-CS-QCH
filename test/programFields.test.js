@@ -27,10 +27,17 @@ const g = (userId, permission, extra = {}) => ({
   userId, permission, scopeType: 'PROGRAM', programId: 11, departmentId: null, grantSource: 'IN_APP', ...extra,
 });
 
-function seed() {
+// referralForm: also seed a REFERRAL_FORM field (an extra referral-form
+// question, not supported in this slice) so tests can prove every action
+// refuses it.
+const RF = 9;         // REFERRAL_FORM field, used by Program 11
+const RF_OLD = 10;    // REFERRAL_FORM field, discontinued long ago, used by Program 11
+const RF_OPTION = 9;  // option of field RF
+
+function seed({ referralForm = false } = {}) {
   let t = T0;
   const clock = { now: () => new Date(t), advanceDays: (d) => { t += d * DAY; } };
-  const store = createMemoryReferralStore({
+  const data = {
     departments: [{ departmentId: 1, name: 'Synthetic Dept', lifecycleStatus: 'ACTIVE' }],
     programs: [
       { programId: 11, departmentId: 1, name: 'Synthetic Program 11', site: null, lifecycleStatus: 'ACTIVE' },
@@ -71,7 +78,20 @@ function seed() {
       { programId: 11, fieldId: 2, displayOrder: 2 },
       { programId: 11, fieldId: 3, displayOrder: 4 },
     ],
-  }, { now: clock.now });
+  };
+  if (referralForm) {
+    data.fields.push(
+      { fieldId: RF, fieldKey: 'field_9', label: 'Synthetic referral question', appliesTo: 'REFERRAL_FORM', dataType: 'SINGLE_SELECT' },
+      { fieldId: RF_OLD, fieldKey: 'field_10', label: 'Synthetic old referral question', appliesTo: 'REFERRAL_FORM', dataType: 'TEXT',
+        lifecycleStatus: 'DISCONTINUED', discontinuedAt: new Date(T0 - 100 * DAY).toISOString() },
+    );
+    data.fieldOptions.push({ optionId: RF_OPTION, fieldId: RF, label: 'Synthetic referral choice', displayOrder: 0 });
+    data.fieldApplicability.push(
+      { programId: 11, fieldId: RF, displayOrder: 5 },
+      { programId: 11, fieldId: RF_OLD, displayOrder: 6 },
+    );
+  }
+  const store = createMemoryReferralStore(data, { now: clock.now });
   return { store, clock, fields: createFieldService({ store }) };
 }
 
@@ -376,6 +396,68 @@ describe('stale versions, concurrency, rollback (PRD 9.3, 9.4, 9.6)', () => {
     assert.equal((await renaming).status, 'RENAMED');
     await revoking;
     await rejectsWith(fields.renameField(MANAGER_11, 2, { version: fieldRow(store, 2).version, label: 'Synthetic after' }), 'NOT_AUTHORIZED');
+  });
+});
+
+describe('only PROGRAM_INFO fields are managed here (REFERRAL_FORM refused everywhere)', () => {
+  const snapshot = (store) => JSON.stringify([store._fieldRows(), store._optionRows(), store._applicabilityRows(), audit(store)]);
+
+  test('the Program field list leaves out REFERRAL_FORM fields', async () => {
+    const { fields } = seed({ referralForm: true });
+    const { fields: list } = await fields.listProgramFields(MANAGER_11, 11);
+    assert.deepEqual(list.map((f) => f.fieldId), [1, 2, 3]);
+    assert.ok(list.every((f) => f.appliesTo === 'PROGRAM_INFO'));
+  });
+
+  const attempts = {
+    'use in another Program': (f, s) => f.applyField(MANAGER_BOTH, 12, RF, {}),
+    'required/order': (f, s) => f.updateApplicability(MANAGER_11, 11, RF,
+      { version: s._applicabilityRows().find((a) => a.programId === 11 && a.fieldId === RF).version, isRequired: true }),
+    rename: (f, s) => f.renameField(MANAGER_11, RF, { version: fieldRow(s, RF).version, label: 'Synthetic renamed' }),
+    replace: (f, s) => f.replaceField(MANAGER_11, RF, { version: fieldRow(s, RF).version, label: 'Synthetic new meaning', dataType: 'TEXT' }),
+    discontinue: (f, s) => f.discontinueField(MANAGER_11, RF, { version: fieldRow(s, RF).version }),
+    reactivate: (f, s) => f.reactivateField(MANAGER_11, RF_OLD, { version: fieldRow(s, RF_OLD).version }),
+    retire: (f, s) => f.retireField(ORG_ADMIN, RF_OLD, { version: fieldRow(s, RF_OLD).version }),
+    'add option': (f, s) => f.addOption(MANAGER_11, RF, { label: 'Synthetic another choice' }),
+    'rename option': (f, s) => f.renameOption(MANAGER_11, RF, RF_OPTION, { version: optionRow(s, RF_OPTION).version, label: 'Synthetic x' }),
+    'discontinue option': (f, s) => f.discontinueOption(MANAGER_11, RF, RF_OPTION, { version: optionRow(s, RF_OPTION).version }),
+    'reactivate option': (f, s) => f.reactivateOption(MANAGER_11, RF, RF_OPTION, { version: optionRow(s, RF_OPTION).version }),
+  };
+  for (const [name, attempt] of Object.entries(attempts)) {
+    test(`${name}: refused with FIELD_NOT_SUPPORTED; fields, options, applicability, and audit unchanged`, async () => {
+      const { store, fields } = seed({ referralForm: true });
+      const before = snapshot(store);
+      await rejectsWith(attempt(fields, store), 'FIELD_NOT_SUPPORTED');
+      assert.equal(snapshot(store), before);
+    });
+  }
+
+  test('refusal comes after authorization: no permission still means NOT_AUTHORIZED', async () => {
+    const { store, fields } = seed({ referralForm: true });
+    await rejectsWith(fields.renameField(NOBODY, RF, { version: fieldRow(store, RF).version, label: 'Synthetic x' }), 'NOT_AUTHORIZED');
+    await rejectsWith(fields.retireField(MANAGER_11, RF_OLD, { version: fieldRow(store, RF_OLD).version }), 'NOT_AUTHORIZED');
+  });
+
+  test('over HTTP: 409 FIELD_NOT_SUPPORTED, nothing changes', async () => {
+    const { store } = seed({ referralForm: true });
+    const app = createApp({ affiliationStore: store, referralStore: store, resolveIdentity: () => ({ userId: MANAGER_11 }), nodeEnv: 'test' });
+    const base = '/api/program-management';
+    const before = snapshot(store);
+    const calls = [
+      request(app).patch(`${base}/fields/${RF}`).send({ version: fieldRow(store, RF).version, label: 'Synthetic x' }),
+      request(app).post(`${base}/fields/${RF}/replace`).send({ version: fieldRow(store, RF).version, label: 'Synthetic x', dataType: 'TEXT' }),
+      request(app).post(`${base}/fields/${RF}/discontinue`).send({ version: fieldRow(store, RF).version }),
+      request(app).post(`${base}/fields/${RF}/options`).send({ label: 'Synthetic x' }),
+      request(app).patch(`${base}/fields/${RF}/options/${RF_OPTION}`).send({ version: optionRow(store, RF_OPTION).version, label: 'Synthetic x' }),
+      request(app).patch(`${base}/programs/11/field-applicability/${RF}`).send({ version: 'v1', displayOrder: 1 }),
+    ];
+    for (const call of calls) {
+      const res = await call;
+      assert.deepEqual([res.status, res.body.code], [409, 'FIELD_NOT_SUPPORTED']);
+    }
+    const list = await request(app).get(`${base}/programs/11/fields`);
+    assert.ok(list.body.fields.every((f) => f.fieldId !== RF && f.fieldId !== RF_OLD));
+    assert.equal(snapshot(store), before);
   });
 });
 
