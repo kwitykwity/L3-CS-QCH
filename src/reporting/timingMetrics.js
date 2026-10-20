@@ -21,11 +21,13 @@
 //    the metric but not the statistic; both is the superset.
 // D2 Median of an even count is the mean of the two middle durations (the
 //    standard statistical median).
-// D3 A referral counts for Time to Recorded Service only if its CURRENT
-//    outcome is RESULTED_IN_SERVICE ("first valid ... timestamp"; authorized
-//    corrections change current-state reporting, PRD 6.2, 12.4). It is
-//    measured from first_resulted_in_service_at, which corrections never
-//    rewrite, so a correction away and back keeps the original time.
+// D3 Settled in the PR #26 review (Team Lead, Oct 20): PRD 12.4 says "Only
+//    referrals that reached RESULTED_IN_SERVICE participate". A referral
+//    counts for Time to Recorded Service if it EVER reached that outcome,
+//    which is exactly when first_resulted_in_service_at is set. A later
+//    correction to Did Not Result in Service does not remove it, and the
+//    duration is always measured from that first time, which corrections
+//    never rewrite.
 // D4 Durations are exact milliseconds of elapsed time (UTC instants, so a
 //    daylight-saving change never adds or removes an hour). The server does
 //    not round; the screen chooses how to show hours or days (PRD 12.5
@@ -34,7 +36,7 @@
 export const TIMING_DECISIONS = Object.freeze({
   firstResponseStatistics: ['AVERAGE', 'MEDIAN'],      // D1
   evenMedian: 'MEAN_OF_MIDDLE_TWO',                   // D2
-  recordedServiceQualifies: 'CURRENTLY_RESULTED',     // D3
+  recordedServiceQualifies: 'REACHED_RESULTED',       // D3 (settled)
   unit: 'MILLISECONDS',                               // D4
 });
 
@@ -80,7 +82,7 @@ export function computeTimingMetrics(facts) {
     if (f.firstRespondedAt) firstResponse.push(ms(f.firstRespondedAt) - created);
     else awaiting += 1;
 
-    if (f.serviceOutcome === 'RESULTED_IN_SERVICE' && f.firstResultedInServiceAt) {       // D3
+    if (f.firstResultedInServiceAt) {                                    // D3: reached
       recordedService.push(ms(f.firstResultedInServiceAt) - created);
     } else if (f.decision === 'ACCEPTED' && f.serviceOutcome === 'NOT_RECORDED') {
       // "Accepted, outcome still unknown: remains open for outcome

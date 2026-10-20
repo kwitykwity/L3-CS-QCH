@@ -95,7 +95,7 @@ async function july() {
   await referral(store, { created: '2026-07-10T09:00:00Z' });
   // R5: responded +4 h, Did Not Result.
   await referral(store, { created: '2026-07-11T00:00:00Z', responded: '2026-07-11T04:00:00Z', outcome: { current: 'DID_NOT_RESULT_IN_SERVICE', recordedAt: '2026-07-14T00:00:00Z' } });
-  // R6: responded +6 h; Resulted at +24 h, later CORRECTED to Did Not (D3: excluded).
+  // R6: responded +6 h; Resulted at +24 h, later CORRECTED to Did Not (D3: still counts, it reached Resulted).
   await referral(store, { created: '2026-07-15T00:00:00Z', responded: '2026-07-15T06:00:00Z', outcome: { current: 'DID_NOT_RESULT_IN_SERVICE', firstResultedAt: '2026-07-16T00:00:00Z' } });
   // R7: responded +1 h, Accepted, outcome not recorded yet (pending).
   await referral(store, { created: '2026-07-20T00:00:00Z', responded: '2026-07-20T01:00:00Z', outcome: { current: 'NOT_RECORDED' } });
@@ -130,17 +130,20 @@ describe('known answers: July 2026, organization-wide', () => {
     assert.equal(t.averageMs, 153_000_000 / 7);
   });
 
-  test('Time to Recorded Service: R1, R2, R9 qualify; avg 120 h; median 72 h; 1 pending', async () => {
-    // Durations (h): R1 72, R2 240, R9 48. Sorted 48, 72, 240 -> median 72 h.
-    // Average = (72 + 240 + 48) / 3 = 360 / 3 = 120 h = 432,000,000 ms.
-    // Excluded: R3 Not Appropriate, R4 awaiting, R5 Did Not, R6 corrected
-    // away from Resulted (D3), R7 not recorded yet (pending), R8 June cohort.
+  test('Time to Recorded Service: R1, R2, R6, R9 reached it; avg 96 h; median 60 h; 1 pending', async () => {
+    // PRD 12.4: "Only referrals that reached RESULTED_IN_SERVICE participate."
+    // Durations (h), from the FIRST Resulted time: R1 72, R2 240, R6 24
+    // (later corrected to Did Not, still reached it), R9 48.
+    // Sorted 24, 48, 72, 240 -> even count, D2 median = (48 + 72) / 2 = 60 h.
+    // Average = (72 + 240 + 24 + 48) / 4 = 384 / 4 = 96 h = 345,600,000 ms.
+    // Excluded: R3 Not Appropriate, R4 awaiting, R5 Did Not (never reached
+    // Resulted), R7 not recorded yet (pending), R8 June cohort.
     const { timeToRecordedService: s } = await report(await july(), JULY);
     assert.equal(s.status, 'OK');
-    assert.equal(s.qualifyingCount, 3);
+    assert.equal(s.qualifyingCount, 4);
     assert.equal(s.pendingCount, 1, 'R7: Accepted, outcome not recorded');
-    assert.equal(s.medianMs, 72 * H);
-    assert.equal(s.averageMs, 120 * H);
+    assert.equal(s.medianMs, 60 * H);
+    assert.equal(s.averageMs, 96 * H);
   });
 
   test('the cohort is anchored on creation: June and August get their own referrals', async () => {
@@ -212,12 +215,23 @@ describe('known answers: edge cases', () => {
     assert.equal(october.timeToFirstResponse.medianMs, 25 * H);
   });
 
-  test('a correction away from Resulted and back keeps the ORIGINAL first-service time (PRD 12.4, D3)', async () => {
+  test('a correction away from Resulted, and back, keeps the referral counted from its ORIGINAL first-service time (PRD 12.4, D3)', async () => {
     const store = build();
     const id = await referral(store, { created: '2026-07-02T00:00:00Z', responded: '2026-07-02T01:00:00Z', outcome: { current: 'DID_NOT_RESULT_IN_SERVICE', firstResultedAt: '2026-07-03T00:00:00Z' } });
-    assert.equal((await report(store, JULY)).timeToRecordedService.status, 'N/A', 'currently Did Not -> excluded');
+    const away = (await report(store, JULY)).timeToRecordedService;
+    assert.deepEqual([away.status, away.qualifyingCount, away.pendingCount, away.medianMs], ['OK', 1, 0, 24 * H],
+      'corrected to Did Not: it reached Resulted, so it still counts, from the first time');
     store._setReferralState(id, { serviceOutcome: 'RESULTED_IN_SERVICE', outcomeRecordedAt: '2026-07-20T00:00:00Z' });
-    assert.equal((await report(store, JULY)).timeToRecordedService.medianMs, 24 * H, 'measured from the first time, not the latest');
+    const back = (await report(store, JULY)).timeToRecordedService;
+    assert.deepEqual([back.qualifyingCount, back.medianMs], [1, 24 * H], 'corrected back: counted once, from the first time, not the latest');
+  });
+
+  test('a referral that never reached Resulted is never counted, whatever else happened (D3)', async () => {
+    const store = build();
+    await referral(store, { created: '2026-07-02T00:00:00Z', responded: '2026-07-02T01:00:00Z', outcome: { current: 'DID_NOT_RESULT_IN_SERVICE', recordedAt: '2026-07-05T00:00:00Z' } });
+    await referral(store, { created: '2026-07-03T00:00:00Z', responded: '2026-07-03T01:00:00Z', decision: 'NOT_APPROPRIATE' });
+    const s = (await report(store, JULY)).timeToRecordedService;
+    assert.deepEqual([s.status, s.qualifyingCount, s.pendingCount], ['N/A', 0, 0]);
   });
 
   test('a corrected decision does not change Time to First Response (first timestamp kept)', async () => {
@@ -287,7 +301,7 @@ describe('calculation helpers', () => {
     assert.deepEqual(TIMING_DECISIONS, {
       firstResponseStatistics: ['AVERAGE', 'MEDIAN'],
       evenMedian: 'MEAN_OF_MIDDLE_TWO',
-      recordedServiceQualifies: 'CURRENTLY_RESULTED',
+      recordedServiceQualifies: 'REACHED_RESULTED',
       unit: 'MILLISECONDS',
     });
   });
@@ -311,7 +325,7 @@ describe('HTTP: GET /api/reports/timing-metrics', () => {
     assert.equal(res.status, 200);
     assert.equal(res.headers['cache-control'], 'no-store');
     assert.equal(res.body.timeToFirstResponse.medianMs, 4 * H);
-    assert.equal(res.body.timeToRecordedService.averageMs, 120 * H);
+    assert.equal(res.body.timeToRecordedService.averageMs, 96 * H);
     assert.equal(res.body.partial, true, 'July is still in progress at the injected "as of" time');
     assert.deepEqual(Object.keys(res.body).sort(),
       ['asOf', 'cohortSize', 'metric', 'partial', 'period', 'scope', 'timeToFirstResponse', 'timeToRecordedService', 'unit']);
