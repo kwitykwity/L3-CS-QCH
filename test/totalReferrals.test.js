@@ -73,7 +73,7 @@ async function seeded() {
 }
 
 const signedIn = (req) => ({ userId: A });
-function appFor(store, nowIso = '2026-10-18T16:00:00.000Z', resolveIdentity = signedIn) {
+function appFor(store, nowIso = '2027-07-02T16:00:00.000Z', resolveIdentity = signedIn) {
   return createApp({ referralStore: store, affiliationStore: store, resolveIdentity, now: () => new Date(nowIso) });
 }
 const total = async (store, query, nowIso) => {
@@ -253,6 +253,46 @@ describe('response and access rules', () => {
       const res = await total(store, query);
       assert.equal(res.status, 400, JSON.stringify(query));
       assert.equal(res.body.value, undefined);
+    }
+  });
+});
+
+describe('reporting dates distinguish future periods from zero activity', () => {
+  test('future dates are refused for every period before counting', async () => {
+    const store = build();
+    let counted = false;
+    store.countReferrals = async () => { counted = true; return 0; };
+    for (const period of ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY']) {
+      for (const date of ['2026-10-19', '2030-01-01', '9999-12-31']) {
+        const res = await total(store, { period, date }, '2026-10-18T16:00:00.000Z');
+        assert.equal(res.status, 400, `${period} ${date}`);
+        assert.equal(res.body.code, 'INVALID_REQUEST');
+        assert.deepEqual(res.body.fields, ['date']);
+        assert.equal(res.body.value, undefined);
+        assert.equal(res.headers['cache-control'], 'no-store');
+      }
+    }
+    assert.equal(counted, false);
+  });
+
+  test('today follows New York midnight, including EDT and EST', async () => {
+    const store = build();
+    for (const [before, midnight, today, tomorrow] of [
+      ['2026-10-19T03:59:59.000Z', '2026-10-19T04:00:00.000Z', '2026-10-18', '2026-10-19'],
+      ['2026-12-02T04:59:59.000Z', '2026-12-02T05:00:00.000Z', '2026-12-01', '2026-12-02'],
+    ]) {
+      const current = await total(store, { period: 'MONTHLY', date: today }, before);
+      assert.equal(current.status, 200);
+      assert.equal(current.body.value, 0);
+      assert.equal(current.body.partial, true);
+
+      const future = await total(store, { period: 'MONTHLY', date: tomorrow }, before);
+      assert.equal(future.status, 400);
+      assert.deepEqual(future.body.fields, ['date']);
+
+      const arrived = await total(store, { period: 'MONTHLY', date: tomorrow }, midnight);
+      assert.equal(arrived.status, 200);
+      assert.equal(arrived.body.value, 0);
     }
   });
 });
