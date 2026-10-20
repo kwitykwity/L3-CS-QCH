@@ -42,6 +42,7 @@ describe('guided form validation', () => {
       assert.equal(validateGuidedForm(answers({ ageMin, ageMax })).ageRange, GUIDED_FIELD_MESSAGES.ageRange.invalid, `${ageMin}-${ageMax}`);
     }
     assert.equal(validateGuidedForm(answers({ ageMin: '30', ageMax: '20' })).ageRange, GUIDED_FIELD_MESSAGES.ageRange.order);
+    assert.equal(validateGuidedForm(answers({ ageMin: '21', ageMax: '20' })).ageRange, GUIDED_FIELD_MESSAGES.ageRange.order, 'off by one');
   });
 
   test('ZIP is five digits or blank', () => {
