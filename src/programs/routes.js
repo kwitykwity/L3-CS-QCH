@@ -26,6 +26,16 @@
 //   PATCH /fields/:fieldId/options/:optionId                  { version, label }
 //   POST  /fields/:fieldId/options/:optionId/discontinue | reactivate  { version }
 //
+// Organization changes (slice 14C, MANAGE_ORGANIZATION at ORG scope):
+//   GET   /departments                                       list, with Program counts
+//   POST  /departments                                       { name }
+//   PATCH /departments/:departmentId                         rename { version, name }
+//   POST  /departments/:departmentId/discontinue | reactivate  { version }
+//         discontinue refused while the Department has ACTIVE Programs
+//   POST  /programs                                          create { departmentId, name,
+//         site?, description?, eligibilityNotes?, scheduleNotes?, costNotes? }
+//   POST  /programs/:programId/move                          { version, departmentId }
+//
 //   400 INVALID_REQUEST | UNEXPECTED_FIELD   401 NOT_AUTHENTICATED
 //   403 USER_NOT_ACTIVE | NOT_AUTHORIZED     404 PROGRAM_NOT_FOUND
 //   409 PROGRAM_CHANGED (with `current`) | NO_CHANGE | PROGRAM_RETIRED |
@@ -41,6 +51,7 @@ import { assertDemoGrantsAllowed } from '../authorization/referralAccess.js';
 import { ProgramError, programErrors } from './errors.js';
 import { createProgramService } from './programService.js';
 import { createFieldService } from './fieldService.js';
+import { createOrganizationService } from './organizationService.js';
 import { MAX_BODY_BYTES } from './validateProgramChange.js';
 
 const POSITIVE_INT = /^[1-9][0-9]{0,15}$/;
@@ -56,6 +67,7 @@ export function createProgramRouter({ store, resolveIdentity, allowDemoGrants = 
   const router = express.Router();
   const service = store ? createProgramService({ store, allowDemoGrants }) : null;
   const fields = store ? createFieldService({ store, allowDemoGrants }) : null;
+  const org = store ? createOrganizationService({ store, allowDemoGrants }) : null;
 
   router.use((req, res, next) => {
     res.set('Cache-Control', 'no-store');
@@ -152,6 +164,29 @@ export function createProgramRouter({ store, resolveIdentity, allowDemoGrants = 
       res.json(await fields[method](req.userId, fieldIdOf(req), optionIdOf(req), req.body, opts(req)));
     });
   }
+
+  // ----- Organization changes (14C) -----
+  const departmentIdOf = (req) => idParam(req, 'departmentId', programErrors.departmentNotFound);
+  router.get('/departments', async (req, res) => {
+    res.json(await org.listDepartments(req.userId));
+  });
+  router.post('/departments', async (req, res) => {
+    res.status(201).json(await org.createDepartment(req.userId, req.body, opts(req)));
+  });
+  router.patch('/departments/:departmentId', async (req, res) => {
+    res.json(await org.renameDepartment(req.userId, departmentIdOf(req), req.body, opts(req)));
+  });
+  for (const [path, method] of [['discontinue', 'discontinueDepartment'], ['reactivate', 'reactivateDepartment']]) {
+    router.post(`/departments/:departmentId/${path}`, async (req, res) => {
+      res.json(await org[method](req.userId, departmentIdOf(req), req.body, opts(req)));
+    });
+  }
+  router.post('/programs', async (req, res) => {
+    res.status(201).json(await org.createProgram(req.userId, req.body, opts(req)));
+  });
+  router.post('/programs/:programId/move', async (req, res) => {
+    res.json(await org.moveProgram(req.userId, programIdOf(req), req.body, opts(req)));
+  });
 
   router.use((err, req, res, next) => {
     if (err instanceof ProgramError) {

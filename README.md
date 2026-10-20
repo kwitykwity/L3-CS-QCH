@@ -258,6 +258,43 @@ field).
   new value is written in the same transaction. If the audit fails, nothing
   changes. No schema change.
 
+## Creating Programs and managing Departments (card 14, slice 14C)
+
+| Method  | Path (under `/api/program-management`)        | Body |
+| ------- | --------------------------------------------- | ---- |
+| `GET`   | `/departments`                                | none (each with active and total Program counts) |
+| `POST`  | `/departments`                                | `{ name }` |
+| `PATCH` | `/departments/:departmentId`                  | `{ version, name }` (rename) |
+| `POST`  | `/departments/:departmentId/discontinue`      | `{ version }` |
+| `POST`  | `/departments/:departmentId/reactivate`       | `{ version }` |
+| `POST`  | `/programs`                                   | `{ departmentId, name, site?, description?, eligibilityNotes?, scheduleNotes?, costNotes? }` |
+| `POST`  | `/programs/:programId/move`                   | `{ version, departmentId }` |
+
+- **Who (PRD 3.6):** `MANAGE_ORGANIZATION` as an active ORG-scope grant
+  ("Create Programs, administer Department lifecycle"). `MANAGE_PROGRAM`,
+  `ADMINISTER_PERMISSIONS`, and PROGRAM-scope grants don't count.
+- **Department rule (PRD 4.4):** a Department with ACTIVE Programs can't be
+  discontinued; move or discontinue those Programs first. A discontinued
+  Department drops out of new choices, and its Programs can't be
+  reactivated until it is. Retired Departments aren't changed here.
+- **New Programs** start ACTIVE in an ACTIVE Department. Nobody manages a
+  new Program until a permission administrator grants `MANAGE_PROGRAM`.
+  Its notification email (routing) and GPME matching facts are set up
+  separately.
+- **Names are unique** like the schema says (`uq_departments_name`,
+  `uq_programs_name_site`), ignoring upper/lower case. Two people creating
+  the same name at once can't both succeed.
+- **Moving a Program** needs an ACTIVE target Department. Past referrals
+  keep their historical Department context.
+- **No race with the Department rule:** every change that can make a
+  Program ACTIVE in a Department (create, reactivate, move in) and every
+  Department change holds that Department for update first. Lock order:
+  Program, then Department, then name keys. 14A's reactivate now holds
+  the Department too.
+- Same transaction rules as 14A/14B: version checks, `DEPARTMENT` and
+  `PROGRAM` audit events in the same transaction, full rollback on audit
+  failure. No schema change.
+
 ## Deployment and handoff
 
 [`docs/`](docs/README.md) holds the production deployment runbook, the list

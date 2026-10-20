@@ -77,3 +77,61 @@ export function validateLifecycleChange(body) {
   if (!validVersion(body.version)) return { ok: false, fields: ['version'] };
   return { ok: true, value: { version: body.version } };
 }
+
+// ----- Organization changes (slice 14C, MANAGE_ORGANIZATION) -----------
+
+export const NAME_MAX = 200; // programs.name and departments.name are NVARCHAR(200)
+const NAME_RULE = { max: NAME_MAX, singleLine: true };
+const validId = (v) => Number.isSafeInteger(v) && v > 0;
+
+// New Program: { departmentId, name, site?, description?, eligibilityNotes?,
+// scheduleNotes?, costNotes? }. Routing (notification email) and GPME
+// matching facts are not set here.
+export function validateCreateProgram(body) {
+  if (!isPlainObject(body)) return { ok: false, fields: [] };
+  const allowed = new Set(['departmentId', 'name', ...Object.keys(EDITABLE_FIELDS)]);
+  if (Object.keys(body).some((k) => !allowed.has(k))) return { ok: false, unexpectedField: true };
+  const fields = [];
+  if (!validId(body.departmentId)) fields.push('departmentId');
+  const name = cleanText(body.name, NAME_RULE);
+  if (!name) fields.push('name');
+  const details = {};
+  for (const [field, rule] of Object.entries(EDITABLE_FIELDS)) {
+    const value = field in body ? cleanText(body[field], rule) : null;
+    if (value === undefined) fields.push(field);
+    else details[field] = value;
+  }
+  if (fields.length > 0) return { ok: false, fields };
+  return { ok: true, value: { departmentId: body.departmentId, name, ...details } };
+}
+
+// Move a Program to another Department: { version, departmentId }.
+export function validateMoveProgram(body) {
+  if (!isPlainObject(body)) return { ok: false, fields: [] };
+  if (Object.keys(body).some((k) => k !== 'version' && k !== 'departmentId')) return { ok: false, unexpectedField: true };
+  const fields = [];
+  if (!validVersion(body.version)) fields.push('version');
+  if (!validId(body.departmentId)) fields.push('departmentId');
+  if (fields.length > 0) return { ok: false, fields };
+  return { ok: true, value: { version: body.version, departmentId: body.departmentId } };
+}
+
+// New Department: { name }.
+export function validateCreateDepartment(body) {
+  if (!isPlainObject(body)) return { ok: false, fields: [] };
+  if (Object.keys(body).some((k) => k !== 'name')) return { ok: false, unexpectedField: true };
+  const name = cleanText(body.name, NAME_RULE);
+  return name ? { ok: true, value: { name } } : { ok: false, fields: ['name'] };
+}
+
+// Rename a Department: { version, name }.
+export function validateRenameDepartment(body) {
+  if (!isPlainObject(body)) return { ok: false, fields: [] };
+  if (Object.keys(body).some((k) => k !== 'version' && k !== 'name')) return { ok: false, unexpectedField: true };
+  const fields = [];
+  if (!validVersion(body.version)) fields.push('version');
+  const name = cleanText(body.name, NAME_RULE);
+  if (!name) fields.push('name');
+  if (fields.length > 0) return { ok: false, fields };
+  return { ok: true, value: { version: body.version, name } };
+}

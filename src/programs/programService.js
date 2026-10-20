@@ -73,7 +73,10 @@ export function createProgramService({ store, allowDemoGrants = false }) {
 
   // Inside the transaction: active user, the Program held for update, and
   // the capability for that Program. Returns { program, department }.
-  async function authorize(tx, userId, programId, capability) {
+  // holdDepartment: hold the Department for update instead of only reading
+  // it. Reactivation does this, so it can't race a Department discontinue
+  // (slice 14C). Lock order: Program, then Department.
+  async function authorize(tx, userId, programId, capability, { holdDepartment = false } = {}) {
     const user = await tx.getUser(userId);
     if (!user || !user.isActive) throw programErrors.userNotActive();
 
@@ -84,7 +87,9 @@ export function createProgramService({ store, allowDemoGrants = false }) {
     const allowed = programIdsWithCapability(grants, capability, { allowDemoGrants }).has(programId);
     if (!allowed) throw programErrors.notAuthorized();
 
-    const department = await tx.getDepartment(program.departmentId);
+    const department = holdDepartment
+      ? await tx.lockDepartmentForUpdate(program.departmentId)
+      : await tx.getDepartment(program.departmentId);
     return { program, department };
   }
 
@@ -151,7 +156,9 @@ export function createProgramService({ store, allowDemoGrants = false }) {
     const { version } = validation.value;
 
     return store.withTransaction(async (tx) => {
-      const { program, department } = await authorize(tx, userId, programId, LIFECYCLE_CAPABILITY);
+      const { program, department } = await authorize(tx, userId, programId, LIFECYCLE_CAPABILITY, {
+        holdDepartment: target === 'ACTIVE',
+      });
       if (program.lifecycleStatus === 'RETIRED') throw programErrors.programRetired();
       if (program.version !== version) throw await staleError(tx, programId);
       if (program.lifecycleStatus === target) throw programErrors.alreadyInStatus();
