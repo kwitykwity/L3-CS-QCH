@@ -21,7 +21,14 @@ export function createReportingService({ store, now = () => new Date() }) {
     async getTotalReferrals({ periodType, date, programId, departmentId }) {
       if (!PERIOD_TYPES.includes(periodType)) throw referralErrors.invalidRequest(['period']);
       const asOf = now();
-      const day = date ?? localDateOf(asOf);
+      const today = localDateOf(asOf);
+      const day = date ?? today;
+      // A future reporting date is not evidence of zero activity (PRD 12.6).
+      // Compare calendar dates in New York, not the UTC calendar date.
+      if (Date.UTC(day.year, day.month - 1, day.day)
+          > Date.UTC(today.year, today.month - 1, today.day)) {
+        throw referralErrors.invalidRequest(['date']);
+      }
       const period = periodContaining(periodType, day);
 
       // An unknown Program or Department is "Unknown", not "Zero" (PRD 12.6).
