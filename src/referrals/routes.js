@@ -109,6 +109,7 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
   router.use(express.json({ limit: MAX_BODY_BYTES }));
 
   router.post('/', async (req, res) => {
+    readQuery(req.query, []);
     const result = await service.createDirectReferral(req.userId, req.body, {
       correlationId: req.correlationId,
     });
@@ -116,6 +117,7 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
   });
 
   router.get('/submissions/:submissionId', async (req, res) => {
+    readQuery(req.query, []);
     res.json(await service.checkSubmission(req.userId, req.params.submissionId));
   });
 

@@ -24,6 +24,12 @@ const publicDir = path.join(
 //   it on also requires nodeEnv 'development' or 'test'; anything else,
 //   including no nodeEnv, throws at start-up (PRD 16.1, 17.4).
 // - nodeEnv: the validated NODE_ENV from loadConfig().
+// Fixed 404. Nothing from the request is repeated in the response.
+function notFound(req, res) {
+  res.set('Cache-Control', 'no-store');
+  res.status(404).json({ error: 'Not Found' });
+}
+
 export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false, nodeEnv } = {}) {
   const app = express();
 
@@ -47,6 +53,11 @@ export function createApp({ affiliationStore, referralStore, resolveIdentity, al
   );
 
   app.use(express.static(publicDir));
+
+  // Any other path or method, under /api or not: a fixed JSON 404.
+  // Express's built-in page would echo the requested path back and is not
+  // marked no-store (PRD 5.5, 10.4, 15.4).
+  app.use(notFound);
 
   // Must be registered last. Express's default handler includes stack
   // traces when NODE_ENV is not 'production' (PRD 15.4), so we replace it.
