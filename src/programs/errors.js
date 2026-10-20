@@ -73,6 +73,11 @@ export const programErrors = Object.freeze({
       'FIELD_REPLACED',
       'This field was replaced by a field with a new meaning and cannot be reactivated.',
     ),
+  // Only PROGRAM_INFO fields are managed in this slice. REFERRAL_FORM
+  // fields (extra referral-form questions) are refused everywhere until
+  // referral-form support exists, so they can't be changed by accident.
+  fieldNotSupported: () =>
+    new ProgramError(409, 'FIELD_NOT_SUPPORTED', 'This kind of field cannot be managed here yet.'),
   alreadyApplied: () =>
     new ProgramError(409, 'ALREADY_APPLIED', 'This Program already uses that field.'),
   notDiscontinued: () =>
