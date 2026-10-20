@@ -13,7 +13,13 @@ This document records verification coverage; it does not change requirements.
 ## Repeatable SQL check
 
 Run db/checks/referral_audit.sql against an isolated synthetic test database
-with migration 001 applied. Do not rerun migrations on an existing database.
+after migrations 001, 002, and 003 have been applied.
+Do not rerun migrations on an existing database.
+
+Run this trigger check using a test administrator identity.
+A restricted runtime identity may receive permission error 229 before the
+trigger runs. That denial is expected permission enforcement, not evidence
+that the trigger failed. Verify runtime permissions separately.
 
 Command:
 sqlcmd -S <server> -d <test-database> <auth flags> -I -b -i db/checks/referral_audit.sql

@@ -1,6 +1,9 @@
 -- Card 4: audit append-only verification.
 -- Run against an isolated synthetic SQL Server/Azure SQL test database
--- after the core schema migration, using sqlcmd -I -b.
+-- after migrations 001, 002, and 003, using sqlcmd -I -b.
+-- Use a test administrator identity to exercise the trigger.
+-- A restricted runtime identity may get permission error 229 first;
+-- verify that expected permission denial separately.
 -- No rows are inserted, updated, or deleted.
 -- This checks trigger enforcement, not application persistence,
 -- transaction atomicity, or production database permissions.
