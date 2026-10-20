@@ -98,6 +98,29 @@ export const programErrors = Object.freeze({
     new ProgramError(422, 'VALUE_REQUIRED', 'This field is required for the Program and cannot be left empty.'),
   optionNotSelectable: () =>
     new ProgramError(422, 'OPTION_NOT_SELECTABLE', 'That option cannot be selected for this field.'),
+  departmentNotFound: () =>
+    new ProgramError(404, 'DEPARTMENT_NOT_FOUND', 'Department not found.'),
+  departmentChanged: (current) =>
+    new ProgramError(
+      409,
+      'DEPARTMENT_CHANGED',
+      'This Department was changed by someone else. Review the current information and try again.',
+      { current },
+    ),
+  departmentRetired: () =>
+    new ProgramError(409, 'DEPARTMENT_RETIRED', 'This Department is retired and cannot be changed.'),
+  departmentAlreadyInStatus: () =>
+    new ProgramError(409, 'ALREADY_IN_STATUS', 'The Department is already in that status.'),
+  departmentHasActivePrograms: () =>
+    new ProgramError(
+      409,
+      'DEPARTMENT_HAS_ACTIVE_PROGRAMS',
+      'This Department still has active Programs. Move or discontinue them first.',
+    ),
+  departmentNameTaken: () =>
+    new ProgramError(409, 'DEPARTMENT_NAME_TAKEN', 'Another Department already has that name.'),
+  programNameTaken: () =>
+    new ProgramError(409, 'PROGRAM_NAME_TAKEN', 'Another Program already has that name at that site.'),
   storeUnavailable: () =>
     new ProgramError(503, 'NOT_CONFIGURED', 'This service is not available.'),
 });
