@@ -210,6 +210,29 @@ never return secrets, connection strings, config values, or error details.
 - No query parameters are accepted. No schema change: the columns exist in
   migration 001.
 
+## Configurable Program fields (card 14, slice 14B)
+
+Routes are under `/api/program-management` (see `src/programs/routes.js`):
+list and create a Program's fields, use an existing field in another
+Program, set required/optional and display order, rename, replace,
+discontinue, reactivate, retire, and manage choice options.
+
+- **Identity follows meaning (PRD 4.3):** a wording-only change is a rename
+  (same field ID). A meaning change is a replacement: the old field is
+  discontinued and points to a new field used by the same Programs. Values
+  collected under the old field stay with it.
+- **Who:** Program-level actions need `MANAGE_PROGRAM` for that Program.
+  Changing a field's definition or options needs `MANAGE_PROGRAM` for every
+  Program that uses it, so the manager of one Program can't change a field
+  another Program shares. Retiring needs `MANAGE_ORGANIZATION` at ORG scope
+  and only after the field has been discontinued for 90 days ("approximately
+  three months", team decision). Retiring deletes nothing.
+- Same transaction rules as 14A: rows held for update, version checks,
+  audit events (`FIELD`, `FIELD_OPTION`, `PROGRAM_FIELD`) in the same
+  transaction, full rollback on audit failure.
+- Only `PROGRAM_INFO` fields in this slice. Entering field **values** for a
+  Program is the next slice. No schema change.
+
 ## Deployment and handoff
 
 [`docs/`](docs/README.md) holds the production deployment runbook, the list
