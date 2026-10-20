@@ -119,8 +119,31 @@
 //       (for example a referral checking that it is ACTIVE), so such a
 //       transaction commits against the state it read (PRD 9.3, 9.4).
 //
-// Columns map to dbo.referrals, dbo.programs and dbo.audit_events in
-// db/migrations/001_core_schema.sql (PR #4).
+// Configurable fields (card 14B; dbo.field_definitions, dbo.field_options,
+// dbo.program_field_applicability):
+//   tx.lockFieldForUpdate(fieldId), tx.lockOptionForUpdate(optionId),
+//   tx.lockApplicabilityForUpdate(programId, fieldId) -> row | null
+//       Same rule as lockProgramForUpdate: one holder at a time
+//       (SELECT ... WITH (UPDLOCK, ROWLOCK)), held until the transaction ends.
+//       Always lock in this order to avoid deadlocks: field, then option,
+//       then applicability rows in ascending programId.
+//   tx.getField(fieldId), tx.getOption(optionId),
+//   tx.listFieldOptions(fieldId), tx.listFieldApplicability(fieldId),
+//   tx.listProgramApplicability(programId)
+//       Reads that include this transaction's own uncommitted changes.
+//   tx.insertField(row), tx.insertOption(row), tx.insertApplicability(row)
+//       -> new row (IDENTITY ids are allocated at once; gaps are possible).
+//       insertApplicability returns null if the (program, field) row
+//       already exists (primary key).
+//   tx.updateField / tx.updateOption / tx.updateApplicability
+//       ({ ...id, expectedVersion, set }) -> row | null
+//       ONE conditional UPDATE ... WHERE <id> AND row_version = @expected,
+//       only on a row this transaction holds for update; null = 0 rows.
+//   Every change becomes visible only at commit, together with its audit
+//   events. Every row carries `version` (row_version).
+//
+// Columns map to dbo.referrals, dbo.programs, dbo.audit_events and the
+// field tables in db/migrations/001_core_schema.sql (PR #4).
 
 import { createMemoryStore } from '../affiliation/memoryStore.js';
 import { DuplicateSubmissionError } from './errors.js';
@@ -196,8 +219,35 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   const inFlight = new Map();
   // referral ID -> in-flight first response (same waiting rule as above).
   const responseInFlight = new Map();
-  // program ID -> the transaction holding it for update (UPDLOCK).
-  const programUpdateHeld = new Map();
+  // row key ("program:11", "field:5", ...) -> the transaction holding it
+  // for update (UPDLOCK).
+  const updateHeld = new Map();
+
+  // Configurable-field tables. rowVersion stands in for ROWVERSION.
+  const tables = {
+    field: { rows: new Map(), nextId: 1, idOf: (r) => r.fieldId },
+    option: { rows: new Map(), nextId: 1, idOf: (r) => r.optionId },
+    applicability: { rows: new Map(), idOf: (r) => `${r.programId}:${r.fieldId}` },
+  };
+  const seedRows = (table, list, idField) => {
+    for (const row of list ?? []) {
+      const full = { ...row, rowVersion: 1 };
+      if (idField) table.nextId = Math.max(table.nextId, row[idField] + 1);
+      table.rows.set(table.idOf(full), full);
+    }
+  };
+  seedRows(tables.field, (seed.fields ?? []).map((f) => ({
+    lifecycleStatus: 'ACTIVE', replacedByFieldId: null, discontinuedAt: null, retiredAt: null,
+    createdAt: now().toISOString(), ...f,
+  })), 'fieldId');
+  seedRows(tables.option, (seed.fieldOptions ?? []).map((o) => ({ lifecycleStatus: 'ACTIVE', displayOrder: 0, ...o })), 'optionId');
+  seedRows(tables.applicability, (seed.fieldApplicability ?? []).map((a) => ({ isRequired: false, displayOrder: 0, ...a })));
+
+  const publicRow = (row) => {
+    if (!row) return null;
+    const { rowVersion, ...rest } = row;
+    return { ...rest, version: `v${rowVersion}` };
+  };
   let nextReferralId = 1;
   let failNextAudit = false;
 
@@ -208,7 +258,41 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   }
 
   async function withTransaction(fn) {
-    const staged = { referrals: [], audit: [], locks: [], updates: [], responseLocks: [], programUpdates: [], programHolds: [] };
+    const staged = { referrals: [], audit: [], locks: [], updates: [], responseLocks: [], programUpdates: [], holds: [] };
+    // Uncommitted field-table rows: "table:id" -> row.
+    const overlay = new Map();
+    const holds = (key) => staged.holds.some((h) => h.key === key);
+    async function holdForUpdate(key) {
+      if (holds(key)) return;
+      while (updateHeld.has(key)) await updateHeld.get(key).promise;
+      let settle;
+      const promise = new Promise((resolve) => { settle = resolve; });
+      updateHeld.set(key, { promise, owner });
+      staged.holds.push({ key, settle });
+    }
+    const rowOf = (name, id) => overlay.get(`${name}:${id}`) ?? tables[name].rows.get(id) ?? null;
+    const allRows = (name) => {
+      const byId = new Map(tables[name].rows);
+      for (const [key, row] of overlay) if (key.startsWith(`${name}:`)) byId.set(tables[name].idOf(row), row);
+      return [...byId.values()];
+    };
+    const sortById = (a, b) => (a.fieldId ?? 0) - (b.fieldId ?? 0) || (a.optionId ?? 0) - (b.optionId ?? 0)
+      || (a.programId ?? 0) - (b.programId ?? 0);
+    function insertRow(name, idField, row) {
+      const table = tables[name];
+      const full = { ...row, rowVersion: 1 };
+      if (idField) full[idField] = table.nextId++;
+      overlay.set(`${name}:${table.idOf(full)}`, full);
+      return publicRow(full);
+    }
+    function updateRow(name, id, expectedVersion, set) {
+      if (!holds(`${name}:${id}`)) throw new Error(`update of ${name} requires holding it for update first`);
+      const current = rowOf(name, id);
+      if (!current || `v${current.rowVersion}` !== expectedVersion) return null; // 0 rows updated
+      const next = { ...current, ...set, rowVersion: current.rowVersion + 1 };
+      overlay.set(`${name}:${id}`, next);
+      return publicRow(next);
+    }
     const owner = Symbol('transaction');
 
     // Committed row with this transaction's own staged changes applied.
@@ -293,20 +377,58 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       },
 
       async lockProgramForUpdate(programId) {
-        if (!staged.programHolds.some((h) => h.programId === programId)) {
-          while (programUpdateHeld.has(programId)) {
-            await programUpdateHeld.get(programId).promise;
-          }
-          let settle;
-          const promise = new Promise((resolve) => { settle = resolve; });
-          programUpdateHeld.set(programId, { promise, owner });
-          staged.programHolds.push({ programId, settle });
-        }
+        await holdForUpdate(`program:${programId}`);
         return tx.getProgram(programId);
       },
 
+      async lockFieldForUpdate(fieldId) {
+        await holdForUpdate(`field:${fieldId}`);
+        return publicRow(rowOf('field', fieldId));
+      },
+      async lockOptionForUpdate(optionId) {
+        await holdForUpdate(`option:${optionId}`);
+        return publicRow(rowOf('option', optionId));
+      },
+      async lockApplicabilityForUpdate(programId, fieldId) {
+        await holdForUpdate(`applicability:${programId}:${fieldId}`);
+        return publicRow(rowOf('applicability', `${programId}:${fieldId}`));
+      },
+      async getField(fieldId) { return publicRow(rowOf('field', fieldId)); },
+      async getOption(optionId) { return publicRow(rowOf('option', optionId)); },
+      async listFieldOptions(fieldId) {
+        return allRows('option').filter((o) => o.fieldId === fieldId)
+          .sort((a, b) => a.displayOrder - b.displayOrder || a.optionId - b.optionId).map(publicRow);
+      },
+      async listFieldApplicability(fieldId) {
+        return allRows('applicability').filter((a) => a.fieldId === fieldId).sort(sortById).map(publicRow);
+      },
+      async listProgramApplicability(programId) {
+        return allRows('applicability').filter((a) => a.programId === programId).sort(sortById).map(publicRow);
+      },
+      async insertField(row) {
+        const field = insertRow('field', 'fieldId', {
+          replacedByFieldId: null, discontinuedAt: null, retiredAt: null, createdAt: now().toISOString(), ...row,
+        });
+        // field_key is UNIQUE in the schema; derived from the new ID.
+        const keyed = { ...overlay.get(`field:${field.fieldId}`), fieldKey: `field_${field.fieldId}` };
+        overlay.set(`field:${field.fieldId}`, keyed);
+        return publicRow(keyed);
+      },
+      async insertOption(row) { return insertRow('option', 'optionId', row); },
+      async insertApplicability(row) {
+        await holdForUpdate(`applicability:${row.programId}:${row.fieldId}`);
+        if (rowOf('applicability', `${row.programId}:${row.fieldId}`)) return null; // primary key
+        return insertRow('applicability', null, row);
+      },
+      async updateField({ fieldId, expectedVersion, set }) { return updateRow('field', fieldId, expectedVersion, set); },
+      async updateOption({ optionId, expectedVersion, set }) { return updateRow('option', optionId, expectedVersion, set); },
+      async updateApplicability({ programId, fieldId, expectedVersion, set }) {
+        return updateRow('applicability', `${programId}:${fieldId}`, expectedVersion, set);
+      },
+      now: () => now().toISOString(),
+
       async updateProgram({ programId, expectedVersion, set }) {
-        if (!staged.programHolds.some((h) => h.programId === programId)) {
+        if (!holds(`program:${programId}`)) {
           throw new Error('updateProgram requires lockProgramForUpdate first');
         }
         if (staged.programUpdates.some((u) => u.programId === programId)) {
@@ -332,8 +454,8 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     };
 
     const release = () => {
-      for (const { programId, settle } of staged.programHolds) {
-        programUpdateHeld.delete(programId);
+      for (const { key, settle } of staged.holds) {
+        updateHeld.delete(key);
         settle();
       }
       locks.releaseShared(owner);
@@ -359,6 +481,10 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
         base._applyProgramChange(programId, fields);
       }
       writeReleases.forEach((done) => done());
+      for (const [key, row] of overlay) {
+        const name = key.slice(0, key.indexOf(':'));
+        tables[name].rows.set(tables[name].idOf(row), row);
+      }
       referrals.push(...staged.referrals);
       for (const { referralId, fields } of staged.updates) {
         Object.assign(referrals.find((r) => r.referralId === referralId), fields);
@@ -440,6 +566,9 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     _setDepartmentStatus: (departmentId, status) =>
       locks.exclusive(`department:${departmentId}`, async () => base._setDepartmentStatus(departmentId, status)),
     _afterLockingRead(fn) { afterLockingRead = fn; },
+    _fieldRows: () => [...tables.field.rows.values()].map(publicRow),
+    _optionRows: () => [...tables.option.rows.values()].map(publicRow),
+    _applicabilityRows: () => [...tables.applicability.rows.values()].map(publicRow),
     // Deactivates a user, waiting for any transaction that has read them.
     _setUserActive: (userId, isActive) =>
       locks.exclusive(`user:${userId}`, async () => base._setUserActive(userId, isActive)),

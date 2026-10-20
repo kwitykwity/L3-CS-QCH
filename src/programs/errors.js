@@ -50,6 +50,50 @@ export const programErrors = Object.freeze({
       'DEPARTMENT_NOT_ACTIVE',
       'This Program cannot be reactivated while its Department is not active.',
     ),
+  fieldNotFound: () =>
+    new ProgramError(404, 'FIELD_NOT_FOUND', 'Field not found.'),
+  optionNotFound: () =>
+    new ProgramError(404, 'OPTION_NOT_FOUND', 'Option not found.'),
+  fieldNotApplied: () =>
+    new ProgramError(404, 'FIELD_NOT_APPLIED', 'That field is not used by this Program.'),
+  fieldChanged: (current) =>
+    new ProgramError(
+      409,
+      'FIELD_CHANGED',
+      'This field was changed by someone else. Review the current field and try again.',
+      { current },
+    ),
+  fieldNotActive: () =>
+    new ProgramError(409, 'FIELD_NOT_ACTIVE', 'This field is not active.'),
+  fieldRetired: () =>
+    new ProgramError(409, 'FIELD_RETIRED', 'This field is retired and cannot be changed.'),
+  fieldReplaced: () =>
+    new ProgramError(
+      409,
+      'FIELD_REPLACED',
+      'This field was replaced by a field with a new meaning and cannot be reactivated.',
+    ),
+  // Only PROGRAM_INFO fields are managed in this slice. REFERRAL_FORM
+  // fields (extra referral-form questions) are refused everywhere until
+  // referral-form support exists, so they can't be changed by accident.
+  fieldNotSupported: () =>
+    new ProgramError(409, 'FIELD_NOT_SUPPORTED', 'This kind of field cannot be managed here yet.'),
+  alreadyApplied: () =>
+    new ProgramError(409, 'ALREADY_APPLIED', 'This Program already uses that field.'),
+  notDiscontinued: () =>
+    new ProgramError(409, 'NOT_DISCONTINUED', 'Only a discontinued field can be retired.'),
+  retireNotYet: () =>
+    new ProgramError(
+      409,
+      'RETIRE_NOT_YET',
+      'A field can be retired only after its review period as a discontinued field.',
+    ),
+  optionsNotAllowed: () =>
+    new ProgramError(409, 'OPTIONS_NOT_ALLOWED', 'This type of field does not have options.'),
+  lastActiveOption: () =>
+    new ProgramError(409, 'LAST_ACTIVE_OPTION', 'A choice field needs at least one active option.'),
+  duplicateOption: () =>
+    new ProgramError(409, 'DUPLICATE_OPTION', 'This field already has an option with that label.'),
   storeUnavailable: () =>
     new ProgramError(503, 'NOT_CONFIGURED', 'This service is not available.'),
 });
