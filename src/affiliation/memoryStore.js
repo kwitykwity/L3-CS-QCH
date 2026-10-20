@@ -6,8 +6,12 @@
 //   getUser(userId) -> { userId, isActive, currentProgramId, version } | null
 //       `version` is an opaque string that changes every time the user row
 //       changes (dbo.users.row_version, ROWVERSION). Callers only compare it.
-//   getProgram(programId)      -> { programId, departmentId, name, site, lifecycleStatus } | null
-//   getDepartment(departmentId)-> { departmentId, name, lifecycleStatus } | null
+//   getProgram(programId)      -> { programId, departmentId, name, site, lifecycleStatus,
+//                                   description, eligibilityNotes, scheduleNotes,
+//                                   costNotes, version, updatedAt, ... } | null
+//       `version` is an opaque string that changes every time the Program
+//       row changes (dbo.programs.row_version). Callers only compare it.
+//   getDepartment(departmentId)-> { departmentId, name, lifecycleStatus, version } | null
 //   listActivePrograms()       -> [{ program, department }] where BOTH are ACTIVE
 //
 //   updateUserProgramAffiliation({ userId, expectedVersion, fromProgramId,
@@ -35,14 +39,40 @@ export function createMemoryStore(
   { departments = [], programs = [], users = [] } = {},
   { now = () => new Date() } = {},
 ) {
-  const departmentsById = new Map(departments.map((d) => [d.departmentId, { ...d }]));
-  const programsById = new Map(programs.map((p) => [p.programId, { ...p }]));
+  // rowVersion stands in for SQL ROWVERSION on departments too.
+  const departmentsById = new Map(departments.map((d) => [d.departmentId, {
+    createdAt: null, updatedAt: null, ...d, rowVersion: 1,
+  }]));
+  let nextDepartmentId = Math.max(0, ...departments.map((d) => d.departmentId)) + 1;
+  let nextProgramId = Math.max(0, ...programs.map((p) => p.programId)) + 1;
+  // rowVersion stands in for SQL ROWVERSION: bumped on every Program change.
+  const programsById = new Map(programs.map((p) => [p.programId, {
+    description: null,
+    eligibilityNotes: null,
+    scheduleNotes: null,
+    costNotes: null,
+    updatedAt: null,
+    ...p,
+    rowVersion: 1,
+  }]));
   // rowVersion stands in for SQL ROWVERSION: bumped on every user update.
   const usersById = new Map(users.map((u) => [u.userId, { currentProgramId: null, ...u, rowVersion: 1 }]));
   const auditEvents = [];
   let failNextAudit = false;
 
   const copy = (row) => (row ? { ...row } : null);
+
+  function publicProgram(program) {
+    if (!program) return null;
+    const { rowVersion, ...rest } = program;
+    return { ...rest, version: `v${rowVersion}` };
+  }
+
+  const publicDepartment = (department) => {
+    if (!department) return null;
+    const { rowVersion, ...rest } = department;
+    return { ...rest, version: `v${rowVersion}` };
+  };
 
   function publicUser(user) {
     if (!user) return null;
@@ -56,11 +86,11 @@ export function createMemoryStore(
     },
 
     async getProgram(programId) {
-      return copy(programsById.get(programId));
+      return publicProgram(programsById.get(programId));
     },
 
     async getDepartment(departmentId) {
-      return copy(departmentsById.get(departmentId));
+      return publicDepartment(departmentsById.get(departmentId));
     },
 
     async listActivePrograms() {
@@ -68,7 +98,7 @@ export function createMemoryStore(
       for (const program of programsById.values()) {
         const department = departmentsById.get(program.departmentId);
         if (program.lifecycleStatus === 'ACTIVE' && department?.lifecycleStatus === 'ACTIVE') {
-          rows.push({ program: { ...program }, department: { ...department } });
+          rows.push({ program: publicProgram(program), department: publicDepartment(department) });
         }
       }
       return rows;
@@ -104,10 +134,49 @@ export function createMemoryStore(
     _auditEvents: auditEvents,
     _failNextAudit() { failNextAudit = true; },
     _setProgramStatus(programId, lifecycleStatus) {
-      programsById.get(programId).lifecycleStatus = lifecycleStatus;
+      const program = programsById.get(programId);
+      program.lifecycleStatus = lifecycleStatus;
+      program.rowVersion += 1;
+    },
+    // Applies an already-validated, already-authorized Program change.
+    // Only the transactional store calls this, at commit (see
+    // memoryReferralStore.js). Returns the new public row.
+    _applyProgramChange(programId, fields) {
+      const program = programsById.get(programId);
+      Object.assign(program, fields, { updatedAt: now().toISOString() });
+      program.rowVersion += 1;
+      return publicProgram(program);
+    },
+    _setUserActive(userId, isActive) {
+      const user = usersById.get(userId);
+      user.isActive = isActive;
+      user.rowVersion += 1;
     },
     _setDepartmentStatus(departmentId, lifecycleStatus) {
-      departmentsById.get(departmentId).lifecycleStatus = lifecycleStatus;
+      const department = departmentsById.get(departmentId);
+      department.lifecycleStatus = lifecycleStatus;
+      department.rowVersion += 1;
+    },
+
+    // Organization changes (slice 14C). Only the transactional store calls
+    // these, at commit (see memoryReferralStore.js). Not part of the store
+    // contract; the SQL store uses INSERT/UPDATE in the transaction.
+    _allDepartments: () => [...departmentsById.values()].map(publicDepartment),
+    _allPrograms: () => [...programsById.values()].map(publicProgram),
+    _allocateDepartmentId: () => nextDepartmentId++,
+    _allocateProgramId: () => nextProgramId++,
+    _insertDepartment(row) {
+      const at = now().toISOString();
+      departmentsById.set(row.departmentId, { createdAt: at, updatedAt: at, ...row, rowVersion: 1 });
+    },
+    _insertProgram(row) {
+      const at = now().toISOString();
+      programsById.set(row.programId, { createdAt: at, ...row, updatedAt: at, rowVersion: 1 });
+    },
+    _applyDepartmentChange(departmentId, fields) {
+      const department = departmentsById.get(departmentId);
+      Object.assign(department, fields, { updatedAt: now().toISOString() });
+      department.rowVersion += 1;
     },
   };
 }

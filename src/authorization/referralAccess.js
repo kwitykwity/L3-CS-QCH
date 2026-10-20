@@ -66,6 +66,17 @@ export function programIdsWithCapability(grants, permission, { allowDemoGrants =
   return ids;
 }
 
+// True when the user holds `permission` as an active, usable ORG-scope
+// grant. Used for organization-wide capabilities such as
+// MANAGE_ORGANIZATION (PRD 3.6). A PROGRAM- or DEPARTMENT-scope grant of
+// the same permission does not count.
+export function hasOrgScopeCapability(grants, permission, { allowDemoGrants = false } = {}) {
+  return (grants ?? []).some((grant) =>
+    grant.permission === permission &&
+    grant.scopeType === 'ORG' &&
+    isUsable(grant, { allowDemoGrants }));
+}
+
 // Program IDs whose received referrals this user may view.
 export function receivingProgramIds(grants, options = {}) {
   return programIdsWithCapability(grants, RECEIVING_VIEW, options);
