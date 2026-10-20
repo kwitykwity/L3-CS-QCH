@@ -1,0 +1,207 @@
+/* Direct Referral page. All sizes are rem-based so the S/M/L/XL text-size
+   preference (PRD 14.5) scales labels, inputs, errors and controls. */
+
+:root {
+  --bg: #f6f7f9;
+  --card: #ffffff;
+  --text: #1a1d21;
+  --muted: #545e68;
+  --border: #c9cfd6;
+  --primary: #1f4f99;
+  --primary-text: #ffffff;
+  --error: #a4231b;
+  --success: #17683f;
+  --info: #1f4f99;
+  --focus-ring: #1a1d21;
+  --focus-bg: #e9ecef;
+  font-size: 14px; /* M: default (PRD 14.5); app.js sets the chosen size */
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #15181c;
+    --card: #1e2227;
+    --text: #e8eaed;
+    --muted: #a6b0ba;
+    --border: #47505a;
+    --primary: #8fb4f2;
+    --primary-text: #0f1724;
+    --error: #ff8a80;
+    --success: #6fd3a0;
+    --info: #8fb4f2;
+    --focus-ring: #e8eaed;
+    --focus-bg: #2c3238;
+  }
+}
+
+* { box-sizing: border-box; }
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--text);
+  font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
+}
+
+.skip-link {
+  position: absolute;
+  left: -9999px;
+}
+.skip-link:focus { left: 1rem; top: 1rem; background: var(--card); padding: 0.5rem 1rem; z-index: 10; }
+
+.topbar {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: space-between;
+  align-items: center;
+  gap: 0.75rem;
+  padding: 0.75rem 1rem;
+  background: var(--card);
+  border-bottom: 1px solid var(--border);
+}
+
+.brand { font-weight: 700; color: var(--text); text-decoration: none; }
+
+.text-size { display: inline-flex; align-items: center; gap: 0.25rem; }
+.text-size__label { color: var(--muted); margin-right: 0.25rem; }
+.text-size__btn {
+  min-width: 2.5rem;
+  padding: 0.25rem 0.5rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+  cursor: pointer;
+}
+.text-size__btn[aria-pressed="true"] {
+  background: var(--primary);
+  color: var(--primary-text);
+  border-color: var(--primary);
+  font-weight: 700;
+  text-decoration: underline; /* selected state is not shown by color alone */
+}
+
+.page { max-width: 46rem; margin: 0 auto; padding: 1.5rem 1rem 3rem; }
+
+h1 { font-size: 1.75rem; margin: 0 0 0.25rem; }
+h2 { font-size: 1.25rem; margin: 0 0 0.75rem; }
+.lead { margin: 0 0 1.25rem; color: var(--muted); }
+.muted { color: var(--muted); margin: 0.25rem 0; }
+.footnote { margin-top: 2rem; color: var(--muted); font-size: 0.875rem; }
+
+.panel {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  padding: 1.25rem;
+  margin-bottom: 1rem;
+}
+
+.field { margin-bottom: 1rem; }
+.field--narrow input { max-width: 10rem; }
+
+label, legend { display: block; font-weight: 600; margin-bottom: 0.25rem; }
+.req { color: var(--error); }
+
+input[type="text"], input[type="search"], input[type="tel"], input[type="email"], select, textarea {
+  width: 100%;
+  padding: 0.5rem 0.625rem;
+  border: 1px solid var(--border);
+  border-radius: 0.375rem;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+}
+textarea { resize: vertical; }
+
+input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] {
+  border: 2px solid var(--error);
+}
+
+fieldset { border: 0; padding: 0; margin: 0; min-width: 0; }
+fieldset.plain:disabled { opacity: 0.75; }
+
+.radios__options { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; }
+.radios__options label, .program-options label { font-weight: 400; display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+
+.program-options { list-style: none; margin: 0; padding: 0; max-height: 20rem; overflow-y: auto; }
+.program-options li { border-top: 1px solid var(--border); }
+.program-options li:first-child { border-top: 0; }
+.program-options label { display: flex; padding: 0.5rem 0.25rem; width: 100%; }
+.program-options .program-meta { margin-left: auto; color: var(--muted); font-size: 0.875rem; text-align: right; }
+
+.field__error { color: var(--error); font-weight: 600; margin: 0.25rem 0 0; }
+.field__error::before { content: "⚠ Error: "; } /* text + icon, not color alone */
+
+.required-note { margin: 0 0 1rem; }
+
+.summary { margin: 0 0 1.25rem; display: grid; gap: 0.5rem; }
+.summary div { display: grid; gap: 0.125rem; }
+.summary dt { color: var(--muted); font-size: 0.875rem; }
+.summary dd { margin: 0; font-weight: 600; }
+
+.actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
+
+.btn {
+  font: inherit;
+  padding: 0.5rem 1rem;
+  border-radius: 0.375rem;
+  border: 1px solid var(--primary);
+  cursor: pointer;
+}
+.btn--primary { background: var(--primary); color: var(--primary-text); font-weight: 600; }
+.btn--secondary { background: var(--card); color: var(--primary); }
+.btn--link { background: none; border: 0; padding: 0 0.25rem; color: var(--primary); text-decoration: underline; font-weight: 400; }
+.btn:disabled { background: var(--focus-bg); color: var(--muted); border-color: var(--border); cursor: not-allowed; }
+
+/* Focus: light-gray highlight plus a clear outline, not color alone (PRD 14.2). */
+:focus-visible {
+  outline: 3px solid var(--focus-ring);
+  outline-offset: 2px;
+}
+input:focus-visible, select:focus-visible, textarea:focus-visible,
+.btn:focus-visible, .text-size__btn:focus-visible {
+  background-color: var(--focus-bg);
+}
+/* The focus background is light, so every focused button uses the normal
+   text color on it. Without this the primary button's white label sat on
+   light gray (PRD 14.1, 14.2). Checked in light and dark themes. */
+.btn:focus-visible, .text-size__btn:focus-visible { color: var(--text); }
+input[type="radio"]:focus-visible { outline-offset: 3px; }
+h2:focus, .status:focus { outline: none; }
+h2:focus-visible, .status:focus-visible { outline: 3px solid var(--focus-ring); }
+
+.status {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.5rem;
+  padding: 0.75rem 1rem;
+  margin-bottom: 0.75rem;
+  border-radius: 0.5rem;
+  border: 2px solid currentColor;
+  background: var(--card);
+  font-weight: 600;
+}
+.status--success { color: var(--success); }
+.status--error { color: var(--error); }
+.status--info { color: var(--info); }
+.status__badge { white-space: nowrap; }
+.status--success .status__badge::before { content: "✔ Done:"; }
+.status--error .status__badge::before { content: "⚠ Attention:"; }
+.status--info .status__badge::before { content: "ℹ Info:"; }
+.status__text { color: var(--text); }
+.status-actions { display: flex; gap: 0.75rem; margin-bottom: 1rem; }
+.status-actions:empty { display: none; }
+
+dialog {
+  max-width: 28rem;
+  border: 1px solid var(--border);
+  border-radius: 0.75rem;
+  background: var(--card);
+  color: var(--text);
+  padding: 1.25rem;
+}
+dialog::backdrop { background: rgb(0 0 0 / 0.4); }
+
+[hidden] { display: none !important; }

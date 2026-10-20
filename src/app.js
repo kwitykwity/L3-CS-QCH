@@ -5,6 +5,7 @@ import { errorHandler } from './errorHandler.js';
 import { createAffiliationRouter } from './affiliation/routes.js';
 import { createReferralRouter } from './referrals/routes.js';
 import { createReportingRouter } from './reporting/routes.js';
+import { createProgramRouter } from './programs/routes.js';
 
 const publicDir = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -44,6 +45,13 @@ export function createApp({ affiliationStore, referralStore, resolveIdentity, al
   );
 
   app.use('/api/reports', createReportingRouter({ store: referralStore, resolveIdentity, now }));
+
+  // Program maintenance writes need the transactional store (one Azure SQL
+  // store will serve as every store in production).
+  app.use(
+    '/api/program-management',
+    createProgramRouter({ store: referralStore, resolveIdentity, allowDemoGrants, nodeEnv }),
+  );
 
   app.use(
     '/api',

@@ -243,21 +243,21 @@ describe('single referral', () => {
   test('the creator can view it, as creator', async () => {
     const { referral, viewerAccess } = await ctx.queries.getReferral(CREATOR, ctx.ids.a);
     assert.equal(referral.participantName, 'Synthetic A');
-    assert.deepEqual(viewerAccess, { asCreator: true, asReceiver: false });
+    assert.deepEqual(viewerAccess, { asCreator: true, asReceiver: false, canRespond: false });
   });
 
   test('an authorized receiver can view it with contact details, as receiver', async () => {
     const { referral, viewerAccess } = await ctx.queries.getReferral(RECEIVER_11, ctx.ids.a);
     assert.equal(referral.contactValue, '555-010-0147');
     assert.equal(referral.notes, 'Synthetic note');
-    assert.deepEqual(viewerAccess, { asCreator: false, asReceiver: true });
+    assert.deepEqual(viewerAccess, { asCreator: false, asReceiver: true, canRespond: false });
   });
 
   test('someone who is both creator and receiver gets both', async () => {
     const store = seed();
     const id = (await createReferralService({ store }).createDirectReferral(RECEIVER_11, body())).referral.referralId;
     const { viewerAccess } = await createReferralQueryService({ store }).getReferral(RECEIVER_11, id);
-    assert.deepEqual(viewerAccess, { asCreator: true, asReceiver: true });
+    assert.deepEqual(viewerAccess, { asCreator: true, asReceiver: true, canRespond: false });
   });
 
   test('the creator is shown by display name only', async () => {
