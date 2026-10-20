@@ -41,6 +41,30 @@
 //       that index) into DuplicateSubmissionError; every other constraint or
 //       database error propagates unchanged, so it is never mistaken for a
 //       safe retry.
+//
+// GPME-assisted referrals (card 11):
+//   tx.listNeedCategories(), tx.listMatchablePrograms()
+//       The same reads GPME uses (src/affiliation/memoryStore.js), inside
+//       the referral transaction, so the re-check at submission sees
+//       current Program data. In Azure SQL the receiving Program's row is
+//       already held by tx.getProgram; its matching facts (age and
+//       service-area state columns, program_service_area_zips,
+//       program need categories) should be read in the same transaction
+//       WITH (REPEATABLEREAD), so an edit to them waits until the referral
+//       commits and the saved evaluation matches what was checked.
+//   tx.insertGpmeEvaluation({ ruleVersion, results: [{ programId,
+//       displayOrder, explanation, programContext, wasSelected }] })
+//       -> evaluationId. One row in dbo.gpme_evaluations (rule_version_id
+//       looked up from dbo.gpme_rule_versions by version_label) and one row
+//       per listed Program in dbo.gpme_evaluation_results
+//       (program_context_json = JSON of programContext), in the referral's
+//       transaction. Program facts only: no matching answers (PRD 5.3).
+//       The referral row then gets source = 'GPME_ASSISTED' and
+//       gpme_evaluation_id (ck_referrals_source_gpme,
+//       ux_referrals_gpme_evaluation).
+//   getGpmeEvaluation(evaluationId) -> { evaluationId, ruleVersion,
+//       evaluatedAt, results } | null   (committed only; tests and later
+//       referral-detail views)
 //   appendAuditEvent({ entityType, entityId, action, actorUserId,
 //                      before, after, correlationId })
 //       Written in the same transaction as the change it records. The store
@@ -159,6 +183,8 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   // referral ID -> in-flight first response (same waiting rule as above).
   const responseInFlight = new Map();
   let nextReferralId = 1;
+  const gpmeEvaluations = [];  // committed GPME evaluations
+  let nextEvaluationId = 1;
   let failNextAudit = false;
 
   const copy = (row) => (row ? { ...row } : null);
@@ -168,7 +194,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   }
 
   async function withTransaction(fn) {
-    const staged = { referrals: [], audit: [], locks: [], updates: [], responseLocks: [] };
+    const staged = { referrals: [], audit: [], locks: [], updates: [], responseLocks: [], evaluations: [] };
     const owner = Symbol('transaction');
 
     // Committed row with this transaction's own staged changes applied.
@@ -194,6 +220,20 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       getProgram: lockingRead('program', base.getProgram),
       getDepartment: lockingRead('department', base.getDepartment),
       listActivePrograms: base.listActivePrograms,
+      listNeedCategories: base.listNeedCategories,
+      listMatchablePrograms: base.listMatchablePrograms,
+
+      async insertGpmeEvaluation({ ruleVersion, results }) {
+        // Like an IDENTITY column: IDs are never reused, gaps are possible.
+        const evaluationId = nextEvaluationId++;
+        staged.evaluations.push({
+          evaluationId,
+          ruleVersion,
+          evaluatedAt: now().toISOString(),
+          results: structuredClone(results),
+        });
+        return evaluationId;
+      },
 
       async getReferralBySubmissionId(submissionId) {
         return copy(staged.referrals.find((r) => r.submissionId === submissionId))
@@ -282,6 +322,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
         Object.assign(referrals.find((r) => r.referralId === referralId), fields);
       }
       auditEvents.push(...staged.audit);
+      gpmeEvaluations.push(...staged.evaluations);
       for (const r of staged.referrals) committedIds.add(r.submissionId);
       release();
       return result;
@@ -318,6 +359,11 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     ...base,
     withTransaction,
     getReferralBySubmissionId,
+
+    async getGpmeEvaluation(evaluationId) {
+      const found = gpmeEvaluations.find((e) => e.evaluationId === evaluationId);
+      return found ? structuredClone(found) : null;
+    },
 
     async getActiveGrants(userId) {
       return activeGrants(userId);
@@ -372,6 +418,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       }),
     _referrals: referrals,
     _referralAuditEvents: auditEvents,
+    _gpmeEvaluations: gpmeEvaluations,
     _failNextAudit() { failNextAudit = true; },
     _grants: grants,
     // Simulates a later receiving response so tests can cover every stage

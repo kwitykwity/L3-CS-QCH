@@ -3,7 +3,7 @@
   <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
-    <title>Direct Referral · QCH Connect</title>
+    <title>New Referral · QCH Connect</title>
     <link rel="stylesheet" href="referral.css" />
     <script type="module" src="app.js"></script>
   </head>
@@ -22,8 +22,8 @@
     </header>
 
     <main id="main" class="page">
-      <h1>Direct Referral</h1>
-      <p class="lead">Already know which QCH Program this referral should go to? Choose it below. No matching step is needed.</p>
+      <h1>New Referral</h1>
+      <p class="lead">Find a QCH Program with guided matching, or go straight to a Program you already know with Direct Referral. Both send the same kind of referral.</p>
 
       <!-- Status: announced to screen readers; tone is shown with an icon and a word, never color alone -->
       <div id="status" class="status" role="status" aria-live="polite" tabindex="-1" hidden>
@@ -60,22 +60,109 @@
         </form>
       </section>
 
-      <!-- Step 1: choose the receiving Program -->
+      <!-- Step 1: choose the receiving Program. Two equal paths (PRD 2.1):
+           guided matching (GPME) or Direct Referral. Neither is preselected. -->
       <section id="step-program" class="panel" aria-labelledby="step-program-heading">
         <h2 id="step-program-heading" tabindex="-1">1. Which Program should receive this referral?</h2>
-        <div class="field">
-          <label for="program-search">Search Programs by name</label>
-          <input id="program-search" type="search" autocomplete="off" aria-describedby="program-count" />
-          <p id="program-count" class="muted" aria-live="polite"></p>
+
+        <div class="path-choice" role="group" aria-labelledby="path-label">
+          <p id="path-label" class="path-choice__label">How do you want to choose the Program?</p>
+          <button type="button" id="path-guided" class="path-btn" aria-pressed="false" aria-controls="guided">
+            <span class="path-btn__title">Help me find a Program</span>
+            <span class="path-btn__desc">Guided matching: answer a few questions and see Programs that may fit.</span>
+          </button>
+          <button type="button" id="path-direct" class="path-btn" aria-pressed="false" aria-controls="direct">
+            <span class="path-btn__title">I know the Program</span>
+            <span class="path-btn__desc">Direct Referral: choose it from the list.</span>
+          </button>
         </div>
-        <fieldset class="program-list" aria-describedby="program-error">
-          <legend>Programs <span class="req" aria-hidden="true">*</span></legend>
-          <p id="programs-loading" class="muted">Loading Programs&hellip;</p>
-          <ul id="program-options" class="program-options"></ul>
-        </fieldset>
-        <p id="program-error" class="field__error" hidden></p>
-        <div class="actions">
-          <button type="button" id="program-continue" class="btn btn--primary">Continue to referral details</button>
+
+        <!-- Guided matching (GPME, card 11). Answers are used only to find
+             Programs; they are sent in a POST body and are not saved. -->
+        <div id="guided" class="path-panel" hidden>
+          <h3 id="guided-heading" tabindex="-1">Guided matching</h3>
+          <form id="guided-form" novalidate>
+            <fieldset class="field" id="needs" aria-describedby="needs-hint needs-error">
+              <legend>What does the participant need? <span class="req" aria-hidden="true">*</span></legend>
+              <p id="needs-hint" class="muted">Choose all that apply.</p>
+              <p id="needs-loading" class="muted">Loading need categories&hellip;</p>
+              <div id="needs-options" class="checks"></div>
+              <p id="needs-error" class="field__error" hidden></p>
+            </fieldset>
+
+            <fieldset class="field" id="ageRange" aria-describedby="ageRange-hint ageRange-error">
+              <legend>Age range (optional)</legend>
+              <p id="ageRange-hint" class="muted">A range is fine if you do not know the exact age, for example 18 to 24.</p>
+              <div class="range">
+                <label for="ageMin">From</label>
+                <input id="ageMin" type="text" inputmode="numeric" autocomplete="off" maxlength="3" aria-describedby="ageRange-error" />
+                <label for="ageMax">to</label>
+                <input id="ageMax" type="text" inputmode="numeric" autocomplete="off" maxlength="3" aria-describedby="ageRange-error" />
+              </div>
+              <p id="ageRange-error" class="field__error" hidden></p>
+            </fieldset>
+
+            <div class="field field--narrow">
+              <label for="matchZip">ZIP code (optional)</label>
+              <input id="matchZip" type="text" inputmode="numeric" autocomplete="off" maxlength="5"
+                aria-describedby="matchZip-hint matchZip-error" />
+              <p id="matchZip-hint" class="muted">Leaving age or ZIP blank never blocks matching.</p>
+              <p id="matchZip-error" class="field__error" hidden></p>
+            </div>
+
+            <p class="muted">These answers are used only to find Programs. They are not saved with the referral.</p>
+            <div class="actions">
+              <button type="submit" id="find-programs" class="btn btn--primary">Find Programs</button>
+            </div>
+          </form>
+
+          <!-- Guided outcome: no plausible match, technical failure, etc.
+               Announced; shown with an icon and a word, never color alone. -->
+          <div id="match-message" class="status" role="status" aria-live="polite" tabindex="-1" hidden>
+            <span class="status__badge" aria-hidden="true"></span>
+            <span class="status__text"></span>
+          </div>
+          <div class="status-actions">
+            <button type="button" id="match-retry" class="btn btn--primary" hidden>Try again</button>
+            <button type="button" id="match-edit" class="btn btn--secondary" hidden>Change answers</button>
+            <button type="button" id="match-direct" class="btn btn--secondary" hidden>Use Direct Referral</button>
+          </div>
+
+          <div id="match-results" hidden>
+            <h3 id="results-heading" tabindex="-1">Programs that may fit</h3>
+            <p class="muted" id="suggestion-note"></p>
+            <p class="muted" id="order-note"></p>
+            <section id="plausible-group" aria-labelledby="plausible-heading" hidden>
+              <h4 id="plausible-heading">Plausible matches</h4>
+              <p class="muted">Every criterion matching could check fits the answers given.</p>
+              <ul id="plausible-list" class="match-list"></ul>
+            </section>
+            <section id="possible-group" aria-labelledby="possible-heading" hidden>
+              <h4 id="possible-heading">Possible matches</h4>
+              <p class="muted">Nothing rules these out, but some information could not be checked. Confirm with the Program.</p>
+              <ul id="possible-list" class="match-list"></ul>
+            </section>
+            <p id="not-checked-note" class="muted" hidden></p>
+          </div>
+        </div>
+
+        <!-- Direct Referral (card 5) -->
+        <div id="direct" class="path-panel" hidden>
+          <h3 id="direct-heading" tabindex="-1">Direct Referral</h3>
+          <div class="field">
+            <label for="program-search">Search Programs by name</label>
+            <input id="program-search" type="search" autocomplete="off" aria-describedby="program-count" />
+            <p id="program-count" class="muted" aria-live="polite"></p>
+          </div>
+          <fieldset class="program-list" aria-describedby="program-error">
+            <legend>Programs <span class="req" aria-hidden="true">*</span></legend>
+            <p id="programs-loading" class="muted">Loading Programs&hellip;</p>
+            <ul id="program-options" class="program-options"></ul>
+          </fieldset>
+          <p id="program-error" class="field__error" hidden></p>
+          <div class="actions">
+            <button type="button" id="program-continue" class="btn btn--primary">Continue to referral details</button>
+          </div>
         </div>
       </section>
 
@@ -87,6 +174,10 @@
             <dt>Sending to</dt>
             <dd><span id="summary-receiving"></span>
               <button type="button" id="change-program" class="btn btn--link">Change Program</button></dd>
+          </div>
+          <div>
+            <dt>How the Program was chosen</dt>
+            <dd id="summary-source"></dd>
           </div>
           <div>
             <dt>Referring Program (from your affiliation)</dt>
@@ -143,6 +234,7 @@
 
           <div class="actions">
             <button type="submit" id="send" class="btn btn--primary">Send referral</button>
+            <button type="button" id="send-direct" class="btn btn--secondary" hidden>Send as a Direct Referral instead</button>
             <button type="button" id="cancel" class="btn btn--secondary">Cancel</button>
           </div>
         </form>
