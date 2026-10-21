@@ -49,6 +49,14 @@ function isUsable(grant, { allowDemoGrants }) {
 // A separate capability from viewing: view never implies modify (PRD 3.3).
 export const RESPOND = 'RESPOND_TO_REFERRAL';
 
+// Card 8 (PRD 3.6). Each is its own capability for the receiving Program;
+// none implies another, and none implies view (PRD 3.3).
+export const RECORD_OUTCOME = 'RECORD_OUTCOME';
+// Correct an already recorded Service Outcome only.
+export const CORRECT_OUTCOME = 'CORRECT_OUTCOME';
+// Update a received referral, including correcting the Response/Decision.
+export const UPDATE_RECEIVED = 'UPDATE_RECEIVED_REFERRAL';
+
 // Program IDs for which this user holds `permission` as an active,
 // usable, PROGRAM-scope grant.
 export function programIdsWithCapability(grants, permission, { allowDemoGrants = false } = {}) {

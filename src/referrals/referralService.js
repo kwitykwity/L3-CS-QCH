@@ -1,5 +1,6 @@
-// Canonical referral-creation transaction for Direct Referral
-// (Final Technical PRD 2.2, 3.2, 3.6, 3.9, 6.1, 6.2, 7.2, 7.3, 9.1, 9.3, 9.6).
+// Canonical referral-creation transaction for both entry paths, Direct
+// Referral and GPME-assisted (Final Technical PRD 2.1, 2.2, 3.2, 3.6, 3.9,
+// 6.1, 6.2, 7.2, 7.3, 8.1, 8.7, 9.1, 9.3, 9.6; cards 3 and 11).
 //
 // Sequence (PRD 2.2): validate -> authorize -> verify receiving Program
 // -> transaction -> create referral + permanent Referral ID -> commit.
@@ -16,13 +17,24 @@
 //   constraint (uq_referrals_submission) is the final guard against
 //   concurrent duplicates.
 // - Every new referral starts AWAITING_RESPONSE / no decision /
-//   NOT_RECORDED, source DIRECT (PRD 6.2). The client cannot set these.
+//   NOT_RECORDED (PRD 6.2). The client cannot set these or `source`.
+// - GPME-assisted (card 11): the request carries the worker's matching
+//   answers in `gpme`. Inside the same transaction the server re-runs GPME
+//   with current Program data and the current rule version and checks that
+//   the receiving Program is among the results. Only then is the referral
+//   saved, with source GPME_ASSISTED and a GPME evaluation record (rule
+//   version, the listed Programs, their explanations, which one was
+//   selected) so the recommendation can be explained later (PRD 8.7, 9.1).
+//   The matching answers themselves are never stored (PRD 5.3). Everything
+//   after matching is the same pipeline as Direct Referral (PRD 2.2).
 // - The audit event holds IDs only, never participant data (PRD 5.4, 9.6).
 
 import { createAffiliationService } from '../affiliation/affiliationService.js';
 import { errors as affiliationErrors } from '../affiliation/errors.js';
 import { DuplicateSubmissionError, referralErrors } from './errors.js';
 import { validateDirectReferral } from './validateReferral.js';
+import { safeErrorKind } from '../gpme/gpmeService.js';
+import { GPME_RULE_VERSION, MATCH_STATUS, matchPrograms } from '../gpme/matchPrograms.js';
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 
@@ -41,6 +53,41 @@ const SAME_REQUEST_FIELDS = [
 
 // Minimum-necessary confirmation returned to the browser (PRD 10.5).
 // No participant data is echoed back.
+function sourceOf(request) {
+  return request.gpme ? 'GPME_ASSISTED' : 'DIRECT';
+}
+
+// What gets kept about a GPME recommendation (dbo.gpme_evaluation_results):
+// Program facts and explanations only, never the participant's answers.
+// Explanations are built from Program facts (src/gpme/matchPrograms.js).
+function toEvaluation(result, receivingProgramId) {
+  const listed = [
+    ...result.plausible.map((p) => ({ ...p, group: 'PLAUSIBLE' })),
+    ...result.possible.map((p) => ({ ...p, group: 'POSSIBLE' })),
+  ];
+  return {
+    ruleVersion: result.ruleVersion,
+    results: listed.map((p, index) => ({
+      programId: p.programId,
+      displayOrder: index + 1,
+      explanation: p.explanations.join('; '),
+      programContext: {
+        group: p.group,
+        programName: p.name,
+        site: p.site,
+        departmentId: p.departmentId,
+        departmentName: p.departmentName,
+        explanations: [...p.explanations],
+      },
+      wasSelected: p.programId === receivingProgramId,
+    })),
+  };
+}
+
+function defaultLogGpmeFailure(err) {
+  console.error(`[referrals] GPME re-check unavailable (${safeErrorKind(err)})`);
+}
+
 function toConfirmation(row) {
   return {
     referralId: row.referralId,
@@ -67,14 +114,51 @@ async function getSelectableProgram(store, programId) {
   return { program, department };
 }
 
-export function createReferralService({ store }) {
+export function createReferralService({
+  store, gpmeRuleVersion = GPME_RULE_VERSION, logGpmeFailure = defaultLogGpmeFailure,
+} = {}) {
   if (!store) throw new Error('createReferralService requires a store');
+
+  // Re-runs GPME inside the referral transaction (card 11). Returns the
+  // evaluation to save, or throws a fixed error. A technical failure is
+  // GPME_UNAVAILABLE, never "result changed" (PRD 8.5).
+  async function confirmGpmeRecommendation(tx, gpme, receivingProgramId) {
+    let needCategories;
+    let candidates;
+    try {
+      needCategories = await tx.listNeedCategories();
+      candidates = await tx.listMatchablePrograms();
+    } catch (err) {
+      logGpmeFailure(err);
+      throw referralErrors.gpmeUnavailable();
+    }
+
+    const active = new Set(
+      needCategories.filter((c) => c.lifecycleStatus === 'ACTIVE').map((c) => c.needCategoryId),
+    );
+    if (!gpme.needCategoryIds.every((id) => active.has(id))) throw referralErrors.invalidRequest(['gpme']);
+
+    let result;
+    try {
+      result = matchPrograms(gpme, { candidates, needCategories, ruleVersion: gpmeRuleVersion });
+    } catch (err) {
+      logGpmeFailure(err);
+      throw referralErrors.gpmeUnavailable();
+    }
+    const listed = result.status === MATCH_STATUS.RESULTS
+      && [...result.plausible, ...result.possible].some((p) => p.programId === receivingProgramId);
+    if (!listed) throw referralErrors.gpmeResultChanged();
+    return toEvaluation(result, receivingProgramId);
+  }
 
   // A repeated Submission ID from the same user with the same content is a
   // retry: return the referral that already exists. Anything else is a
   // conflict, reported without revealing the other referral.
   function replay(existing, userId, request) {
     if (existing.createdByUserId !== userId) throw referralErrors.submissionIdConflict();
+    // A Direct retry of a GPME-assisted Submission ID (or the reverse) is a
+    // different logical request.
+    if (existing.source !== sourceOf(request)) throw referralErrors.submissionIdConflict();
     for (const field of SAME_REQUEST_FIELDS) {
       if ((existing[field] ?? null) !== (request[field] ?? null)) {
         throw referralErrors.submissionIdConflict();
@@ -109,9 +193,19 @@ export function createReferralService({ store }) {
         const receiving = await getSelectableProgram(tx, request.receivingProgramId);
         if (!receiving) throw referralErrors.receivingProgramNotSelectable();
 
+        const source = sourceOf(request);
+        let gpmeEvaluationId = null;
+        let ruleVersion = null;
+        if (request.gpme) {
+          const evaluation = await confirmGpmeRecommendation(tx, request.gpme, receiving.program.programId);
+          gpmeEvaluationId = await tx.insertGpmeEvaluation(evaluation);
+          ruleVersion = evaluation.ruleVersion;
+        }
+
         const row = await tx.insertReferral({
           submissionId: request.submissionId,
-          source: 'DIRECT',
+          source,
+          gpmeEvaluationId,
           createdByUserId: userId,
           referringProgramId: referring.referringProgramId,
           referringDepartmentId: referring.referringDepartmentId,
@@ -135,7 +229,8 @@ export function createReferralService({ store }) {
           actorUserId: userId,
           before: null,
           after: {
-            source: 'DIRECT',
+            source,
+            ...(gpmeEvaluationId === null ? {} : { gpme_evaluation_id: gpmeEvaluationId, gpme_rule_version: ruleVersion }),
             referring_program_id: row.referringProgramId,
             receiving_program_id: row.receivingProgramId,
             referring_department_id: row.referringDepartmentId,
@@ -172,5 +267,6 @@ export function createReferralService({ store }) {
     return { status: 'RECEIVED', referral: toConfirmation(existing) };
   }
 
+  // createDirectReferral serves both entry paths (the name predates GPME).
   return Object.freeze({ createDirectReferral, checkSubmission });
 }

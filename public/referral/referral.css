@@ -1,4 +1,4 @@
-/* Direct Referral page. All sizes are rem-based so the S/M/L/XL text-size
+/* New Referral page (guided matching and Direct Referral). All sizes are rem-based so the S/M/L/XL text-size
    preference (PRD 14.5) scales labels, inputs, errors and controls. */
 
 :root {
@@ -15,6 +15,7 @@
   --info: #1f4f99;
   --focus-ring: #1a1d21;
   --focus-bg: #e9ecef;
+  color-scheme: light dark; /* native checkboxes and radios follow the theme */
   font-size: 14px; /* M: default (PRD 14.5); app.js sets the chosen size */
 }
 
@@ -198,6 +199,45 @@ h2:focus-visible, .status:focus-visible { outline: 3px solid var(--focus-ring); 
 .status__text { color: var(--text); }
 .status-actions { display: flex; gap: 0.75rem; margin-bottom: 1rem; }
 .status-actions:empty { display: none; }
+
+/* Path choice (PRD 2.1): two equal buttons. The chosen one is shown with a
+   check mark and a thicker border, not color alone. */
+.path-choice { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+.path-choice__label { grid-column: 1 / -1; font-weight: 600; margin: 0; }
+.path-btn {
+  display: grid; gap: 0.25rem; text-align: left;
+  font: inherit; padding: 0.75rem 1rem;
+  border: 1px solid var(--border); border-radius: 0.5rem;
+  background: var(--card); color: var(--text); cursor: pointer;
+}
+.path-btn__title { font-weight: 700; color: var(--primary); }
+.path-btn__desc { color: var(--muted); font-size: 0.875rem; }
+.path-btn[aria-pressed="true"] { border: 3px solid var(--primary); padding: calc(0.75rem - 2px) calc(1rem - 2px); }
+.path-btn[aria-pressed="true"] .path-btn__title::before { content: "✔ "; }
+.path-btn:focus-visible { background-color: var(--focus-bg); }
+.path-panel { border-top: 1px solid var(--border); padding-top: 1rem; }
+h3 { font-size: 1.125rem; margin: 0 0 0.75rem; }
+h4 { font-size: 1rem; margin: 1rem 0 0.25rem; }
+h3:focus { outline: none; }
+h3:focus-visible { outline: 3px solid var(--focus-ring); }
+
+.checks { display: flex; flex-wrap: wrap; gap: 0.5rem 1.25rem; }
+.checks label { font-weight: 400; display: inline-flex; align-items: center; gap: 0.5rem; cursor: pointer; }
+.range { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; }
+.range label { font-weight: 400; margin: 0; }
+.range input { width: 5rem; }
+input[type="checkbox"]:focus-visible { outline-offset: 3px; }
+
+.match-list { list-style: none; margin: 0; padding: 0; }
+.match {
+  border: 1px solid var(--border); border-radius: 0.5rem;
+  padding: 0.75rem 1rem; margin-top: 0.5rem;
+}
+.match__head { display: flex; flex-wrap: wrap; gap: 0.25rem 1rem; align-items: baseline; }
+.match__name { font-weight: 700; }
+.match__meta { color: var(--muted); font-size: 0.875rem; }
+.match__why { margin: 0.5rem 0; padding-left: 1.25rem; }
+.match__why-label { margin: 0.5rem 0 0; font-size: 0.875rem; color: var(--muted); }
 
 dialog {
   max-width: 28rem;

@@ -1,4 +1,12 @@
-// Server-side validation for a new Direct Referral (PRD 5.2, 10.3, 10.7).
+// Server-side validation for a new referral (PRD 5.2, 10.3, 10.7), from
+// either entry path (PRD 2.1, 2.2).
+//
+// - `gpme` (optional) marks a GPME-assisted referral (card 11). It carries
+//   the same matching answers the worker gave GPME, checked by the same
+//   validateMatchRequest. The server re-runs matching with them; it never
+//   trusts a browser claim that a Program was recommended, and never
+//   stores the answers (PRD 5.3, 8.7). The client still cannot set
+//   `source` itself.
 //
 // - Explicit allowlist: any other field is rejected, so a client cannot set
 //   identity, timestamps, lifecycle state, source, or Department context
@@ -15,6 +23,8 @@
 // Exact limits and formats are engineering decisions (PRD 10.7, Section 22)
 // and can be changed in one place here.
 
+import { MAX_BODY_BYTES as GPME_MAX_BODY_BYTES, validateMatchRequest } from '../gpme/validateMatchRequest.js';
+
 const ALLOWED_FIELDS = new Set([
   'submissionId',
   'receivingProgramId',
@@ -25,6 +35,7 @@ const ALLOWED_FIELDS = new Set([
   'participantZip',
   'referralContext',
   'notes',
+  'gpme',
 ]);
 
 export const CONTACT_METHODS = Object.freeze(['PHONE_CALL', 'PHONE_TEXT', 'EMAIL', 'NOT_AVAILABLE']);
@@ -46,9 +57,11 @@ export const LIMITS = Object.freeze({
 // pretty-printed JSON.
 const WORST_CASE_BYTES_PER_UNIT = 6;
 const STRUCTURE_ALLOWANCE_BYTES = 4 * 1024;
+// Plus room for the optional `gpme` matching answers, sized by GPME itself.
 export const MAX_BODY_BYTES =
   WORST_CASE_BYTES_PER_UNIT * Object.values(LIMITS).reduce((a, b) => a + b, 0)
-  + STRUCTURE_ALLOWANCE_BYTES;
+  + STRUCTURE_ALLOWANCE_BYTES
+  + GPME_MAX_BODY_BYTES;
 
 const UUID = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
 const ZIP = /^\d{5}$/;
@@ -154,6 +167,17 @@ export function validateDirectReferral(body) {
     else fields.push('notes');
   }
 
+  // Optional: present only on the guided path. Any problem inside it is
+  // reported as the one field `gpme`; an unexpected nested property is
+  // refused without its name, like everywhere else.
+  let gpme = null;
+  if (body.gpme !== undefined && body.gpme !== null) {
+    const checked = validateMatchRequest(body.gpme);
+    if (checked.unexpectedField) return { ok: false, unexpectedField: true };
+    if (checked.ok) gpme = checked.value;
+    else fields.push('gpme');
+  }
+
   if (fields.length > 0) return { ok: false, fields };
 
   return {
@@ -168,6 +192,7 @@ export function validateDirectReferral(body) {
       participantZip,
       referralContext,
       notes,
+      gpme,
     },
   };
 }
