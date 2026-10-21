@@ -414,8 +414,11 @@ describe('HTTP routes', () => {
     assert.equal(withBodyUser.status, 400);
     assert.equal(withBodyUser.body.code, 'INVALID_REQUEST');
 
-    await request(app).put('/api/me/affiliation?userId=101').send({ programId: 10, version: current.version });
-    assert.equal((await store.getUser(100)).currentProgramId, 10);
+    // A query parameter is refused outright (card 16), so neither user changes.
+    const withQueryUser = await request(app).put('/api/me/affiliation?userId=101').send({ programId: 10, version: current.version });
+    assert.equal(withQueryUser.status, 400);
+    assert.equal(withQueryUser.body.code, 'INVALID_REQUEST');
+    assert.equal((await store.getUser(100)).currentProgramId, null);
     assert.equal((await store.getUser(101)).currentProgramId, null);
   });
 
