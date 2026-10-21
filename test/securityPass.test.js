@@ -114,6 +114,8 @@ const ROUTES = [
   // Reporting (card 9, #18): aggregate only
   { method: 'get', path: '/api/reports/total-referrals' },
   { method: 'get', path: '/api/reports/timing-metrics' }, // card 13, #26
+  // Referral activity (card 12, #30): aggregate only
+  { method: 'get', path: '/api/reports/referral-activity' },
 
   // Guided Program Matching (card 10, #16)
   { method: 'get', path: '/api/gpme/need-categories' },
@@ -333,12 +335,14 @@ describe('authorization boundaries (capability + resource + scope, PRD 3.3-3.9)'
 
   test('reporting is aggregate only: no referral content or identifiers for any active user (PRD 3.5, 12)', async () => {
     const ctx = await populated();
-    for (const [who, report] of [ADMIN, CREATOR, RECEIVER, OTHER].flatMap((w) => [[w, 'total-referrals'], [w, 'timing-metrics']])) {
-      const res = await request(appAs(ctx.store, who)).get(`/api/reports/${report}?period=MONTHLY`);
-      assert.equal(res.status, 200, `${who} ${report}`);
-      assert.equal(res.headers['cache-control'], 'no-store');
-      noMarker(res.text, 'report');
-      assert.doesNotMatch(res.text, /referralId|submissionId|participant|contact/i);
+    for (const report of ['total-referrals', 'timing-metrics', 'referral-activity']) {
+      for (const who of [ADMIN, CREATOR, RECEIVER, OTHER]) {
+        const res = await request(appAs(ctx.store, who)).get(`/api/reports/${report}?period=MONTHLY`);
+        assert.equal(res.status, 200, `${report} ${who}`);
+        assert.equal(res.headers['cache-control'], 'no-store');
+        noMarker(res.text, 'report');
+        assert.doesNotMatch(res.text, /referralId|submissionId|participant|contact/i);
+      }
     }
   });
 
