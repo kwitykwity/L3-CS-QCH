@@ -1,7 +1,12 @@
 // GET /api/reports/total-referrals?period=&date=&programId=&departmentId=
+// GET /api/reports/timing-metrics?period=&date=&programId=&departmentId=
+//   200 { metric: "TIMING", cohortSize, unit: "MILLISECONDS",
+//         timeToFirstResponse:   { status, qualifyingCount, pendingCount, averageMs, medianMs },
+//         timeToRecordedService: { status, qualifyingCount, pendingCount, averageMs, medianMs },
+//         period, scope, partial, asOf }   status "N/A" when nothing qualifies
 //   period: WEEKLY | MONTHLY | QUARTERLY | YEARLY (required)
-//   date: YYYY-MM-DD, no later than today in New York (default: today,
-//         America/New_York)
+//   date: YYYY-MM-DD, from 2000-01-01 to today in New York (default:
+//         today, America/New_York)
 //   programId | departmentId: optional scope, not both
 // 200 { metric, value, period, scope, partial, asOf } - aggregate only.
 //
@@ -9,8 +14,9 @@
 //   Same query rules. Card 12: summary, Program and Department breakdowns
 //   (made, received, accepted, not appropriate, awaiting, resulted in
 //   service, and their rates).
-// Both reports use one date rule (resolveReportDay): a date after today in
-// New York, or before 2000-01-01, is a 400 on `date`.
+// All three reports share one setup step (resolveReportQuery) and one date
+// rule (resolveReportDay): a date after today in New York, or before
+// 2000-01-01, is a 400 on `date`.
 // 200 { metric, period, scope, summary, programs, departments, partial, asOf }
 //
 // Any signed-in user may view aggregate reporting (PRD 3.5, 3.6). Identity
@@ -79,6 +85,10 @@ export function createReportingRouter({ store, resolveIdentity, now }) {
 
   router.get('/total-referrals', async (req, res) => {
     res.json(await service.getTotalReferrals(readQuery(req.query)));
+  });
+
+  router.get('/timing-metrics', async (req, res) => {
+    res.json(await service.getTimingMetrics(readQuery(req.query)));
   });
 
   router.get('/referral-activity', async (req, res) => {

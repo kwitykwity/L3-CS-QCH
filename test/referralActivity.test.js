@@ -302,51 +302,56 @@ describe('one consistent result (PRD 12.7)', () => {
   });
 });
 
-describe('one date rule for every report (both endpoints, HTTP)', () => {
+// Every report endpoint. All three share resolveReportQuery, so each must
+// accept and refuse exactly the same dates.
+const REPORTS = ['total-referrals', 'timing-metrics', 'referral-activity'];
+const all = (value) => REPORTS.map(() => value);
+
+describe('one date rule for every report (all three endpoints, HTTP)', () => {
   const appAt = (store, nowIso) => createApp({
     referralStore: store, affiliationStore: store, resolveIdentity: () => ({ userId: A }), nodeEnv: 'test', now: () => new Date(nowIso),
   });
   const statuses = async (store, nowIso, query) => {
     const app = appAt(store, nowIso);
     const out = [];
-    for (const report of ['total-referrals', 'referral-activity']) {
+    for (const report of REPORTS) {
       const res = await request(app).get(`/api/reports/${report}`).query(query);
       out.push(res.status === 400 ? `400 ${res.body.fields}` : res.status);
     }
     return out;
   };
 
-  test('a future date inside an already-started period is refused by both', async () => {
+  test('a future date inside an already-started period is refused by every report', async () => {
     const { store } = await seeded();
     // Oct 20 noon EDT: October has started, but Oct 21 is still in the future.
-    assert.deepEqual(await statuses(store, '2026-10-20T16:00:00.000Z', { period: 'MONTHLY', date: '2026-10-21' }), ['400 date', '400 date']);
-    assert.deepEqual(await statuses(store, '2026-10-20T16:00:00.000Z', { period: 'MONTHLY', date: '2026-10-20' }), [200, 200]);
-    assert.deepEqual(await statuses(store, '2026-10-20T16:00:00.000Z', { period: 'YEARLY', date: '2027-01-01' }), ['400 date', '400 date']);
+    assert.deepEqual(await statuses(store, '2026-10-20T16:00:00.000Z', { period: 'MONTHLY', date: '2026-10-21' }), all('400 date'));
+    assert.deepEqual(await statuses(store, '2026-10-20T16:00:00.000Z', { period: 'MONTHLY', date: '2026-10-20' }), all(200));
+    assert.deepEqual(await statuses(store, '2026-10-20T16:00:00.000Z', { period: 'YEARLY', date: '2027-01-01' }), all('400 date'));
   });
 
   test('New York midnight in EDT: 11:59 PM on Oct 20 is still Oct 20, even though UTC says Oct 21', async () => {
     const { store } = await seeded();
     const late = '2026-10-21T03:59:59.000Z'; // Oct 20 23:59:59 EDT
-    assert.deepEqual(await statuses(store, late, { period: 'WEEKLY', date: '2026-10-20' }), [200, 200]);
-    assert.deepEqual(await statuses(store, late, { period: 'WEEKLY', date: '2026-10-21' }), ['400 date', '400 date']);
+    assert.deepEqual(await statuses(store, late, { period: 'WEEKLY', date: '2026-10-20' }), all(200));
+    assert.deepEqual(await statuses(store, late, { period: 'WEEKLY', date: '2026-10-21' }), all('400 date'));
     const midnight = '2026-10-21T04:00:00.000Z'; // Oct 21 00:00:00 EDT
-    assert.deepEqual(await statuses(store, midnight, { period: 'WEEKLY', date: '2026-10-21' }), [200, 200]);
+    assert.deepEqual(await statuses(store, midnight, { period: 'WEEKLY', date: '2026-10-21' }), all(200));
   });
 
   test('New York midnight in EST (after the clocks change): the boundary moves to 05:00 UTC', async () => {
     const { store } = await seeded();
     const late = '2026-12-01T04:59:59.000Z'; // Nov 30 23:59:59 EST
-    assert.deepEqual(await statuses(store, late, { period: 'MONTHLY', date: '2026-11-30' }), [200, 200]);
-    assert.deepEqual(await statuses(store, late, { period: 'MONTHLY', date: '2026-12-01' }), ['400 date', '400 date']);
+    assert.deepEqual(await statuses(store, late, { period: 'MONTHLY', date: '2026-11-30' }), all(200));
+    assert.deepEqual(await statuses(store, late, { period: 'MONTHLY', date: '2026-12-01' }), all('400 date'));
     const midnight = '2026-12-01T05:00:00.000Z'; // Dec 1 00:00:00 EST
-    assert.deepEqual(await statuses(store, midnight, { period: 'MONTHLY', date: '2026-12-01' }), [200, 200]);
+    assert.deepEqual(await statuses(store, midnight, { period: 'MONTHLY', date: '2026-12-01' }), all(200));
   });
 
-  test('dates before 2000 are refused by both; no date means today', async () => {
+  test('dates before 2000 are refused by every report; no date means today', async () => {
     const { store } = await seeded();
-    assert.deepEqual(await statuses(store, NOW, { period: 'YEARLY', date: '1999-12-31' }), ['400 date', '400 date']);
-    assert.deepEqual(await statuses(store, NOW, { period: 'YEARLY', date: '2000-01-01' }), [200, 200]);
-    assert.deepEqual(await statuses(store, NOW, { period: 'MONTHLY' }), [200, 200]);
+    assert.deepEqual(await statuses(store, NOW, { period: 'YEARLY', date: '1999-12-31' }), all('400 date'));
+    assert.deepEqual(await statuses(store, NOW, { period: 'YEARLY', date: '2000-01-01' }), all(200));
+    assert.deepEqual(await statuses(store, NOW, { period: 'MONTHLY' }), all(200));
   });
 });
 

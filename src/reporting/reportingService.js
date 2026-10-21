@@ -4,6 +4,7 @@
 
 import { referralErrors } from '../referrals/errors.js';
 import { PERIOD_TYPES, REPORTING_TIME_ZONE, periodContaining, localDateOf, parseDateText, isoDate } from './periods.js';
+import { computeTimingMetrics } from './timingMetrics.js';
 
 // Reporting starts at this date; earlier dates are refused (QCH Connect
 // has no data before it, and it keeps date math in a safe range).
@@ -15,8 +16,9 @@ const dayNumber = ({ year, month, day }) => Date.UTC(year, month - 1, day);
 // the local (America/New_York) calendar date to report on: the given date,
 // or today. Refuses, as 400 INVALID_REQUEST on `date`:
 // - a date after today in New York. A future date is not evidence of zero
-//   activity, even when its period has already started. Compares New York
-//   calendar dates, never the UTC date.
+//   activity, and a timing report for it would only be "N/A", even when its
+//   period has already started. Compares New York calendar dates, never
+//   the UTC date.
 // - a date before EARLIEST_REPORT_DATE.
 export function resolveReportDay(date, asOf) {
   const today = localDateOf(asOf);
@@ -27,7 +29,40 @@ export function resolveReportDay(date, asOf) {
   return day;
 }
 
+// Shared by EVERY report (Total Referrals, Timing Metrics, Referral
+// Activity), so they can't drift apart: validates the period, applies the
+// one date rule, resolves the period, checks the scope, and builds the
+// response context ("data as of"). All of it happens before any referral
+// data is read.
+export async function resolveReportQuery(store, asOf, { periodType, date, programId, departmentId }) {
+  if (!PERIOD_TYPES.includes(periodType)) throw referralErrors.invalidRequest(['period']);
+  const day = resolveReportDay(date, asOf);
+  const period = periodContaining(periodType, day);
+  // An unknown Program or Department is "Unknown", not "Zero" (PRD 12.6).
+  if (programId !== undefined && !(await store.getProgram(programId))) throw referralErrors.invalidRequest(['programId']);
+  if (departmentId !== undefined && !(await store.getDepartment(departmentId))) throw referralErrors.invalidRequest(['departmentId']);
+  return {
+    cohort: { from: period.start.toISOString(), to: period.end.toISOString(), programId, departmentId },
+    context: {
+      period: {
+        type: period.periodType,
+        label: period.label,
+        start: period.startDate,
+        endExclusive: period.endDate,
+        timeZone: REPORTING_TIME_ZONE,
+      },
+      scope: programId !== undefined ? { type: 'PROGRAM', programId }
+        : departmentId !== undefined ? { type: 'DEPARTMENT', departmentId }
+          : { type: 'ORGANIZATION' },
+      partial: asOf < period.end,
+      asOf: asOf.toISOString(),
+    },
+  };
+}
+
 export function createReportingService({ store, now = () => new Date() }) {
+  const resolve = (query) => resolveReportQuery(store, now(), query);
+
   return {
     // Total Referrals (PRD 12.4): committed referrals whose ORIGINAL
     // submission timestamp falls in the period and the aggregate scope,
@@ -40,40 +75,21 @@ export function createReportingService({ store, now = () => new Date() }) {
     // or Department is given; then it is referrals MADE OR RECEIVED by that
     // Program/Department, counted once. Department scope uses the
     // Department stored on the referral at creation (historical context).
-    async getTotalReferrals({ periodType, date, programId, departmentId }) {
-      if (!PERIOD_TYPES.includes(periodType)) throw referralErrors.invalidRequest(['period']);
-      const asOf = now();
-      const day = resolveReportDay(date, asOf);
-      const period = periodContaining(periodType, day);
+    async getTotalReferrals(query) {
+      const { cohort, context } = await resolve(query);
+      return { metric: 'TOTAL_REFERRALS', value: await store.countReferrals(cohort), ...context };
+    },
 
-      // An unknown Program or Department is "Unknown", not "Zero" (PRD 12.6).
-      if (programId !== undefined && !(await store.getProgram(programId))) throw referralErrors.invalidRequest(['programId']);
-      if (departmentId !== undefined && !(await store.getDepartment(departmentId))) throw referralErrors.invalidRequest(['departmentId']);
-
-      const totalReferrals = await store.countReferrals({
-        from: period.start.toISOString(),
-        to: period.end.toISOString(),
-        programId,
-        departmentId,
-      });
-
-      return {
-        metric: 'TOTAL_REFERRALS',
-        value: totalReferrals,
-        period: {
-          type: period.periodType,
-          label: period.label,
-          start: period.startDate,
-          endExclusive: period.endDate,
-          timeZone: REPORTING_TIME_ZONE,
-        },
-        scope: programId !== undefined ? { type: 'PROGRAM', programId }
-          : departmentId !== undefined ? { type: 'DEPARTMENT', departmentId }
-            : { type: 'ORGANIZATION' },
-        // Partial period: "data as of" (wireframes).
-        partial: asOf < period.end,
-        asOf: asOf.toISOString(),
-      };
+    // Time to First Response; Average and Median Time to Recorded Service
+    // (PRD 12.3, 12.4; card 13). Same cohort and scope as Total Referrals:
+    // referrals CREATED in the period, so a later response or outcome
+    // matures its original cohort and never moves it (PRD 12.4). Durations
+    // in milliseconds; "N/A" when nothing qualifies. See timingMetrics.js
+    // for the definitions and the decisions awaiting confirmation.
+    async getTimingMetrics(query) {
+      const { cohort, context } = await resolve(query);
+      const facts = await store.listTimingFacts(cohort);
+      return { metric: 'TIMING', ...computeTimingMetrics(facts), ...context };
     },
   };
 }

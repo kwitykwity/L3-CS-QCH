@@ -25,14 +25,12 @@
 //   NO_DATA     when there is nothing to calculate from.
 // A rate never shows 0% for "nothing decided yet" (PRD 12.4 "N/A").
 // A date after today is refused rather than reported as zero
-// (resolveReportDay, shared with Total Referrals).
+// (resolveReportQuery, shared by every report).
 //
 // Aggregate only: counts, rates, and Program/Department names. Never
 // referral IDs, participant data, or anything per person (PRD 12.1, 12.7).
 
-import { referralErrors } from '../referrals/errors.js';
-import { REPORTING_TIME_ZONE, periodContaining } from './periods.js';
-import { resolveReportDay } from './reportingService.js';
+import { resolveReportQuery } from './reportingService.js';
 
 const RECEIVED_KEYS = ['accepted', 'notAppropriate', 'awaiting', 'resultedInService', 'didNotResultInService', 'acceptedNotRecorded'];
 
@@ -81,23 +79,12 @@ export function createReferralActivityService({ store, now = () => new Date() })
   return {
     // query: { periodType, date?, programId?, departmentId? }, already
     // shape-checked by the route (same query as total-referrals).
-    async getReferralActivity({ periodType, date, programId, departmentId }) {
-      const asOf = now();
-      // Same date rule as Total Referrals: no date after today (New York)
-      // and none before 2000 (PRD 12.6).
-      const day = resolveReportDay(date, asOf);
-      const period = periodContaining(periodType, day);
-
-      // Unknown scope is "Unknown", not zero (PRD 12.6).
-      if (programId !== undefined && !(await store.getProgram(programId))) throw referralErrors.invalidRequest(['programId']);
-      if (departmentId !== undefined && !(await store.getDepartment(departmentId))) throw referralErrors.invalidRequest(['departmentId']);
-
-      const { totalReferrals, rows } = await store.aggregateReferrals({
-        from: period.start.toISOString(),
-        to: period.end.toISOString(),
-        programId,
-        departmentId,
-      });
+    async getReferralActivity(query) {
+      // The same setup every report uses: one date rule (no date after
+      // today in New York, none before 2000), period, scope check, and
+      // "data as of" (PRD 12.6).
+      const { cohort, context } = await resolveReportQuery(store, now(), query);
+      const { totalReferrals, rows } = await store.aggregateReferrals(cohort);
 
       // Programs group by Program identity (a Program that changed
       // Department is still one Program); Departments group by the
@@ -124,21 +111,10 @@ export function createReferralActivityService({ store, now = () => new Date() })
 
       return {
         metric: 'REFERRAL_ACTIVITY',
-        period: {
-          type: period.periodType,
-          label: period.label,
-          start: period.startDate,
-          endExclusive: period.endDate,
-          timeZone: REPORTING_TIME_ZONE,
-        },
-        scope: programId !== undefined ? { type: 'PROGRAM', programId }
-          : departmentId !== undefined ? { type: 'DEPARTMENT', departmentId }
-            : { type: 'ORGANIZATION' },
         summary: { totalReferrals, ...metricsFor(summary) },
         programs,
         departments,
-        partial: asOf < period.end,
-        asOf: asOf.toISOString(),
+        ...context,
       };
     },
   };
