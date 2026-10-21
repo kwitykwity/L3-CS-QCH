@@ -7,11 +7,23 @@ import { PERIOD_TYPES, REPORTING_TIME_ZONE, periodContaining, localDateOf, parse
 import { computeTimingMetrics } from './timingMetrics.js';
 
 export function createReportingService({ store, now = () => new Date() }) {
-  // Shared by every metric: the period, its scope, and "data as of".
+  // Shared by EVERY metric, so they can't drift apart: validates the
+  // period, refuses a future date, resolves the period, checks the scope,
+  // and builds the response context ("data as of"). All of it happens
+  // before any referral data is read.
   async function resolve({ periodType, date, programId, departmentId }) {
     if (!PERIOD_TYPES.includes(periodType)) throw referralErrors.invalidRequest(['period']);
     const asOf = now();
-    const period = periodContaining(periodType, date ?? localDateOf(asOf));
+    const today = localDateOf(asOf);
+    const day = date ?? today;
+    // A future reporting date is not evidence of zero activity, and a
+    // timing report for it would only be "N/A" (PRD 12.6). Compare calendar
+    // dates in New York, not the UTC calendar date.
+    if (Date.UTC(day.year, day.month - 1, day.day)
+        > Date.UTC(today.year, today.month - 1, today.day)) {
+      throw referralErrors.invalidRequest(['date']);
+    }
+    const period = periodContaining(periodType, day);
     // An unknown Program or Department is "Unknown", not "Zero" (PRD 12.6).
     if (programId !== undefined && !(await store.getProgram(programId))) throw referralErrors.invalidRequest(['programId']);
     if (departmentId !== undefined && !(await store.getDepartment(departmentId))) throw referralErrors.invalidRequest(['departmentId']);
@@ -46,47 +58,9 @@ export function createReportingService({ store, now = () => new Date() }) {
     // or Department is given; then it is referrals MADE OR RECEIVED by that
     // Program/Department, counted once. Department scope uses the
     // Department stored on the referral at creation (historical context).
-    async getTotalReferrals({ periodType, date, programId, departmentId }) {
-      if (!PERIOD_TYPES.includes(periodType)) throw referralErrors.invalidRequest(['period']);
-      const asOf = now();
-      const today = localDateOf(asOf);
-      const day = date ?? today;
-      // A future reporting date is not evidence of zero activity (PRD 12.6).
-      // Compare calendar dates in New York, not the UTC calendar date.
-      if (Date.UTC(day.year, day.month - 1, day.day)
-          > Date.UTC(today.year, today.month - 1, today.day)) {
-        throw referralErrors.invalidRequest(['date']);
-      }
-      const period = periodContaining(periodType, day);
-
-      // An unknown Program or Department is "Unknown", not "Zero" (PRD 12.6).
-      if (programId !== undefined && !(await store.getProgram(programId))) throw referralErrors.invalidRequest(['programId']);
-      if (departmentId !== undefined && !(await store.getDepartment(departmentId))) throw referralErrors.invalidRequest(['departmentId']);
-
-      const totalReferrals = await store.countReferrals({
-        from: period.start.toISOString(),
-        to: period.end.toISOString(),
-        programId,
-        departmentId,
-      });
-
-      return {
-        metric: 'TOTAL_REFERRALS',
-        value: totalReferrals,
-        period: {
-          type: period.periodType,
-          label: period.label,
-          start: period.startDate,
-          endExclusive: period.endDate,
-          timeZone: REPORTING_TIME_ZONE,
-        },
-        scope: programId !== undefined ? { type: 'PROGRAM', programId }
-          : departmentId !== undefined ? { type: 'DEPARTMENT', departmentId }
-            : { type: 'ORGANIZATION' },
-        // Partial period: "data as of" (wireframes).
-        partial: asOf < period.end,
-        asOf: asOf.toISOString(),
-      };
+    async getTotalReferrals(query) {
+      const { cohort, context } = await resolve(query);
+      return { metric: 'TOTAL_REFERRALS', value: await store.countReferrals(cohort), ...context };
     },
 
     // Time to First Response; Average and Median Time to Recorded Service

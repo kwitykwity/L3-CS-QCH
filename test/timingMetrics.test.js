@@ -350,3 +350,83 @@ describe('HTTP: GET /api/reports/timing-metrics', () => {
     }
   });
 });
+
+// PR #26 re-review: a future date must be refused for Timing Metrics too,
+// by the same shared resolver as Total Referrals, before any timing fact
+// is read (PRD 12.6). Reporting zone America/New_York: EDT (UTC-4) until
+// Nov 1, 2026, then EST (UTC-5).
+describe('HTTP: future dates are refused before reading timing facts (PRD 12.6)', () => {
+  const at = (store, nowIso) => createApp({
+    referralStore: store, affiliationStore: store,
+    resolveIdentity: () => ({ userId: A }),
+    now: () => new Date(nowIso),
+  });
+  const timing = (store, query, nowIso) => request(at(store, nowIso)).get('/api/reports/timing-metrics').query(query);
+  const watched = () => {
+    const store = build();
+    const reads = { count: 0 };
+    const original = store.listTimingFacts.bind(store);
+    store.listTimingFacts = async (...args) => { reads.count += 1; return original(...args); };
+    return { store, reads };
+  };
+
+  test('every period type refuses tomorrow, a far-future date and the largest date, without reading facts', async () => {
+    const { store, reads } = watched();
+    for (const period of ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY']) {
+      for (const date of ['2026-10-19', '2030-01-01', '9999-12-31']) {
+        const res = await timing(store, { period, date }, '2026-10-18T16:00:00.000Z'); // Oct 18, 12:00 EDT
+        assert.equal(res.status, 400, `${period} ${date}`);
+        assert.equal(res.body.code, 'INVALID_REQUEST');
+        assert.deepEqual(res.body.fields, ['date']);
+        assert.equal(res.body.timeToFirstResponse, undefined, 'no report');
+        assert.equal(res.body.timeToRecordedService, undefined, 'no report');
+        assert.equal(res.headers['cache-control'], 'no-store');
+      }
+    }
+    assert.equal(reads.count, 0, 'timing facts were never read');
+  });
+
+  test('"today" follows New York midnight, in EDT and in EST', async () => {
+    const { store, reads } = watched();
+    for (const [before, midnight, today, tomorrow] of [
+      ['2026-10-19T03:59:59.000Z', '2026-10-19T04:00:00.000Z', '2026-10-18', '2026-10-19'], // EDT
+      ['2026-12-02T04:59:59.000Z', '2026-12-02T05:00:00.000Z', '2026-12-01', '2026-12-02'], // EST
+    ]) {
+      for (const period of ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY']) {
+        const current = await timing(store, { period, date: today }, before);
+        assert.equal(current.status, 200, `${period} ${today} at ${before}`);
+        assert.equal(current.body.partial, true);
+
+        const readsBefore = reads.count;
+        const future = await timing(store, { period, date: tomorrow }, before);
+        assert.equal(future.status, 400, `${period} ${tomorrow} at ${before}`);
+        assert.deepEqual(future.body.fields, ['date']);
+        assert.equal(reads.count, readsBefore, 'refused before reading timing facts');
+
+        const arrived = await timing(store, { period, date: tomorrow }, midnight);
+        assert.equal(arrived.status, 200, `${period} ${tomorrow} at ${midnight}`);
+      }
+    }
+  });
+
+  test('with no date, "today" is the New York date (11:30 PM EDT on Oct 31 is still October)', async () => {
+    // The UTC date is already Nov 1; New York is still Oct 31.
+    const res = await timing(build(), { period: 'MONTHLY' }, '2026-11-01T03:30:00.000Z');
+    assert.equal(res.status, 200);
+    assert.equal(res.body.period.label, '2026-10');
+  });
+
+  test('Total Referrals and Timing Metrics accept and refuse exactly the same dates (one shared resolver)', async () => {
+    const store = build();
+    const nowIso = '2026-12-02T04:59:59.000Z'; // Dec 1, 23:59:59 EST
+    for (const period of ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY']) {
+      for (const date of ['2026-07-01', '2026-12-01', '2026-12-02', '2027-01-01', '2026-02-30', 'tomorrow']) {
+        const a = await request(at(store, nowIso)).get('/api/reports/total-referrals').query({ period, date });
+        const b = await timing(store, { period, date }, nowIso);
+        assert.equal(a.status, b.status, `${period} ${date}`);
+        assert.deepEqual(a.body.fields, b.body.fields, `${period} ${date}`);
+        if (a.status === 200) assert.deepEqual(a.body.period, b.body.period);
+      }
+    }
+  });
+});
