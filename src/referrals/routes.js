@@ -1,11 +1,16 @@
-// HTTP routes for Direct Referral creation.
+// HTTP routes for referral creation (Direct and GPME-assisted) and reads.
 //
 //   POST /api/referrals
 //       body: { submissionId, receivingProgramId, referringProgramId?,
 //               participantName, contactMethod, contactValue?,
-//               participantZip?, referralContext, notes? }
+//               participantZip?, referralContext, notes?,
+//               gpme?: { needCategoryIds, ageRange?, participantZip? } }
 //       201 { status: "RECEIVED", referral }          new referral committed
 //       200 { status: "ALREADY_RECEIVED", referral }  same Submission ID retried
+//       With `gpme` (GPME-assisted, card 11) the server re-runs matching
+//       and saves source GPME_ASSISTED, or answers (nothing saved):
+//       409 GPME_RESULT_CHANGED  the Program is no longer in the results
+//       503 GPME_UNAVAILABLE     matching could not be re-run
 //
 //   GET /api/referrals/submissions/:submissionId
 //       Safe check after an unconfirmed submission (PRD 7.4).
@@ -123,6 +128,7 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
   router.use(express.json({ limit: MAX_BODY_BYTES }));
 
   router.post('/', async (req, res) => {
+    readQuery(req.query, []);
     const result = await service.createDirectReferral(req.userId, req.body, {
       correlationId: req.correlationId,
     });
@@ -130,6 +136,7 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
   });
 
   router.get('/submissions/:submissionId', async (req, res) => {
+    readQuery(req.query, []);
     res.json(await service.checkSubmission(req.userId, req.params.submissionId));
   });
 

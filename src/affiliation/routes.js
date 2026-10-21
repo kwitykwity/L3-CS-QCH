@@ -51,6 +51,13 @@ export function createAffiliationRouter({ store, resolveIdentity }) {
     next();
   });
 
+  // None of these routes takes query parameters. Anything there is refused
+  // with a fixed error that never repeats the parameter (PRD 10.3, 10.4).
+  router.use(OWN_PATHS, (req, res, next) => {
+    if (Object.keys(req.query).length > 0) return next(errors.invalidRequest());
+    next();
+  });
+
   // Small bound: the only accepted body is { programId, version } (PRD 10.7).
   router.use(OWN_PATHS, express.json({ limit: '1kb' }));
 
