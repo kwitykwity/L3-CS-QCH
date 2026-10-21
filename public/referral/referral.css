@@ -6,7 +6,8 @@
   --card: #ffffff;
   --text: #1a1d21;
   --muted: #545e68;
-  --border: #c9cfd6;
+  --border: #c9cfd6;        /* panels and dividers (decorative) */
+  --control-border: #78828b; /* edges of inputs and controls: 3:1 or more on card, page and focus backgrounds (WCAG 1.4.11) */
   --primary: #1f4f99;
   --primary-text: #ffffff;
   --error: #a4231b;
@@ -25,6 +26,7 @@
     --text: #e8eaed;
     --muted: #a6b0ba;
     --border: #47505a;
+    --control-border: #7a8590;
     --primary: #8fb4f2;
     --primary-text: #0f1724;
     --error: #ff8a80;
@@ -43,6 +45,9 @@ body {
   color: var(--text);
   font: 1rem/1.5 system-ui, -apple-system, "Segoe UI", sans-serif;
 }
+
+/* Links follow the theme; the browser default blue fails on the dark card. */
+a { color: var(--primary); }
 
 .skip-link {
   position: absolute;
@@ -68,7 +73,7 @@ body {
 .text-size__btn {
   min-width: 2.5rem;
   padding: 0.25rem 0.5rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: 0.375rem;
   background: var(--card);
   color: var(--text);
@@ -108,7 +113,7 @@ label, legend { display: block; font-weight: 600; margin-bottom: 0.25rem; }
 input[type="text"], input[type="search"], input[type="tel"], input[type="email"], select, textarea {
   width: 100%;
   padding: 0.5rem 0.625rem;
-  border: 1px solid var(--border);
+  border: 1px solid var(--control-border);
   border-radius: 0.375rem;
   background: var(--card);
   color: var(--text);
