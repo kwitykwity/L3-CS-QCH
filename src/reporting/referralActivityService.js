@@ -24,17 +24,15 @@
 //               (awaiting a response, or accepted with no outcome yet),
 //   NO_DATA     when there is nothing to calculate from.
 // A rate never shows 0% for "nothing decided yet" (PRD 12.4 "N/A").
-// A period that has not started is refused rather than reported as zero.
+// A date after today is refused rather than reported as zero
+// (resolveReportDay, shared with Total Referrals).
 //
 // Aggregate only: counts, rates, and Program/Department names. Never
 // referral IDs, participant data, or anything per person (PRD 12.1, 12.7).
 
 import { referralErrors } from '../referrals/errors.js';
-import { REPORTING_TIME_ZONE, localDateOf, periodContaining } from './periods.js';
-
-// Reporting starts at this date; earlier dates are refused (QCH Connect
-// has no data before it, and it keeps date math in a safe range).
-export const EARLIEST_REPORT_DATE = Object.freeze({ year: 2000, month: 1, day: 1 });
+import { REPORTING_TIME_ZONE, periodContaining } from './periods.js';
+import { resolveReportDay } from './reportingService.js';
 
 const RECEIVED_KEYS = ['accepted', 'notAppropriate', 'awaiting', 'resultedInService', 'didNotResultInService', 'acceptedNotRecorded'];
 
@@ -74,8 +72,6 @@ export function metricsFor(c) {
   };
 }
 
-const before = (a, b) => a.year * 10000 + a.month * 100 + a.day < b.year * 10000 + b.month * 100 + b.day;
-
 export function createReferralActivityService({ store, now = () => new Date() }) {
   async function nameOf(kind, id) {
     const row = kind === 'program' ? await store.getProgram(id) : await store.getDepartment(id);
@@ -87,11 +83,10 @@ export function createReferralActivityService({ store, now = () => new Date() })
     // shape-checked by the route (same query as total-referrals).
     async getReferralActivity({ periodType, date, programId, departmentId }) {
       const asOf = now();
-      const day = date ?? localDateOf(asOf);
-      if (before(day, EARLIEST_REPORT_DATE)) throw referralErrors.invalidRequest(['date']);
+      // Same date rule as Total Referrals: no date after today (New York)
+      // and none before 2000 (PRD 12.6).
+      const day = resolveReportDay(date, asOf);
       const period = periodContaining(periodType, day);
-      // Not started yet: there is nothing to report, and 0 would read as "Zero".
-      if (period.start > asOf) throw referralErrors.invalidRequest(['date']);
 
       // Unknown scope is "Unknown", not zero (PRD 12.6).
       if (programId !== undefined && !(await store.getProgram(programId))) throw referralErrors.invalidRequest(['programId']);

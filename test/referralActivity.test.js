@@ -1,11 +1,10 @@
 // Referral activity report (Trello card 12, PRD 12.3, 12.4, 12.6, 12.7).
 // Replaces PR #29. All data is SYNTHETIC.
 //
-// Every referral below is created and answered through the real services,
-// and every expected number was worked out by hand from the PRD 12.4
-// definitions, not by running the code under test. Service outcomes and
-// corrections use the store's _setReferralState test helper until the
-// Service Outcome card (#14) merges.
+// Every referral below is created, answered, given an outcome, and
+// corrected through the real services (card 7 responses, card 8 outcomes
+// and corrections), and every expected number was worked out by hand from
+// the PRD 12.4 definitions, not by running the code under test.
 //
 // Programs: 10 (Dept 1), 11 (Dept 2), 12 (Dept 2).
 // Report: MONTHLY, October 2026 (America/New_York), viewed Oct 20, 2026.
@@ -28,6 +27,8 @@ import { createApp } from '../src/app.js';
 import { createMemoryReferralStore } from '../src/referrals/memoryReferralStore.js';
 import { createReferralService } from '../src/referrals/referralService.js';
 import { createResponseService } from '../src/referrals/responseService.js';
+import { createOutcomeService } from '../src/referrals/outcomeService.js';
+import { createReferralQueryService } from '../src/referrals/referralQueryService.js';
 import { createReferralActivityService, ratio } from '../src/reporting/referralActivityService.js';
 
 const A = 100; // affiliated with Program 10
@@ -61,7 +62,9 @@ function build() {
       { userId: R10, isActive: true }, { userId: R11, isActive: true }, { userId: R12, isActive: true },
     ],
     grants: [
-      ...[[R10, 10], [R11, 11], [R12, 12]].flatMap(([u, p]) => [g(u, 'VIEW_RECEIVED_REFERRAL', p), g(u, 'RESPOND_TO_REFERRAL', p)]),
+      ...[[R10, 10], [R11, 11], [R12, 12]].flatMap(([u, p]) => [
+        'VIEW_RECEIVED_REFERRAL', 'RESPOND_TO_REFERRAL', 'RECORD_OUTCOME', 'CORRECT_OUTCOME', 'UPDATE_RECEIVED_REFERRAL',
+      ].map((permission) => g(u, permission, p))),
     ],
     notAppropriateReasons: [{ reasonId: 1, code: 'PROGRAM_CRITERIA_NOT_MET', label: 'Program criteria not met', displayOrder: 1 }],
   }, { now: () => clock });
@@ -83,8 +86,14 @@ async function send(store, isoUtc, userId, to, decision = null, outcome = null) 
     await createResponseService({ store }).respond(RECEIVER[to], referral.referralId,
       decision === 'ACCEPTED' ? { decision } : { decision, reasonId: 1 });
   }
-  if (outcome) store._setReferralState(referral.referralId, { serviceOutcome: outcome });
+  if (outcome) await createOutcomeService({ store }).recordOutcome(RECEIVER[to], referral.referralId, { outcome });
   return referral.referralId;
+}
+
+// The current version of a referral, as its receiving Program sees it.
+async function versionOf(store, referralId, receivingProgramId) {
+  const { referral } = await createReferralQueryService({ store }).getReferral(RECEIVER[receivingProgramId], referralId);
+  return referral.version;
 }
 
 async function seeded() {
@@ -205,12 +214,38 @@ describe('history and corrections (PRD 12.4)', () => {
     assert.deepEqual(r.departments.map((d) => [d.departmentId, d.made]), [[1, 4], [2, 4]]);
   });
 
-  test('a decision correction changes current-state counts but never moves the referral out of its period', async () => {
+  test('a decision correction (real card 8 service) changes current-state counts but never moves the referral out of its period', async () => {
     const { store, ids } = await seeded();
-    store._setReferralState(ids[2], { decision: 'NOT_APPROPRIATE', notAppropriateReasonId: 1 }); // #3 corrected
+    // #3 (Accepted, no outcome) is corrected to Not Appropriate, weeks later.
+    clock = new Date(NOW);
+    await createOutcomeService({ store }).correctResponse(R11, ids[2],
+      { decision: 'NOT_APPROPRIATE', reasonId: 1, version: await versionOf(store, ids[2], 11) });
     const r = await service(store).getReferralActivity(october());
     assert.deepEqual([r.summary.totalReferrals, r.summary.accepted, r.summary.notAppropriate], [7, 2, 3]);
     assert.deepEqual(r.summary.acceptanceRate, calc(2, 5, 40));
+  });
+});
+
+describe('outcome corrections (real card 8 service)', () => {
+  test('correcting a recorded outcome moves it between Resulted and Did Not Result', async () => {
+    const { store, ids } = await seeded();
+    // #1 was Resulted in Service; corrected to Did Not Result in Service.
+    await createOutcomeService({ store }).correctOutcome(R11, ids[0],
+      { outcome: 'DID_NOT_RESULT_IN_SERVICE', version: await versionOf(store, ids[0], 11) });
+    const r = await service(store).getReferralActivity(october());
+    assert.deepEqual([r.summary.resultedInService, r.summary.didNotResultInService], [0, 2]);
+    assert.deepEqual(r.summary.resultedInServiceRate, calc(0, 2, 0));
+    assert.equal(r.summary.totalReferrals, 7);
+  });
+
+  test('correcting an outcome back to Not Recorded makes the rate PENDING again', async () => {
+    const store = build();
+    const id = await send(store, '2026-10-05T14:00:00.000Z', A, 11, 'ACCEPTED', 'RESULTED_IN_SERVICE');
+    clock = new Date(NOW);
+    assert.deepEqual((await service(store).getReferralActivity(october())).summary.resultedInServiceRate, calc(1, 1, 100));
+    await createOutcomeService({ store }).correctOutcome(R11, id, { outcome: 'NOT_RECORDED', version: await versionOf(store, id, 11) });
+    const after = (await service(store).getReferralActivity(october())).summary.resultedInServiceRate;
+    assert.deepEqual(after, { numerator: 0, denominator: 0, value: null, state: 'PENDING' });
   });
 });
 
@@ -264,6 +299,54 @@ describe('one consistent result (PRD 12.7)', () => {
       assert.equal(r.programs.reduce((n, p) => n + p[key], 0), r.summary[key], key);
       assert.equal(r.departments.reduce((n, d) => n + d[key], 0), r.summary[key], key);
     }
+  });
+});
+
+describe('one date rule for every report (both endpoints, HTTP)', () => {
+  const appAt = (store, nowIso) => createApp({
+    referralStore: store, affiliationStore: store, resolveIdentity: () => ({ userId: A }), nodeEnv: 'test', now: () => new Date(nowIso),
+  });
+  const statuses = async (store, nowIso, query) => {
+    const app = appAt(store, nowIso);
+    const out = [];
+    for (const report of ['total-referrals', 'referral-activity']) {
+      const res = await request(app).get(`/api/reports/${report}`).query(query);
+      out.push(res.status === 400 ? `400 ${res.body.fields}` : res.status);
+    }
+    return out;
+  };
+
+  test('a future date inside an already-started period is refused by both', async () => {
+    const { store } = await seeded();
+    // Oct 20 noon EDT: October has started, but Oct 21 is still in the future.
+    assert.deepEqual(await statuses(store, '2026-10-20T16:00:00.000Z', { period: 'MONTHLY', date: '2026-10-21' }), ['400 date', '400 date']);
+    assert.deepEqual(await statuses(store, '2026-10-20T16:00:00.000Z', { period: 'MONTHLY', date: '2026-10-20' }), [200, 200]);
+    assert.deepEqual(await statuses(store, '2026-10-20T16:00:00.000Z', { period: 'YEARLY', date: '2027-01-01' }), ['400 date', '400 date']);
+  });
+
+  test('New York midnight in EDT: 11:59 PM on Oct 20 is still Oct 20, even though UTC says Oct 21', async () => {
+    const { store } = await seeded();
+    const late = '2026-10-21T03:59:59.000Z'; // Oct 20 23:59:59 EDT
+    assert.deepEqual(await statuses(store, late, { period: 'WEEKLY', date: '2026-10-20' }), [200, 200]);
+    assert.deepEqual(await statuses(store, late, { period: 'WEEKLY', date: '2026-10-21' }), ['400 date', '400 date']);
+    const midnight = '2026-10-21T04:00:00.000Z'; // Oct 21 00:00:00 EDT
+    assert.deepEqual(await statuses(store, midnight, { period: 'WEEKLY', date: '2026-10-21' }), [200, 200]);
+  });
+
+  test('New York midnight in EST (after the clocks change): the boundary moves to 05:00 UTC', async () => {
+    const { store } = await seeded();
+    const late = '2026-12-01T04:59:59.000Z'; // Nov 30 23:59:59 EST
+    assert.deepEqual(await statuses(store, late, { period: 'MONTHLY', date: '2026-11-30' }), [200, 200]);
+    assert.deepEqual(await statuses(store, late, { period: 'MONTHLY', date: '2026-12-01' }), ['400 date', '400 date']);
+    const midnight = '2026-12-01T05:00:00.000Z'; // Dec 1 00:00:00 EST
+    assert.deepEqual(await statuses(store, midnight, { period: 'MONTHLY', date: '2026-12-01' }), [200, 200]);
+  });
+
+  test('dates before 2000 are refused by both; no date means today', async () => {
+    const { store } = await seeded();
+    assert.deepEqual(await statuses(store, NOW, { period: 'YEARLY', date: '1999-12-31' }), ['400 date', '400 date']);
+    assert.deepEqual(await statuses(store, NOW, { period: 'YEARLY', date: '2000-01-01' }), [200, 200]);
+    assert.deepEqual(await statuses(store, NOW, { period: 'MONTHLY' }), [200, 200]);
   });
 });
 

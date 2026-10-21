@@ -358,8 +358,11 @@ awaiting response, resulted in service, and the rates from PRD 12.4.
   could still be), or `NO_DATA`. Never 0% for "nothing decided yet".
 - **History:** Programs group by Program identity; Departments group by the
   Department each Program had when the referral was created.
-- A period that hasn't started, or a date before 2000-01-01, is refused.
-- Service outcomes come from the Service Outcome card (#14).
+- **One date rule for every report** (`resolveReportDay`): a date after
+  today in New York, or before 2000-01-01, is a 400 on `date`, for both
+  Total Referrals and Referral activity.
+- Responses, outcomes, and corrections come from cards 7 and 8; the tests
+  use those real services.
 
 ## Deployment and handoff
 

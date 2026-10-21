@@ -837,7 +837,9 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     //                   WHERE created_at >= @from AND created_at < @to)
     //   SELECT 'TOTAL' AS role, NULL AS program_id, NULL AS department_id,
     //          COUNT(*) AS referral_count, 0, 0, 0, 0, 0, 0
-    //     FROM cohort [WHERE referring_program_id = @p OR receiving_program_id = @p]
+    //     FROM cohort
+    //     [WHERE referring_program_id = @p OR receiving_program_id = @p]         -- Program scope
+    //     [WHERE referring_department_id = @d OR receiving_department_id = @d]   -- Department scope
     //   UNION ALL
     //   SELECT 'RECEIVED', receiving_program_id, receiving_department_id, COUNT(*),
     //          SUM(CASE WHEN decision = 'ACCEPTED' THEN 1 ELSE 0 END),

@@ -5,6 +5,28 @@
 import { referralErrors } from '../referrals/errors.js';
 import { PERIOD_TYPES, REPORTING_TIME_ZONE, periodContaining, localDateOf, parseDateText, isoDate } from './periods.js';
 
+// Reporting starts at this date; earlier dates are refused (QCH Connect
+// has no data before it, and it keeps date math in a safe range).
+export const EARLIEST_REPORT_DATE = Object.freeze({ year: 2000, month: 1, day: 1 });
+
+const dayNumber = ({ year, month, day }) => Date.UTC(year, month - 1, day);
+
+// The one reporting-date rule every report uses (PRD 12.2, 12.6). Returns
+// the local (America/New_York) calendar date to report on: the given date,
+// or today. Refuses, as 400 INVALID_REQUEST on `date`:
+// - a date after today in New York. A future date is not evidence of zero
+//   activity, even when its period has already started. Compares New York
+//   calendar dates, never the UTC date.
+// - a date before EARLIEST_REPORT_DATE.
+export function resolveReportDay(date, asOf) {
+  const today = localDateOf(asOf);
+  const day = date ?? today;
+  if (dayNumber(day) > dayNumber(today) || dayNumber(day) < dayNumber(EARLIEST_REPORT_DATE)) {
+    throw referralErrors.invalidRequest(['date']);
+  }
+  return day;
+}
+
 export function createReportingService({ store, now = () => new Date() }) {
   return {
     // Total Referrals (PRD 12.4): committed referrals whose ORIGINAL
@@ -21,14 +43,7 @@ export function createReportingService({ store, now = () => new Date() }) {
     async getTotalReferrals({ periodType, date, programId, departmentId }) {
       if (!PERIOD_TYPES.includes(periodType)) throw referralErrors.invalidRequest(['period']);
       const asOf = now();
-      const today = localDateOf(asOf);
-      const day = date ?? today;
-      // A future reporting date is not evidence of zero activity (PRD 12.6).
-      // Compare calendar dates in New York, not the UTC calendar date.
-      if (Date.UTC(day.year, day.month - 1, day.day)
-          > Date.UTC(today.year, today.month - 1, today.day)) {
-        throw referralErrors.invalidRequest(['date']);
-      }
+      const day = resolveReportDay(date, asOf);
       const period = periodContaining(periodType, day);
 
       // An unknown Program or Department is "Unknown", not "Zero" (PRD 12.6).

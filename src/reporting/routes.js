@@ -8,8 +8,9 @@
 // GET /api/reports/referral-activity?period=&date=&programId=&departmentId=
 //   Same query rules. Card 12: summary, Program and Department breakdowns
 //   (made, received, accepted, not appropriate, awaiting, resulted in
-//   service, and their rates). A period that has not started, or a date
-//   before 2000-01-01, is a 400 on `date`.
+//   service, and their rates).
+// Both reports use one date rule (resolveReportDay): a date after today in
+// New York, or before 2000-01-01, is a 400 on `date`.
 // 200 { metric, period, scope, summary, programs, departments, partial, asOf }
 //
 // Any signed-in user may view aggregate reporting (PRD 3.5, 3.6). Identity
