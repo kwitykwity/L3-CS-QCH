@@ -18,6 +18,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 | [qch-it-requirements.md](qch-it-requirements.md) | Everything QCH IT needs to provide, and which part of the app needs it |
 | [handoff-checklist.md](handoff-checklist.md) | Every handoff deliverable, where it lives, and what it waits on |
 | [dependencies.md](dependencies.md) | Direct dependencies and how to list every license |
+| [regression-coverage.md](regression-coverage.md) | Accessibility and end-to-end regression coverage, and the manual keyboard checklist |
 
 Elsewhere in the repository:
 

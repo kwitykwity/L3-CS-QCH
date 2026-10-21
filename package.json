@@ -14,13 +14,19 @@
     "test": "node --test",
     "check-runtime": "node scripts/check-runtime.js",
     "test:runtime": "node --test test/runtime.test.js",
-    "licenses": "node scripts/list-licenses.js"
+    "licenses": "node scripts/list-licenses.js",
+    "test:e2e": "playwright test"
   },
   "dependencies": {
     "dotenv": "^18.0.7",
     "express": "^5.3.0"
   },
   "devDependencies": {
+    "@axe-core/playwright": "4.13.0",
+    "@playwright/test": "1.63.0",
     "supertest": "^7.3.1"
+  },
+  "overrides": {
+    "playwright-core": "1.63.0"
   }
 }

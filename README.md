@@ -92,6 +92,17 @@ The suite covers:
   4xx statuses, logs only safe metadata (never the error object or message),
   and closes the connection if a response had already started
 - new-referral notifications (card 15): see Notifications below
+- the accessibility and end-to-end regression suite (card 17) in
+  `test/regression/`: see [docs/regression-coverage.md](docs/regression-coverage.md),
+  which also holds the manual keyboard checklist
+
+Browser tests (card 17: keyboard, focus, text size, and an axe
+accessibility scan) run separately, because they need a browser:
+
+```bash
+npx playwright install chromium   # once per machine
+npm run test:e2e
+```
 
 ## Notifications (card 15)
 

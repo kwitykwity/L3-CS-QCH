@@ -31,3 +31,7 @@ data/private/
 *.xlsx
 *Program_Directory*
 *Program Directory*
+
+# Playwright output (card 17)
+test-results/
+playwright-report/
