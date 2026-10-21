@@ -152,6 +152,9 @@ export function createMemoryStore(
       user.isActive = isActive;
       user.rowVersion += 1;
     },
+    _setProgramDepartment(programId, departmentId) {
+      programsById.get(programId).departmentId = departmentId;
+    },
     _setDepartmentStatus(departmentId, lifecycleStatus) {
       const department = departmentsById.get(departmentId);
       department.lifecycleStatus = lifecycleStatus;

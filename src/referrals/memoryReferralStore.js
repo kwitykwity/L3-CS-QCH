@@ -46,6 +46,9 @@
 //       Written in the same transaction as the change it records. The store
 //       adds occurredAt (UTC) itself; callers never supply the timestamp.
 //
+// Reporting (card 9): countReferrals({ from, to, programId?, departmentId? }) -> number
+//   (see its comment below for the exact SQL).
+//
 // Read methods (card 6, receiving queue + authorization):
 //   getActiveGrants(userId) -> [{ permission, scopeType, programId,
 //       departmentId, grantSource, revokedAt }] from dbo.user_grants where
@@ -749,6 +752,24 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     async listReferralsByReceivingPrograms(programIds, options = {}) {
       const ids = new Set(programIds);
       return newestFirst(referrals.filter((r) => ids.has(r.receivingProgramId)), options);
+    },
+
+    // Reporting (card 9). Count of committed referrals with
+    // from <= createdAt < to (both UTC ISO strings), each counted once.
+    // Scope: none = organization; programId = referring OR receiving
+    // Program; departmentId = referring OR receiving Department as stored
+    // on the referral at creation (historical context). Never both.
+    // Azure SQL:
+    //   SELECT COUNT(*) FROM dbo.referrals
+    //   WHERE created_at >= @from AND created_at < @to
+    //     [AND (referring_program_id = @programId OR receiving_program_id = @programId)]
+    //     [AND (referring_department_id = @departmentId OR receiving_department_id = @departmentId)]
+    async countReferrals({ from, to, programId, departmentId }) {
+      return referrals.filter((r) =>
+        r.createdAt >= from && r.createdAt < to
+        && (programId === undefined || r.referringProgramId === programId || r.receivingProgramId === programId)
+        && (departmentId === undefined || r.referringDepartmentId === departmentId || r.receivingDepartmentId === departmentId),
+      ).length;
     },
 
     async listReferralsByCreator(userId, options = {}) {

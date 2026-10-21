@@ -4,6 +4,7 @@ import express from 'express';
 import { errorHandler } from './errorHandler.js';
 import { createAffiliationRouter } from './affiliation/routes.js';
 import { createReferralRouter } from './referrals/routes.js';
+import { createReportingRouter } from './reporting/routes.js';
 import { createProgramRouter } from './programs/routes.js';
 
 const publicDir = path.join(
@@ -25,7 +26,8 @@ const publicDir = path.join(
 //   it on also requires nodeEnv 'development' or 'test'; anything else,
 //   including no nodeEnv, throws at start-up (PRD 16.1, 17.4).
 // - nodeEnv: the validated NODE_ENV from loadConfig().
-export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false, nodeEnv } = {}) {
+// - now: optional clock for reporting ("data as of"); tests inject it.
+export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false, nodeEnv, now } = {}) {
   const app = express();
 
   // Don't advertise the framework or its version.
@@ -41,6 +43,8 @@ export function createApp({ affiliationStore, referralStore, resolveIdentity, al
     '/api/referrals',
     createReferralRouter({ store: referralStore, resolveIdentity, allowDemoGrants, nodeEnv }),
   );
+
+  app.use('/api/reports', createReportingRouter({ store: referralStore, resolveIdentity, now }));
 
   // Program maintenance writes need the transactional store (one Azure SQL
   // store will serve as every store in production).
