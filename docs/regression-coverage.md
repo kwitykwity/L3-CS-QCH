@@ -5,11 +5,12 @@ waits on other work. Final Technical PRD 14 (accessibility and
 interaction), 17.2 (critical end-to-end tests), 17.3 (authorization) and
 17.7 (accessibility interaction tests).
 
-**Status: first slice.** It covers Direct Referral, the receiving queue
-and response, and Program maintenance slice 14A, on `main` as of
-October 20, 2026. Each area marked *waiting* gets its journey when the
-pull request named in it merges. The same rule as the security suite
-applies: a merged workflow is not done until it has a journey here.
+**Status: first slice, against `main` at `bdfeab3` (October 21, 2026).**
+Covered: Direct Referral, the receiving queue and response, and Program
+maintenance slice 14A. The tables below separate workflows that are
+**merged but not yet covered here** from **dependencies that are not
+merged yet**. The same rule as the security suite applies: a merged
+workflow is not done until it has a journey here.
 
 ## How to run
 
@@ -29,27 +30,42 @@ stops it afterwards. To use a Chromium that is already installed, set
 | --- | --- |
 | `test/regression/journeys.test.js` | Whole workflows through the integrated app over HTTP, switching between staff members |
 | `test/regression/accessibility.test.js` | Every page in `public/`: language, title, headings, labels, ids, required fields, status announcements, text size, link colors, and color contrast in both themes |
-| `e2e/directReferral.spec.js` | In Chromium: Direct Referral completed by keyboard only, visible focus on every stop, Shift+Tab order, Enter safety, undo/redo, S/M/L/XL, phone width at XL, and an axe WCAG 2.2 AA scan of every page state in light and dark themes |
+| `e2e/directReferral.spec.js` | In Chromium: the New Referral entry screen (no path preselected; Direct Referral chosen by keyboard), Direct Referral completed by keyboard only, visible focus on every stop, Shift+Tab order, Enter safety, undo/redo, S/M/L/XL, phone width at XL, and an axe WCAG 2.2 AA scan of the entry screen and every Direct Referral state in light and dark themes |
 
 The journeys use the in-memory store. PRD 17.2 asks for the same journeys
 against Azure SQL; that waits on the Azure SQL store.
 
 ## Coverage by area
 
-| Card 17 area | Automated | Manual (checklist below) | Status |
+### Merged on `main`: covered
+
+| Area | Automated | Manual (checklist below) |
+| --- | --- | --- |
+| Direct Referral E2E (#8, #19; entry screen from #27) | Journeys 1, 4, 5, 6; `e2e/directReferral.spec.js` | Run A in a second browser |
+| Receiving lifecycle: queue and response (#10, #11) | Journeys 1, 2, 3, 6 (API; no screen yet) | None until a screen exists |
+| Program maintenance 14A: Program information and lifecycle (#21) | Journey 7: authorized edit, refusals for other roles, stale-version refusal, discontinue / reactivate, effect on new referral choices, preserved referral history, audit evidence (API; no screen yet) | None until a screen exists |
+| Keyboard workflows and focus | `e2e/` (Chromium, scripted keyboard) | Runs A and B in a second browser |
+| Labels, required fields, errors | `accessibility.test.js` (every page, including the guided-matching markup); axe in `e2e/` | Screen reader spot check |
+| Text sizing S/M/L/XL | `accessibility.test.js`; `e2e/` (computed sizes, kept work, reload) | Run C step 2 (browser zoom) |
+| Contrast (text 4.5:1, controls and focus 3:1) | `accessibility.test.js` both themes; axe in `e2e/` both themes | None |
+
+### Merged on `main`: coverage still to add here (next slice of this card)
+
+| Area | Merged in | What this suite still needs | Covered elsewhere today |
 | --- | --- | --- | --- |
-| Direct Referral E2E | Journeys 1, 4, 5, 6; `e2e/directReferral.spec.js` | Run A in a second browser | Covered |
-| Receiving lifecycle: queue and response | Journeys 1, 2, 3, 6 | No screen yet | Covered at API level |
-| Receiving lifecycle: outcome and corrections | Not yet | No screen yet | *Waiting:* #14 |
-| GPME E2E | Not yet | Run B | *Waiting:* #16, then #27 (add `e2e/gpme.spec.js` then) |
-| Program maintenance 14A: Program information and lifecycle (#21, merged) | Journey 7: authorized edit, refusals for other roles, stale-version refusal, discontinue / reactivate, effect on new referral choices, preserved referral history, audit evidence | No screen yet | Covered at API level |
-| Program maintenance 14B: configurable fields and values (#22, #24, merged) | Not yet | No screen yet | *Pending:* next slice of this card |
-| Program maintenance 14C: create / move Programs, Department lifecycle (#25, merged) | Not yet | No screen yet | *Pending:* next slice of this card |
-| P0 reporting | Not yet | No screen yet | *Waiting:* #18, #26 |
-| Keyboard workflows and focus | `e2e/` (Chromium, scripted keyboard) | Runs A and B in a second browser | Covered in Chromium |
-| Labels, required fields, errors | `accessibility.test.js`; axe in `e2e/` | Screen reader spot check | Covered |
-| Text sizing S/M/L/XL | `accessibility.test.js`; `e2e/` (computed sizes, kept work, reload) | Run C step 2 (browser zoom) | Covered |
-| Contrast (text 4.5:1, controls and focus 3:1) | `accessibility.test.js` both themes; axe in `e2e/` both themes | None | Covered |
+| GPME E2E: guided matching and GPME-assisted referral | #16, #27 | An HTTP journey (match, choose, GPME_ASSISTED referral, evaluation saved) and `e2e/gpme.spec.js` (Run B automated, axe on results / no match / failure) | `test/gpme*.test.js` per card; the card 11 browser check in #27 |
+| Receiving lifecycle: outcome and corrections | #14 | A journey through record outcome, correct outcome, correct response, stale version, audit | `test/serviceOutcome.test.js` per card |
+| Program maintenance 14B: configurable fields and values | #22, #24 | A journey | `test/programFields*.test.js` per card |
+| Program maintenance 14C: create / move Programs, Department lifecycle | #25 | A journey | `test/programOrganization.test.js` per card |
+| P0 reporting: Total Referrals | #18 | A journey that reports on referrals created by the other journeys | `test/totalReferrals.test.js` known answers |
+
+### Not merged yet (dependencies)
+
+| Area | Pull request | Then |
+| --- | --- | --- |
+| P0 reporting: Time to First Response, Time to Recorded Service | #26 | Add to the reporting journey |
+| P0 reporting: referral activity report (breadth) | #30 (replaces #29) | Add to the reporting journey |
+| Any journey against Azure SQL (PRD 17.2) | No Azure SQL store yet | Run these journeys against it |
 
 ## Fixed in this pass
 
@@ -105,7 +121,7 @@ date, browser, tester and any failure in the pull request.
 10. Type in a field, press Cmd+Z (Mac) or Ctrl+Z (Windows): the typing is
     undone. After sending, undo never brings back or resends anything.
 
-### Run B: guided matching (after #27 merges)
+### Run B: guided matching (merged in #27; automation pending, see above)
 
 1. Choose "Help me find a Program" with Enter; focus moves to "Guided
    matching".

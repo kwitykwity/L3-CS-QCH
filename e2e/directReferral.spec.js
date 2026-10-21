@@ -3,7 +3,7 @@
 // docs/regression-coverage.md, automated). SYNTHETIC data only.
 
 import { test, expect } from '@playwright/test';
-import { ensureAffiliation, expectNoAxeViolations, focusStyle, focused, tabTo } from './helpers.js';
+import { chooseDirect, ensureAffiliation, expectNoAxeViolations, focusStyle, focused, tabTo } from './helpers.js';
 
 const status = (page) => page.locator('#status .status__text');
 
@@ -33,6 +33,17 @@ test.describe('Direct Referral, keyboard only (PRD 14.2, 14.3)', () => {
       await page.keyboard.press('Enter');
       await expect(page.locator('#affiliation-view')).toBeVisible();
     }
+
+    // Entry screen (card 11): two equal paths, neither preselected. Choose
+    // Direct Referral with the keyboard; focus moves into that panel.
+    await expect(page.locator('#path-guided')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#path-direct')).toHaveAttribute('aria-pressed', 'false');
+    await expect(page.locator('#direct')).toBeHidden();
+    await tabTo(page, 'path-direct');
+    await page.keyboard.press('Enter');
+    await expect(page.locator('#path-direct')).toHaveAttribute('aria-pressed', 'true');
+    await expect(page.locator('#direct')).toBeVisible();
+    expect(await focused(page)).toBe('direct-heading');
 
     // Program: arrow keys choose within the radio group; Enter in the search box does nothing.
     await tabTo(page, 'program-search');
@@ -101,6 +112,7 @@ test.describe('Direct Referral, keyboard only (PRD 14.2, 14.3)', () => {
     await ensureAffiliation(page);
     await page.reload();
     await page.locator('#program-options input').first().waitFor({ state: 'attached' });
+    await chooseDirect(page);
     await page.locator('#program-options input').first().check();
     await page.locator('#program-continue').click();
     await page.locator('#step-details-heading').focus();
@@ -138,6 +150,7 @@ test.describe('Direct Referral, keyboard only (PRD 14.2, 14.3)', () => {
     await page.goto('/referral/');
     await ensureAffiliation(page);
     await page.reload();
+    await chooseDirect(page);
     await page.locator('#program-options input').first().check();
     await page.locator('#program-continue').click();
     await page.locator('#participantName').focus();
@@ -154,6 +167,7 @@ test.describe('text size S / M / L / XL (PRD 14.5)', () => {
     await page.goto('/referral/');
     await ensureAffiliation(page);
     await page.reload();
+    await chooseDirect(page);
     await page.locator('#program-options input').first().check();
     await page.locator('#program-continue').click();
     await page.locator('#participantName').fill('Synthetic typed work');
@@ -186,6 +200,7 @@ test.describe('text size S / M / L / XL (PRD 14.5)', () => {
     await page.locator('.text-size__btn[data-size="XL"]').click();
     await ensureAffiliation(page);
     await page.reload();
+    await chooseDirect(page);
     await page.locator('#program-options input').first().check();
     await page.locator('#program-continue').click();
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= document.documentElement.clientWidth)).toBe(true);
@@ -199,10 +214,13 @@ test.describe('automatic accessibility scan, WCAG 2.2 AA rules (axe)', () => {
       await page.emulateMedia({ colorScheme });
       await page.goto('/referral/');
       await page.locator('#program-options input').first().waitFor({ state: 'attached' });
-      await expectNoAxeViolations(page, 'program step');
+      await expectNoAxeViolations(page, 'entry screen: choose a path');
+      await chooseDirect(page);
+      await expectNoAxeViolations(page, 'Direct Referral program step');
 
       await ensureAffiliation(page);
       await page.reload();
+      await chooseDirect(page); // the reload returns to the entry screen
       await page.locator('#program-options input').first().check();
       await page.locator('#program-continue').click();
       await expectNoAxeViolations(page, 'empty form');

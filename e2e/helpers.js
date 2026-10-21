@@ -53,3 +53,12 @@ export async function ensureAffiliation(page, programId = 1) {
     });
   }, programId);
 }
+
+// The New Referral page opens on a choice between guided matching and
+// Direct Referral, with neither preselected (card 11, PRD 2.1). Tests that
+// are not about that choice use this to pick Direct Referral.
+export async function chooseDirect(page) {
+  await page.locator('#path-direct').click();
+  await expect(page.locator('#direct')).toBeVisible();
+}
+
