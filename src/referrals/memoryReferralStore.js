@@ -41,6 +41,30 @@
 //       that index) into DuplicateSubmissionError; every other constraint or
 //       database error propagates unchanged, so it is never mistaken for a
 //       safe retry.
+//
+// GPME-assisted referrals (card 11):
+//   tx.listNeedCategories(), tx.listMatchablePrograms()
+//       The same reads GPME uses (src/affiliation/memoryStore.js), inside
+//       the referral transaction, so the re-check at submission sees
+//       current Program data. In Azure SQL the receiving Program's row is
+//       already held by tx.getProgram; its matching facts (age and
+//       service-area state columns, program_service_area_zips,
+//       program need categories) should be read in the same transaction
+//       WITH (REPEATABLEREAD), so an edit to them waits until the referral
+//       commits and the saved evaluation matches what was checked.
+//   tx.insertGpmeEvaluation({ ruleVersion, results: [{ programId,
+//       displayOrder, explanation, programContext, wasSelected }] })
+//       -> evaluationId. One row in dbo.gpme_evaluations (rule_version_id
+//       looked up from dbo.gpme_rule_versions by version_label) and one row
+//       per listed Program in dbo.gpme_evaluation_results
+//       (program_context_json = JSON of programContext), in the referral's
+//       transaction. Program facts only: no matching answers (PRD 5.3).
+//       The referral row then gets source = 'GPME_ASSISTED' and
+//       gpme_evaluation_id (ck_referrals_source_gpme,
+//       ux_referrals_gpme_evaluation).
+//   getGpmeEvaluation(evaluationId) -> { evaluationId, ruleVersion,
+//       evaluatedAt, results } | null   (committed only; tests and later
+//       referral-detail views)
 //   appendAuditEvent({ entityType, entityId, action, actorUserId,
 //                      before, after, correlationId })
 //       Written in the same transaction as the change it records. The store
@@ -100,6 +124,24 @@
 //          first_responded_at=SYSUTCDATETIME(), ...
 //          WHERE referral_id=@id AND response_status='AWAITING_RESPONSE'
 //          so two concurrent responses can never both succeed.
+//
+// Service outcome and corrections (card 8):
+//   Every referral row carries `version` (dbo.referrals.row_version,
+//   ROWVERSION): an opaque token that changes on every update. Callers
+//   only compare it (PRD 9.4).
+//   tx.updateReferral({ referralId, when, set, setNow, setNowIfNull })
+//       -> updated row, or null when a condition in `when` no longer holds
+//          (nothing is written). ONE conditional update:
+//          UPDATE dbo.referrals SET <set>, <setNow> = SYSUTCDATETIME(),
+//                 <setNowIfNull> = COALESCE(<col>, SYSUTCDATETIME()),
+//                 updated_at = SYSUTCDATETIME()
+//          WHERE referral_id = @id AND <each `when` column = @value>
+//          `when` may include { version } (row_version = @version) for
+//          corrections, or current state values (decision, service_outcome)
+//          for first-time recording. A second writer to the same row waits
+//          for the first transaction, then re-checks its conditions.
+//          setNowIfNull is how first_resulted_in_service_at is set once and
+//          never rewritten by a later correction (PRD 12.4).
 //
 // Program maintenance (card 14A):
 //   tx.lockProgramForUpdate(programId) -> program | null
@@ -294,9 +336,17 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     return { ...rest, version: `v${rowVersion}` };
   };
   let nextReferralId = 1;
+  const gpmeEvaluations = [];  // committed GPME evaluations
+  let nextEvaluationId = 1;
   let failNextAudit = false;
 
-  const copy = (row) => (row ? { ...row } : null);
+  const copy = (row) => (row ? withVersion({ ...row }) : null);
+  // The public, opaque version token (dbo.referrals.row_version).
+  function withVersion(row) {
+    if (!row) return null;
+    const { rowVersion, ...rest } = row;
+    return rowVersion === undefined ? row : { ...rest, rowVersion, version: `v${rowVersion}` };
+  }
 
   async function getReferralBySubmissionId(submissionId) {
     return copy(referrals.find((r) => r.submissionId === submissionId));
@@ -305,7 +355,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
   async function withTransaction(fn) {
     const staged = {
       referrals: [], audit: [], locks: [], updates: [], responseLocks: [], programUpdates: [], holds: [],
-      departmentInserts: [], programInserts: [], departmentUpdates: [],
+      departmentInserts: [], programInserts: [], departmentUpdates: [], evaluations: [],
     };
     // Uncommitted field-table rows: "table:id" -> row.
     const overlay = new Map();
@@ -374,8 +424,29 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       if (!committed) return null;
       const row = { ...committed };
       for (const u of staged.updates) if (u.referralId === referralId) Object.assign(row, u.fields);
-      return row;
+      return withVersion(row);
     };
+
+    // Row write lock, held until this transaction ends (like the X lock an
+    // UPDATE takes). Reentrant within the same transaction.
+    const heldRows = new Set();
+    async function lockRowForWrite(referralId) {
+      if (heldRows.has(referralId)) return;
+      while (responseInFlight.has(referralId)) {
+        await responseInFlight.get(referralId).promise;
+      }
+      let settle;
+      const promise = new Promise((resolve) => { settle = resolve; });
+      responseInFlight.set(referralId, { promise });
+      staged.responseLocks.push({ referralId, settle });
+      heldRows.add(referralId);
+    }
+
+    function stageUpdate(referralId, row, fields) {
+      const all = { ...fields, rowVersion: row.rowVersion + 1, updatedAt: now().toISOString() };
+      staged.updates.push({ referralId, fields: all });
+      return withVersion({ ...row, ...all });
+    }
 
     // Locking read: the row stays locked until this transaction ends.
     const lockingRead = (kind, read) => async (id) => {
@@ -390,6 +461,20 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       getProgram: lockingRead('program', base.getProgram),
       getDepartment: lockingRead('department', base.getDepartment),
       listActivePrograms: base.listActivePrograms,
+      listNeedCategories: base.listNeedCategories,
+      listMatchablePrograms: base.listMatchablePrograms,
+
+      async insertGpmeEvaluation({ ruleVersion, results }) {
+        // Like an IDENTITY column: IDs are never reused, gaps are possible.
+        const evaluationId = nextEvaluationId++;
+        staged.evaluations.push({
+          evaluationId,
+          ruleVersion,
+          evaluatedAt: now().toISOString(),
+          results: structuredClone(results),
+        });
+        return evaluationId;
+      },
 
       async getReferralBySubmissionId(submissionId) {
         return copy(staged.referrals.find((r) => r.submissionId === submissionId))
@@ -409,9 +494,10 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
         inFlight.set(row.submissionId, { promise });
         staged.locks.push({ submissionId: row.submissionId, settle });
         // Like an IDENTITY column: IDs are never reused, gaps are possible.
-        const saved = { ...row, referralId: nextReferralId++, createdAt: now().toISOString() };
+        const createdAt = now().toISOString();
+        const saved = { ...row, referralId: nextReferralId++, createdAt, updatedAt: createdAt, rowVersion: 1 };
         staged.referrals.push(saved);
-        return { ...saved };
+        return withVersion(saved);
       },
 
       async getReferralById(referralId) {
@@ -425,27 +511,32 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
         // Like UPDATE ... WHERE response_status = 'AWAITING_RESPONSE': a
         // second responder waits for the first transaction, then finds the
         // row already RESPONDED (0 rows updated) unless the first rolled back.
-        while (responseInFlight.has(referralId)) {
-          await responseInFlight.get(referralId).promise;
-        }
+        await lockRowForWrite(referralId);
         const row = currentRow(referralId);
         if (!row || row.responseStatus !== 'AWAITING_RESPONSE') return null;
 
-        let settle;
-        const promise = new Promise((resolve) => { settle = resolve; });
-        responseInFlight.set(referralId, { promise });
-        staged.responseLocks.push({ referralId, settle });
-
-        const fields = {
+        return stageUpdate(referralId, row, {
           responseStatus: 'RESPONDED',
           decision,
           notAppropriateReasonId,
           notAppropriateExplanation,
           respondedByUserId,
           firstRespondedAt: now().toISOString(),
-        };
-        staged.updates.push({ referralId, fields });
-        return { ...row, ...fields };
+        });
+      },
+
+      async updateReferral({ referralId, when = {}, set = {}, setNow = [], setNowIfNull = [] }) {
+        await lockRowForWrite(referralId);
+        const row = currentRow(referralId);
+        if (!row) return null;
+        for (const [key, value] of Object.entries(when)) {
+          if ((row[key] ?? null) !== value) return null; // 0 rows updated
+        }
+        const stamp = now().toISOString();
+        const fields = { ...set };
+        for (const key of setNow) fields[key] = stamp;
+        for (const key of setNowIfNull) fields[key] = row[key] ?? stamp;
+        return stageUpdate(referralId, row, fields);
       },
 
       async lockProgramForUpdate(programId) {
@@ -656,6 +747,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
         Object.assign(referrals.find((r) => r.referralId === referralId), fields);
       }
       auditEvents.push(...staged.audit);
+      gpmeEvaluations.push(...staged.evaluations);
       for (const r of staged.referrals) committedIds.add(r.submissionId);
       release();
       return result;
@@ -692,6 +784,11 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     ...base,
     withTransaction,
     getReferralBySubmissionId,
+
+    async getGpmeEvaluation(evaluationId) {
+      const found = gpmeEvaluations.find((e) => e.evaluationId === evaluationId);
+      return found ? structuredClone(found) : null;
+    },
 
     async getActiveGrants(userId) {
       return activeGrants(userId);
@@ -798,6 +895,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       }),
     _referrals: referrals,
     _referralAuditEvents: auditEvents,
+    _gpmeEvaluations: gpmeEvaluations,
     _failNextAudit() { failNextAudit = true; },
     _grants: grants,
     // Simulates a later receiving response so tests can cover every stage

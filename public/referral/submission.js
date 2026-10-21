@@ -1,5 +1,5 @@
-// Submission and recovery states for a Direct Referral
-// (PRD 7.1 to 7.5, 13.2, 13.3).
+// Submission and recovery states for a referral from either path, Direct
+// or GPME-assisted (PRD 7.1 to 7.5, 8.8, 13.2, 13.3).
 //
 // Pure functions: given what the server answered (or that it could not be
 // reached), decide what the worker sees and what they may do next.
@@ -30,12 +30,16 @@ export const MESSAGES = Object.freeze({
 //   fieldErrors  - server-reported invalid field names
 //   next         - optional follow-up the page should offer:
 //                  CHECK_AGAIN, NEW_SUBMISSION, CHOOSE_AFFILIATION,
-//                  RELOAD_AFFILIATION, CHOOSE_PROGRAM
+//                  RELOAD_AFFILIATION, CHOOSE_PROGRAM,
+//                  REVIEW_MATCHES (GPME result changed: search again),
+//                  SEND_AS_DIRECT (GPME re-check unavailable: offer Direct)
 //
 // A Submission ID is never replaced automatically. Only the worker's
 // explicit "Send as a new referral" action (next: NEW_SUBMISSION) starts a
 // new logical submission, and only after the safe check has shown that the
 // original attempt was not received (PRD 7.3, 7.4).
+
+import { GUIDED_MESSAGES } from './guided.js';
 
 // A confirmation counts only if it is complete and matches the Submission
 // ID this page sent (PRD 7.2). Anything less leaves the outcome unknown.
@@ -117,6 +121,22 @@ export function interpretSubmitResponse(response, { submissionId } = {}) {
     return {
       state: 'CONFLICT_CHECK', message: MESSAGES.NOT_CONFIRMED, tone: 'error',
       keepInput: true, formLocked: true, canResend: false, needsCheck: true, afterConflict: true,
+    };
+  }
+  // GPME-assisted referral (card 11). The server re-ran matching and
+  // answered with a fixed code BEFORE saving anything, so these are
+  // definite "not saved" answers, unlike an unknown 5xx below. The same
+  // Submission ID stays valid.
+  if (status === 409 && code === 'GPME_RESULT_CHANGED') {
+    return {
+      state: 'GPME_RESULT_CHANGED', message: GUIDED_MESSAGES.RESULT_CHANGED, tone: 'error', next: 'REVIEW_MATCHES',
+      keepInput: true, formLocked: false, canResend: false,
+    };
+  }
+  if (status === 503 && code === 'GPME_UNAVAILABLE') {
+    return {
+      state: 'GPME_UNAVAILABLE', message: GUIDED_MESSAGES.GPME_UNAVAILABLE, tone: 'error', next: 'SEND_AS_DIRECT',
+      keepInput: true, formLocked: false, canResend: true,
     };
   }
   if (status === 401 || status === 403) {
