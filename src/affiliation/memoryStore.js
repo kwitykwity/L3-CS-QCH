@@ -62,6 +62,7 @@
 //   departments.lifecycle_status, audit_events.
 
 import { findMatchingFactProblems } from '../gpme/programFacts.js';
+import { checkAuditEvent } from '../referrals/auditRules.js';
 
 const MATCHING_FACT_KEYS = Object.freeze([
   'needCategoryIds', 'ageLimitState', 'ageMin', 'ageMax', 'serviceAreaState', 'serviceAreaZips',
@@ -227,6 +228,8 @@ export function createMemoryStore(
         failNextAudit = false;
         throw new Error('simulated audit failure');
       }
+      // The dbo.audit_events rules, checked before anything is applied.
+      checkAuditEvent(event, { userExists: (id) => usersById.has(id) });
       user.currentProgramId = toProgramId;
       user.rowVersion += 1;
       auditEvents.push(event);
