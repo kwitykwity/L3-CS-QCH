@@ -256,6 +256,9 @@ export function createMemoryStore(
       user.rowVersion += 1;
     },
     _failMatching(value = true) { failMatching = value; },
+    _setProgramDepartment(programId, departmentId) {
+      programsById.get(programId).departmentId = departmentId;
+    },
     _setDepartmentStatus(departmentId, lifecycleStatus) {
       const department = departmentsById.get(departmentId);
       department.lifecycleStatus = lifecycleStatus;
