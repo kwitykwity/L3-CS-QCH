@@ -351,11 +351,35 @@ describe('state rules and Direct Referral independence (T17, T18)', () => {
     assert.equal(referral.body.status, 'RECEIVED');
   });
 
-  test('T18 Direct Referral code never imports GPME', async () => {
-    for (const file of ['routes.js', 'referralService.js', 'validateReferral.js', 'memoryReferralStore.js']) {
-      const source = await readFile(new URL(`../src/referrals/${file}`, import.meta.url), 'utf8');
-      assert.doesNotMatch(source, /gpme/i, file);
-    }
+  // Card 11 changed this check. It used to say the referral code never
+  // mentions GPME, but GPME-assisted referrals must use the same pipeline
+  // (PRD 2.2), so the referral code now handles an optional `gpme` part.
+  // PRD 8.8 is about behavior, so that is what is tested: a Direct Referral
+  // never runs any GPME read and still succeeds when every GPME read fails
+  // in the very store the referral uses.
+  test('T18 Direct Referral never runs GPME, even when GPME reads fail in its own store', async () => {
+    const referralStore = createMemoryReferralStore({
+      departments: DEPARTMENTS, programs: PROGRAMS, users: USERS, needCategories: NEED_CATEGORIES,
+    });
+    referralStore._failMatching();
+    let gpmeReads = 0;
+    const original = referralStore.withTransaction;
+    referralStore.withTransaction = (fn) => original((tx) => fn({
+      ...tx,
+      listNeedCategories: () => { gpmeReads += 1; return tx.listNeedCategories(); },
+      listMatchablePrograms: () => { gpmeReads += 1; return tx.listMatchablePrograms(); },
+    }));
+    const app = createApp({ affiliationStore: referralStore, referralStore, resolveIdentity: () => ({ userId: 100 }) });
+
+    const referral = await request(app).post('/api/referrals').send({
+      submissionId: randomUUID(),
+      receivingProgramId: 2,
+      participantName: 'Synthetic Person Beta',
+      contactMethod: 'NOT_AVAILABLE',
+      referralContext: 'Synthetic context',
+    });
+    assert.equal(referral.status, 201);
+    assert.equal(gpmeReads, 0);
   });
 });
 

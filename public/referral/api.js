@@ -8,6 +8,12 @@
 //                                                 409 AFFILIATION_CHANGED { current } if stale
 //   POST /api/referrals       { ...referral }  -> 201 RECEIVED / 200 ALREADY_RECEIVED
 //   GET  /api/referrals/submissions/:id        -> { status: RECEIVED | NOT_RECEIVED }
+//   GET  /api/gpme/need-categories             -> { needCategories: [...] }
+//   POST /api/gpme/match  { needCategoryIds, ageRange?, participantZip? }
+//                                              -> RESULTS | NO_PLAUSIBLE_MATCH,
+//                                                 503 UNABLE_TO_MATCH
+//   A GPME-assisted referral adds `gpme` (the same matching answers) to the
+//   POST /api/referrals body.
 //
 // - Participant data only ever travels in a POST body, never in a URL
 //   or query string (PRD 5.5). The Submission ID in the check URL is a
@@ -51,6 +57,10 @@ export const api = Object.freeze({
   // `version` is the one GET /api/me/affiliation returned (PRD 9.4).
   setAffiliation: (programId, version) => call('PUT', '/api/me/affiliation', { programId, version }),
   submitReferral: (body) => call('POST', '/api/referrals', body),
+  listNeedCategories: () => call('GET', '/api/gpme/need-categories'),
+  // Matching answers describe a participant, so they go in a POST body,
+  // never in the URL (PRD 5.5).
+  matchPrograms: (answers) => call('POST', '/api/gpme/match', answers),
   checkSubmission: (submissionId) =>
     call('GET', `/api/referrals/submissions/${encodeURIComponent(submissionId)}`),
 });

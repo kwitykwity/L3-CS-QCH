@@ -84,6 +84,25 @@ export const referralErrors = Object.freeze({
     ),
   reasonNotSelectable: () =>
     new ReferralError(422, 'REASON_NOT_SELECTABLE', 'That reason cannot be selected. Choose another reason.'),
+  // GPME-assisted referral (card 11): matching was re-run at submission and
+  // the chosen Program is no longer among the results (Program information
+  // or rules changed after the worker searched). Nothing was saved.
+  gpmeResultChanged: () =>
+    new ReferralError(
+      409,
+      'GPME_RESULT_CHANGED',
+      'The matching results changed after your search. Nothing was sent. Review the current results.',
+    ),
+  // GPME-assisted referral: matching could not be re-run, so the referral
+  // was not saved. A definite "not saved", unlike an unknown 5xx. The
+  // worker may retry or send the same Program as a Direct Referral
+  // (PRD 8.5, 8.8).
+  gpmeUnavailable: () =>
+    new ReferralError(
+      503,
+      'GPME_UNAVAILABLE',
+      'Matching could not be confirmed, so the referral was not saved.',
+    ),
   storeUnavailable: () =>
     new ReferralError(503, 'NOT_CONFIGURED', 'This service is not available.'),
 });
