@@ -5,7 +5,7 @@
 // participant data, or other user input (PRD 5.4, 10.4, 15.4).
 
 export class ReferralError extends Error {
-  constructor(status, code, message, { fields } = {}) {
+  constructor(status, code, message, { fields, current } = {}) {
     super(message);
     this.name = 'ReferralError';
     this.status = status;
@@ -13,6 +13,9 @@ export class ReferralError extends Error {
     // Names of invalid fields only, never their values. Lets the UI move
     // focus to the first invalid field (PRD 14.3).
     if (fields) this.fields = fields;
+    // For a stale update (409): the current authoritative state, so the
+    // UI can show it and ask the worker to review (PRD 9.4, 13.4).
+    if (current) this.current = current;
   }
 }
 
@@ -49,8 +52,57 @@ export const referralErrors = Object.freeze({
     new ReferralError(403, 'NOT_AUTHORIZED', 'You do not have permission to respond to referrals for this Program.'),
   alreadyResponded: () =>
     new ReferralError(409, 'ALREADY_RESPONDED', 'This referral already has a response. Reload it to see the current response.'),
+  // Card 8: service outcome and corrections (PRD 6.2, 6.5).
+  notAuthorizedForAction: () =>
+    new ReferralError(403, 'NOT_AUTHORIZED', 'You do not have permission to make this change for this Program.'),
+  outcomeNeedsAcceptance: () =>
+    new ReferralError(
+      409,
+      'OUTCOME_NOT_ALLOWED',
+      'A service outcome can only be recorded for an accepted referral. A Not Appropriate referral needs its decision corrected first.',
+    ),
+  outcomeAlreadyRecorded: () =>
+    new ReferralError(409, 'OUTCOME_ALREADY_RECORDED', 'A service outcome is already recorded. Use a correction to change it.'),
+  outcomeNotRecorded: () =>
+    new ReferralError(409, 'OUTCOME_NOT_RECORDED', 'No service outcome is recorded yet, so there is nothing to correct.'),
+  notResponded: () =>
+    new ReferralError(409, 'NOT_RESPONDED', 'This referral has no response yet, so there is nothing to correct.'),
+  outcomeBlocksDecision: () =>
+    new ReferralError(
+      409,
+      'OUTCOME_RECORDED',
+      'This referral has a recorded service outcome. Correct the outcome to "not recorded" before changing the decision to Not Appropriate.',
+    ),
+  noChange: () =>
+    new ReferralError(409, 'NO_CHANGE', 'The correction is the same as the current value. Nothing was changed.'),
+  referralChanged: (current) =>
+    new ReferralError(
+      409,
+      'REFERRAL_CHANGED',
+      'This referral was changed by someone else. Review the current information before making a correction.',
+      { current },
+    ),
   reasonNotSelectable: () =>
     new ReferralError(422, 'REASON_NOT_SELECTABLE', 'That reason cannot be selected. Choose another reason.'),
+  // GPME-assisted referral (card 11): matching was re-run at submission and
+  // the chosen Program is no longer among the results (Program information
+  // or rules changed after the worker searched). Nothing was saved.
+  gpmeResultChanged: () =>
+    new ReferralError(
+      409,
+      'GPME_RESULT_CHANGED',
+      'The matching results changed after your search. Nothing was sent. Review the current results.',
+    ),
+  // GPME-assisted referral: matching could not be re-run, so the referral
+  // was not saved. A definite "not saved", unlike an unknown 5xx. The
+  // worker may retry or send the same Program as a Direct Referral
+  // (PRD 8.5, 8.8).
+  gpmeUnavailable: () =>
+    new ReferralError(
+      503,
+      'GPME_UNAVAILABLE',
+      'Matching could not be confirmed, so the referral was not saved.',
+    ),
   storeUnavailable: () =>
     new ReferralError(503, 'NOT_CONFIGURED', 'This service is not available.'),
 });

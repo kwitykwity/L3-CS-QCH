@@ -4,6 +4,8 @@ import express from 'express';
 import { errorHandler } from './errorHandler.js';
 import { createAffiliationRouter } from './affiliation/routes.js';
 import { createReferralRouter } from './referrals/routes.js';
+import { createGpmeRouter } from './gpme/routes.js';
+import { createReportingRouter } from './reporting/routes.js';
 import { createProgramRouter } from './programs/routes.js';
 
 const publicDir = path.join(
@@ -19,19 +21,23 @@ const publicDir = path.join(
 // - referralStore: the referral data store (see
 //   src/referrals/memoryReferralStore.js for the contract). In production
 //   one Azure SQL store will serve as both stores.
+//   GPME (card 10) reads Program data and need categories from the
+//   affiliationStore, the Program data store.
 // - resolveIdentity(req) -> { userId } | null: supplied by the future Entra
 //   sign-in. Without one, /api routes answer 401 (fail closed).
 // - allowDemoGrants: honor DEMO permission grants. Defaults to false. Turning
 //   it on also requires nodeEnv 'development' or 'test'; anything else,
 //   including no nodeEnv, throws at start-up (PRD 16.1, 17.4).
 // - nodeEnv: the validated NODE_ENV from loadConfig().
+// - now: optional clock for reporting ("data as of"); tests inject it.
+//
 // Fixed 404. Nothing from the request is repeated in the response.
 function notFound(req, res) {
   res.set('Cache-Control', 'no-store');
   res.status(404).json({ error: 'Not Found' });
 }
 
-export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false, nodeEnv } = {}) {
+export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false, nodeEnv, now } = {}) {
   const app = express();
 
   // Don't advertise the framework or its version.
@@ -48,11 +54,18 @@ export function createApp({ affiliationStore, referralStore, resolveIdentity, al
     createReferralRouter({ store: referralStore, resolveIdentity, allowDemoGrants, nodeEnv }),
   );
 
+  app.use('/api/reports', createReportingRouter({ store: referralStore, resolveIdentity, now }));
+
   // Program maintenance writes need the transactional store (one Azure SQL
   // store will serve as every store in production).
   app.use(
     '/api/program-management',
     createProgramRouter({ store: referralStore, resolveIdentity, allowDemoGrants, nodeEnv }),
+  );
+
+  app.use(
+    '/api/gpme',
+    createGpmeRouter({ store: affiliationStore, resolveIdentity }),
   );
 
   app.use(

@@ -1,11 +1,16 @@
-// HTTP routes for Direct Referral creation.
+// HTTP routes for referral creation (Direct and GPME-assisted) and reads.
 //
 //   POST /api/referrals
 //       body: { submissionId, receivingProgramId, referringProgramId?,
 //               participantName, contactMethod, contactValue?,
-//               participantZip?, referralContext, notes? }
+//               participantZip?, referralContext, notes?,
+//               gpme?: { needCategoryIds, ageRange?, participantZip? } }
 //       201 { status: "RECEIVED", referral }          new referral committed
 //       200 { status: "ALREADY_RECEIVED", referral }  same Submission ID retried
+//       With `gpme` (GPME-assisted, card 11) the server re-runs matching
+//       and saves source GPME_ASSISTED, or answers (nothing saved):
+//       409 GPME_RESULT_CHANGED  the Program is no longer in the results
+//       503 GPME_UNAVAILABLE     matching could not be re-run
 //
 //   GET /api/referrals/submissions/:submissionId
 //       Safe check after an unconfirmed submission (PRD 7.4).
@@ -23,6 +28,18 @@
 //        { "decision": "ACCEPTED" } or
 //        { "decision": "NOT_APPROPRIATE", "reasonId": n, "explanation"?: "..." }
 //        200 { status: "RESPONDED", referral } | 403 | 404 | 409 ALREADY_RESPONDED
+//   POST /api/referrals/:referralId/outcome                (RECORD_OUTCOME)
+//        { "outcome": "RESULTED_IN_SERVICE" | "DID_NOT_RESULT_IN_SERVICE" }
+//        200 { status: "OUTCOME_RECORDED", referral } | 403 | 404
+//        409 OUTCOME_NOT_ALLOWED (not Accepted) | OUTCOME_ALREADY_RECORDED
+//   POST /api/referrals/:referralId/outcome/correction     (CORRECT_OUTCOME)
+//        { "outcome": "NOT_RECORDED" | "RESULTED_IN_SERVICE" |
+//                     "DID_NOT_RESULT_IN_SERVICE", "version": "..." }
+//   POST /api/referrals/:referralId/response/correction    (UPDATE_RECEIVED_REFERRAL)
+//        { "decision": ..., "reasonId"?, "explanation"?, "version": "..." }
+//        Corrections: 200 { status: "CORRECTED", referral } | 403 | 404
+//        409 REFERRAL_CHANGED { current } when `version` is stale (PRD 9.4)
+//        409 NO_CHANGE | OUTCOME_RECORDED | OUTCOME_NOT_RECORDED | NOT_RESPONDED
 //   stage: AWAITING_RESPONSE | ACCEPTED_OUTCOME_PENDING | COMPLETE
 //   Query parameters are allowlisted; anything else (e.g. userId) -> 400.
 //
@@ -36,6 +53,7 @@ import { ReferralError, referralErrors } from './errors.js';
 import { createReferralService } from './referralService.js';
 import { createReferralQueryService } from './referralQueryService.js';
 import { createResponseService } from './responseService.js';
+import { createOutcomeService } from './outcomeService.js';
 import { STAGES } from './stage.js';
 import { MAX_BODY_BYTES } from './validateReferral.js';
 import { decodeCursor } from './cursor.js';
@@ -85,6 +103,7 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
   const service = store ? createReferralService({ store }) : null;
   const queries = store ? createReferralQueryService({ store, allowDemoGrants }) : null;
   const responses = store ? createResponseService({ store, allowDemoGrants }) : null;
+  const outcomes = store ? createOutcomeService({ store, allowDemoGrants }) : null;
 
   // Protected responses must not be cached (PRD 5.5).
   router.use((req, res, next) => {
@@ -143,6 +162,19 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
     }));
   });
 
+  // One handler shape for every state-changing action on a referral: no
+  // query parameters, safe-integer ID, server-derived user (PRD 3.2, 10.3).
+  const action = (run) => async (req, res) => {
+    readQuery(req.query, []);
+    const referralId = toId(req.params.referralId);
+    if (referralId === null) throw referralErrors.referralNotFound();
+    res.json(await run(req.userId, referralId, req.body, { correlationId: req.correlationId }));
+  };
+
+  router.post('/:referralId/outcome', action((...a) => outcomes.recordOutcome(...a)));
+  router.post('/:referralId/outcome/correction', action((...a) => outcomes.correctOutcome(...a)));
+  router.post('/:referralId/response/correction', action((...a) => outcomes.correctResponse(...a)));
+
   router.get('/:referralId', async (req, res) => {
     readQuery(req.query, []);
     const referralId = toId(req.params.referralId);
@@ -156,6 +188,7 @@ export function createReferralRouter({ store, resolveIdentity, allowDemoGrants =
     if (err instanceof ReferralError || err instanceof AffiliationError) {
       const body = { error: err.message, code: err.code };
       if (err.fields) body.fields = err.fields;
+      if (err.current) body.current = err.current;
       return res.status(err.status).json(body);
     }
     if (err?.type === 'entity.parse.failed' || err?.type === 'entity.too.large') {
