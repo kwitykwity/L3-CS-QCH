@@ -106,6 +106,18 @@ const ROUTES = [
   { method: 'post', path: '/api/referrals/:referralId/response', body: () => ({ decision: 'ACCEPTED' }) },
   { method: 'get', path: '/api/referrals/:referralId' },
 
+  // Service outcome and corrections (card 8, #14)
+  { method: 'post', path: '/api/referrals/:referralId/outcome', body: () => ({ outcome: 'RESULTED_IN_SERVICE' }) },
+  { method: 'post', path: '/api/referrals/:referralId/outcome/correction', body: () => ({ outcome: 'DID_NOT_RESULT_IN_SERVICE', version: 'v1' }) },
+  { method: 'post', path: '/api/referrals/:referralId/response/correction', body: () => ({ decision: 'ACCEPTED', version: 'v1' }) },
+
+  // Reporting (card 9, #18): aggregate only
+  { method: 'get', path: '/api/reports/total-referrals' },
+
+  // Guided Program Matching (card 10, #16)
+  { method: 'get', path: '/api/gpme/need-categories' },
+  { method: 'post', path: '/api/gpme/match', body: () => ({ needCategoryIds: [1] }) },
+
   // Program maintenance (card 14, PRs #21, #22, #24, #25)
   ...programRoutes(),
 ];
@@ -182,6 +194,8 @@ describe('route inventory', () => {
     const mounts = {
       'referrals/routes.js': '/api/referrals',
       'programs/routes.js': '/api/program-management',
+      'reporting/routes.js': '/api/reports',
+      'gpme/routes.js': '/api/gpme',
       'affiliation/routes.js': '/api',
     };
     const found = [];
@@ -294,6 +308,60 @@ describe('manipulated inputs (PRD 3.3, 10.3, 17.3)', () => {
 });
 
 describe('authorization boundaries (capability + resource + scope, PRD 3.3-3.9)', () => {
+  test('outcome and correction rights for another Program grant nothing on this one; admin grants give nothing', async () => {
+    const ctx = await populated();
+    await request(appAs(ctx.store, RECEIVER)).post(`/api/referrals/${ctx.id}/response`).send({ decision: 'ACCEPTED' });
+    const before = JSON.stringify(ctx.store._referrals);
+    // OTHER holds RECORD_OUTCOME, CORRECT_OUTCOME and UPDATE_RECEIVED_REFERRAL, but for Program 12.
+    for (const who of [OTHER, ADMIN]) {
+      const app = appAs(ctx.store, who);
+      for (const [url, body] of [
+        [`/api/referrals/${ctx.id}/outcome`, { outcome: 'RESULTED_IN_SERVICE' }],
+        [`/api/referrals/${ctx.id}/outcome/correction`, { outcome: 'DID_NOT_RESULT_IN_SERVICE', version: 'v1' }],
+        [`/api/referrals/${ctx.id}/response/correction`, { decision: 'NOT_APPROPRIATE', reasonId: 2, version: 'v1' }],
+      ]) {
+        const res = await request(app).post(url).send(body);
+        assert.equal(res.status, 404, `${who} ${url}`);
+        assert.equal(res.body.code, 'REFERRAL_NOT_FOUND', 'hidden looks the same as missing');
+      }
+    }
+    // The creator can see the referral but holds no outcome or correction capability.
+    assert.equal((await request(appAs(ctx.store, CREATOR)).post(`/api/referrals/${ctx.id}/outcome`).send({ outcome: 'RESULTED_IN_SERVICE' })).status, 403);
+    assert.equal(JSON.stringify(ctx.store._referrals), before, 'nothing changed');
+  });
+
+  test('reporting is aggregate only: no referral content or identifiers for any active user (PRD 3.5, 12)', async () => {
+    const ctx = await populated();
+    for (const who of [ADMIN, CREATOR, RECEIVER, OTHER]) {
+      const res = await request(appAs(ctx.store, who)).get('/api/reports/total-referrals?period=MONTHLY');
+      assert.equal(res.status, 200, `${who}`);
+      assert.equal(res.headers['cache-control'], 'no-store');
+      noMarker(res.text, 'report');
+      assert.doesNotMatch(res.text, /referralId|submissionId|participant|contact/i);
+    }
+  });
+
+  test('GPME never echoes, stores or logs the matching answers (PRD 5.3, 8.2)', async (t) => {
+    const lines = captureConsole(t);
+    const ctx = await populated();
+    const before = JSON.stringify(ctx.store._referrals);
+    const app = appAs(ctx.store, CREATOR);
+    const responses = [
+      await request(app).post('/api/gpme/match').send({ needCategoryIds: [1], ageRange: { min: 19, max: 20 }, participantZip: '99917' }),
+      await request(app).post('/api/gpme/match').send({ needCategoryIds: [1], participantZip: M.name }),
+      await request(app).post('/api/gpme/match').send({ needCategoryIds: [1], notes: M.notes }),
+      await request(app).post('/api/gpme/match').set('Content-Type', 'application/json').send(`{"participantZip":"${M.name}"`),
+    ];
+    for (const res of responses) {
+      assert.equal(res.headers['cache-control'], 'no-store');
+      noMarker(res.text, 'GPME response');
+      assert.ok(!res.text.includes('99917'), 'ZIP echoed');
+    }
+    noMarker(lines.join('\n'), 'log');
+    assert.ok(!lines.join('\n').includes('99917'), 'ZIP logged');
+    assert.equal(JSON.stringify(ctx.store._referrals), before, 'matching creates nothing');
+  });
+
   test('full receiving rights for another Program grant nothing on this one', async () => {
     const ctx = await populated();
     const app = appAs(ctx.store, OTHER);
