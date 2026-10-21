@@ -1,4 +1,9 @@
 // GET /api/reports/total-referrals?period=&date=&programId=&departmentId=
+// GET /api/reports/timing-metrics?period=&date=&programId=&departmentId=
+//   200 { metric: "TIMING", cohortSize, unit: "MILLISECONDS",
+//         timeToFirstResponse:   { status, qualifyingCount, pendingCount, averageMs, medianMs },
+//         timeToRecordedService: { status, qualifyingCount, pendingCount, averageMs, medianMs },
+//         period, scope, partial, asOf }   status "N/A" when nothing qualifies
 //   period: WEEKLY | MONTHLY | QUARTERLY | YEARLY (required)
 //   date: YYYY-MM-DD, no later than today in New York (default: today,
 //         America/New_York)
@@ -69,6 +74,10 @@ export function createReportingRouter({ store, resolveIdentity, now }) {
 
   router.get('/total-referrals', async (req, res) => {
     res.json(await service.getTotalReferrals(readQuery(req.query)));
+  });
+
+  router.get('/timing-metrics', async (req, res) => {
+    res.json(await service.getTimingMetrics(readQuery(req.query)));
   });
 
   router.use((err, req, res, next) => {

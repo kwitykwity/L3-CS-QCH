@@ -72,6 +72,9 @@
 //
 // Reporting (card 9): countReferrals({ from, to, programId?, departmentId? }) -> number
 //   (see its comment below for the exact SQL).
+// Reporting (card 13): listTimingFacts({ from, to, programId?, departmentId? })
+//   -> [{ createdAt, firstRespondedAt, decision, firstResultedInServiceAt, serviceOutcome }]
+//   for the same cohort and scope as countReferrals (see its comment).
 //
 // Read methods (card 6, receiving queue + authorization):
 //   getActiveGrants(userId) -> [{ permission, scopeType, programId,
@@ -820,6 +823,33 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
 
     async listReferralsByCreator(userId, options = {}) {
       return newestFirst(referrals.filter((r) => r.createdByUserId === userId), options);
+    },
+
+    // Reporting (card 13). The timing facts of the cohort countReferrals
+    // counts: committed referrals with from <= createdAt < to, in the same
+    // scope. Only the five columns the timing metrics need; never
+    // participant data or IDs (PRD 10.5, 12.1).
+    // Azure SQL (durations are computed in the service, from these values):
+    //   SELECT created_at, first_responded_at, decision,
+    //          first_resulted_in_service_at, service_outcome
+    //   FROM dbo.referrals
+    //   WHERE created_at >= @from AND created_at < @to
+    //     [AND (referring_program_id = @programId OR receiving_program_id = @programId)]
+    //     [AND (referring_department_id = @departmentId OR receiving_department_id = @departmentId)]
+    //   Timestamps must come back as exact UTC instants (datetime2(3)).
+    async listTimingFacts({ from, to, programId, departmentId }) {
+      return referrals
+        .filter((r) =>
+          r.createdAt >= from && r.createdAt < to
+          && (programId === undefined || r.referringProgramId === programId || r.receivingProgramId === programId)
+          && (departmentId === undefined || r.referringDepartmentId === departmentId || r.receivingDepartmentId === departmentId))
+        .map((r) => ({
+          createdAt: r.createdAt,
+          firstRespondedAt: r.firstRespondedAt ?? null,
+          decision: r.decision ?? null,
+          firstResultedInServiceAt: r.firstResultedInServiceAt ?? null,
+          serviceOutcome: r.serviceOutcome,
+        }));
     },
 
     async listActiveNotAppropriateReasons() {
