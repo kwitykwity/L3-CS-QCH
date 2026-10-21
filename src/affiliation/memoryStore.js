@@ -14,6 +14,32 @@
 //   getDepartment(departmentId)-> { departmentId, name, lifecycleStatus, version } | null
 //   listActivePrograms()       -> [{ program, department }] where BOTH are ACTIVE
 //
+// GPME additions (card 10, migration 003):
+//   listNeedCategories()       -> [{ needCategoryId, name, lifecycleStatus }]
+//       dbo.service_categories (holds the need category list)
+//   listMatchablePrograms()    -> [{ program, department }] where BOTH are ACTIVE,
+//       and program also carries its matching facts:
+//         needCategoryIds   program_service_categories.service_category_id
+//         ageLimitState     programs.age_limit_state (SET, NO_RESTRICTION,
+//                           NOT_ON_FILE, OTHER_LIMIT)
+//         ageMin, ageMax    programs.age_min, programs.age_max
+//         serviceAreaState  programs.service_area_state (same four states)
+//         serviceAreaZips   program_service_area_zips.zip_code
+//       Reads never validate or throw on these facts: GPME reads them
+//       through readMatchingFacts(), which treats inconsistent facts as
+//       NOT_ON_FILE. So bad matching data can never stop the store, Program
+//       listing, affiliation, or Direct Referral from working (PRD 8.8).
+//
+//   updateProgramMatchingFacts({ programId, ...facts }) -> program | null
+//       The WRITE path for matching facts (Program maintenance). Validates
+//       with findMatchingFactProblems() and throws InvalidMatchingFactsError
+//       (nothing written) if the facts break the rules, for example
+//       serviceAreaState SET with no ZIP codes. null if no such Program.
+//       Azure SQL requirement: the state columns and the
+//       program_service_area_zips rows change in ONE transaction, after
+//       this validation, so the state/ZIP rule (which the database cannot
+//       CHECK across tables) holds for every committed edit.
+//
 //   updateUserProgramAffiliation({ userId, expectedVersion, fromProgramId,
 //                                  toProgramId, actorUserId, correlationId })
 //       -> { version } (the new version) on success
@@ -31,12 +57,54 @@
 //       The store, never the caller, sets the audit timestamp (occurredAt,
 //       UTC, PRD 9.6, 9.7). Never touches referrals.
 //
-// Field names map to db/migrations/001_core_schema.sql:
+// Field names map to db/migrations/001_core_schema.sql and 003:
 //   users.current_program_id, users.row_version, programs.lifecycle_status,
 //   departments.lifecycle_status, audit_events.
 
+import { findMatchingFactProblems } from '../gpme/programFacts.js';
+
+const MATCHING_FACT_KEYS = Object.freeze([
+  'needCategoryIds', 'ageLimitState', 'ageMin', 'ageMax', 'serviceAreaState', 'serviceAreaZips',
+]);
+
+// Thrown by updateProgramMatchingFacts. Fixed message, never Program data.
+export class InvalidMatchingFactsError extends Error {
+  constructor() {
+    super('invalid Program matching facts');
+    this.name = 'InvalidMatchingFactsError';
+  }
+}
+
+const copyList = (value) => (Array.isArray(value) ? [...value] : value);
+
+// Program matching facts default to "not on file" (migration 003 defaults).
+// Existing rows are loaded as they are, even if inconsistent: validation
+// belongs to the write path, and GPME reads them fail-safe.
+function withMatchingFacts(program) {
+  const row = {
+    needCategoryIds: [],
+    ageLimitState: 'NOT_ON_FILE',
+    ageMin: null,
+    ageMax: null,
+    serviceAreaState: 'NOT_ON_FILE',
+    serviceAreaZips: [],
+    ...program,
+  };
+  row.needCategoryIds = copyList(row.needCategoryIds);
+  row.serviceAreaZips = copyList(row.serviceAreaZips);
+  return row;
+}
+
+function copyProgram(program) {
+  return {
+    ...program,
+    needCategoryIds: copyList(program.needCategoryIds),
+    serviceAreaZips: copyList(program.serviceAreaZips),
+  };
+}
+
 export function createMemoryStore(
-  { departments = [], programs = [], users = [] } = {},
+  { departments = [], programs = [], users = [], needCategories = [] } = {},
   { now = () => new Date() } = {},
 ) {
   // rowVersion stands in for SQL ROWVERSION on departments too.
@@ -46,15 +114,20 @@ export function createMemoryStore(
   let nextDepartmentId = Math.max(0, ...departments.map((d) => d.departmentId)) + 1;
   let nextProgramId = Math.max(0, ...programs.map((p) => p.programId)) + 1;
   // rowVersion stands in for SQL ROWVERSION: bumped on every Program change.
+  // Matching facts default to "not on file" (withMatchingFacts).
   const programsById = new Map(programs.map((p) => [p.programId, {
-    description: null,
-    eligibilityNotes: null,
-    scheduleNotes: null,
-    costNotes: null,
-    updatedAt: null,
-    ...p,
+    ...withMatchingFacts({
+      description: null,
+      eligibilityNotes: null,
+      scheduleNotes: null,
+      costNotes: null,
+      updatedAt: null,
+      ...p,
+    }),
     rowVersion: 1,
   }]));
+  const needCategoryRows = needCategories.map((c) => ({ lifecycleStatus: 'ACTIVE', ...c }));
+  let failMatching = false;
   // rowVersion stands in for SQL ROWVERSION: bumped on every user update.
   const usersById = new Map(users.map((u) => [u.userId, { currentProgramId: null, ...u, rowVersion: 1 }]));
   const auditEvents = [];
@@ -62,10 +135,11 @@ export function createMemoryStore(
 
   const copy = (row) => (row ? { ...row } : null);
 
+  // Copies the matching-fact lists so callers can't change the stored row.
   function publicProgram(program) {
     if (!program) return null;
     const { rowVersion, ...rest } = program;
-    return { ...rest, version: `v${rowVersion}` };
+    return { ...copyProgram(rest), version: `v${rowVersion}` };
   }
 
   const publicDepartment = (department) => {
@@ -78,6 +152,17 @@ export function createMemoryStore(
     if (!user) return null;
     const { rowVersion, ...rest } = user;
     return { ...rest, version: `v${rowVersion}` };
+  }
+
+  function activeProgramRows() {
+    const rows = [];
+    for (const program of programsById.values()) {
+      const department = departmentsById.get(program.departmentId);
+      if (program.lifecycleStatus === 'ACTIVE' && department?.lifecycleStatus === 'ACTIVE') {
+        rows.push({ program: publicProgram(program), department: publicDepartment(department) });
+      }
+    }
+    return rows;
   }
 
   return {
@@ -94,14 +179,32 @@ export function createMemoryStore(
     },
 
     async listActivePrograms() {
-      const rows = [];
-      for (const program of programsById.values()) {
-        const department = departmentsById.get(program.departmentId);
-        if (program.lifecycleStatus === 'ACTIVE' && department?.lifecycleStatus === 'ACTIVE') {
-          rows.push({ program: publicProgram(program), department: publicDepartment(department) });
-        }
-      }
-      return rows;
+      return activeProgramRows();
+    },
+
+    // Not transactional in the memory store; the Azure SQL store changes the
+    // state columns and ZIP rows in one transaction after validation. Like
+    // every Program change, it moves the Program's version.
+    async updateProgramMatchingFacts({ programId, ...facts }) {
+      const program = programsById.get(programId);
+      if (!program) return null;
+      const next = { ...program };
+      for (const key of MATCHING_FACT_KEYS) if (key in facts) next[key] = facts[key];
+      if (findMatchingFactProblems(next).length > 0) throw new InvalidMatchingFactsError();
+      // Validated first, then applied as one change (like one transaction).
+      Object.assign(program, withMatchingFacts(next), { updatedAt: now().toISOString() });
+      program.rowVersion += 1;
+      return publicProgram(program);
+    },
+
+    async listNeedCategories() {
+      if (failMatching) throw new Error('simulated store failure');
+      return needCategoryRows.map((c) => ({ ...c }));
+    },
+
+    async listMatchablePrograms() {
+      if (failMatching) throw new Error('simulated store failure');
+      return activeProgramRows();
     },
 
     async updateUserProgramAffiliation({ userId, expectedVersion, fromProgramId, toProgramId, actorUserId, correlationId }) {
@@ -152,6 +255,7 @@ export function createMemoryStore(
       user.isActive = isActive;
       user.rowVersion += 1;
     },
+    _failMatching(value = true) { failMatching = value; },
     _setProgramDepartment(programId, departmentId) {
       programsById.get(programId).departmentId = departmentId;
     },
@@ -174,7 +278,7 @@ export function createMemoryStore(
     },
     _insertProgram(row) {
       const at = now().toISOString();
-      programsById.set(row.programId, { createdAt: at, ...row, updatedAt: at, rowVersion: 1 });
+      programsById.set(row.programId, { ...withMatchingFacts({ createdAt: at, ...row }), updatedAt: at, rowVersion: 1 });
     },
     _applyDepartmentChange(departmentId, fields) {
       const department = departmentsById.get(departmentId);
