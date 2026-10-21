@@ -12,7 +12,8 @@
 
 import { errors as affiliationErrors } from '../affiliation/errors.js';
 import {
-  RESPOND, programIdsWithCapability, receivingProgramIds, referralAccess,
+  CORRECT_OUTCOME, RECORD_OUTCOME, RESPOND, UPDATE_RECEIVED,
+  programIdsWithCapability, receivingProgramIds, referralAccess,
 } from '../authorization/referralAccess.js';
 import { referralErrors } from './errors.js';
 import { stageOf } from './stage.js';
@@ -129,8 +130,15 @@ export function createReferralQueryService({ store, allowDemoGrants = false }) {
     const grants = await store.getActiveGrants(userId);
     const access = referralAccess(userId, row, receivingProgramIds(grants, { allowDemoGrants }));
     if (!access.canView) throw referralErrors.referralNotFound(); // same answer as "does not exist"
-    const canRespond = row.responseStatus === 'AWAITING_RESPONSE' &&
-      programIdsWithCapability(grants, RESPOND, { allowDemoGrants }).has(row.receivingProgramId);
+    const holds = (capability) =>
+      programIdsWithCapability(grants, capability, { allowDemoGrants }).has(row.receivingProgramId);
+    const canRespond = row.responseStatus === 'AWAITING_RESPONSE' && holds(RESPOND);
+    // What this viewer may do next (PRD 3.7). Hints for the UI only; every
+    // action is authorized again on the server.
+    const accepted = row.responseStatus === 'RESPONDED' && row.decision === 'ACCEPTED';
+    const canRecordOutcome = accepted && row.serviceOutcome === 'NOT_RECORDED' && holds(RECORD_OUTCOME);
+    const canCorrectOutcome = accepted && row.serviceOutcome !== 'NOT_RECORDED' && holds(CORRECT_OUTCOME);
+    const canCorrectResponse = row.responseStatus === 'RESPONDED' && holds(UPDATE_RECEIVED);
 
     const nameOf = programNamer();
     const creator = await store.getUser(row.createdByUserId);
@@ -153,13 +161,23 @@ export function createReferralQueryService({ store, allowDemoGrants = false }) {
         serviceOutcome: row.serviceOutcome,
         stage: stageOf(row),
         firstRespondedAt: row.firstRespondedAt ?? null,
+        outcomeRecordedAt: row.outcomeRecordedAt ?? null,
+        // Send back with a correction; a stale one is refused (PRD 9.4).
+        version: row.version,
         notAppropriateReason: await reasonNamer()(row.notAppropriateReasonId),
         // Sensitive like Notes (PRD 6.5): only on this authorized view.
         notAppropriateExplanation: row.notAppropriateExplanation ?? null,
       },
       // Lets the UI show this referral read-only or with receiving actions
       // (PRD 3.7). The backend re-checks every action on its own.
-      viewerAccess: { asCreator: access.asCreator, asReceiver: access.asReceiver, canRespond },
+      viewerAccess: {
+        asCreator: access.asCreator,
+        asReceiver: access.asReceiver,
+        canRespond,
+        canRecordOutcome,
+        canCorrectOutcome,
+        canCorrectResponse,
+      },
     };
   }
 
