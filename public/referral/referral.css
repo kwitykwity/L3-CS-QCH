@@ -68,7 +68,7 @@ a { color: var(--primary); }
 
 .brand { font-weight: 700; color: var(--text); text-decoration: none; }
 
-.text-size { display: inline-flex; align-items: center; gap: 0.25rem; }
+.text-size { display: inline-flex; flex-wrap: wrap; min-width: 0; max-width: 100%; align-items: center; gap: 0.25rem; }
 .text-size__label { color: var(--muted); margin-right: 0.25rem; }
 .text-size__btn {
   min-width: 2.5rem;

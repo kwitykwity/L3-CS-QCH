@@ -81,13 +81,20 @@ function validProgram(row, id) {
 }
 function render(row) {
   saved = row;
+  let managementActions = document.getElementById('management-links');
+  if (!managementActions) {
+    managementActions = document.createElement('div');
+    managementActions.id = 'management-links';
+    managementActions.className = 'actions';
+    document.getElementById('editor').append(managementActions);
+  }
   let fieldLink = document.getElementById('manage-fields-link');
   if (!fieldLink) {
     fieldLink = document.createElement('a');
     fieldLink.id = 'manage-fields-link';
     fieldLink.className = 'btn btn--secondary';
     fieldLink.textContent = 'Manage configurable fields';
-    document.getElementById('editor').append(fieldLink);
+    managementActions.append(fieldLink);
   }
   fieldLink.href = `fields.html?programId=${row.programId}`;
   let matchingLink = document.getElementById('manage-matching-link');
@@ -96,7 +103,7 @@ function render(row) {
     matchingLink.id = 'manage-matching-link';
     matchingLink.className = 'btn btn--secondary';
     matchingLink.textContent = 'Manage matching information';
-    document.getElementById('editor').append(matchingLink);
+    managementActions.append(matchingLink);
   }
   matchingLink.href = `matching.html?programId=${row.programId}`;
   latest = null;

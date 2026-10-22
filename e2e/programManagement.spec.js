@@ -131,3 +131,34 @@ for (const colorScheme of ['light', 'dark']) {
     await page.locator('#confirm-stay').click();
   });
 }
+
+test('XL management actions wrap without overlapping', async ({ page }) => {
+  for (const width of [800, 320]) {
+    await page.setViewportSize({ width, height: 900 });
+    await open(page);
+    await page.locator('[data-size="XL"]').click();
+
+    const layout = await page.locator('#editor').evaluate((editor) => {
+      const boxes = [...editor.querySelectorAll('button, a')]
+        .map((node) => ({ text: node.textContent.trim(), rect: node.getBoundingClientRect() }))
+        .filter(({ rect }) => rect.width > 0 && rect.height > 0)
+        .map(({ text, rect }) => ({
+          text, left: rect.left, right: rect.right, top: rect.top, bottom: rect.bottom,
+        }));
+      return {
+        boxes,
+        scrollWidth: document.documentElement.scrollWidth,
+        viewportWidth: document.documentElement.clientWidth,
+      };
+    });
+    expect(layout.scrollWidth, `horizontal overflow at ${width}px`).toBeLessThanOrEqual(layout.viewportWidth + 1);
+    for (let i = 0; i < layout.boxes.length; i += 1) {
+      for (const other of layout.boxes.slice(i + 1)) {
+        const box = layout.boxes[i];
+        const overlap = Math.min(box.right, other.right) - Math.max(box.left, other.left) > 1
+          && Math.min(box.bottom, other.bottom) - Math.max(box.top, other.top) > 1;
+        expect(overlap, `${box.text} overlaps ${other.text} at ${width}px`).toBeFalsy();
+      }
+    }
+  }
+});
