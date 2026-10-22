@@ -337,3 +337,28 @@ test('eligible retirement preserves history through the real browser and API', a
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
   }
 });
+
+test('new field definition is editable immediately without refreshing', async ({ page }) => {
+  await page.goto('/program-management/fields.html?programId=3');
+  await expect(page.locator('#new-field-label')).toBeEnabled();
+  await page.locator('#new-field-label').fill('Synthetic immediate wording');
+  await page.locator('#new-field-type').selectOption('TEXT');
+  await page.getByRole('button', { name: 'Create field', exact: true }).click();
+  await expect(page.locator('#field-status')).toHaveText('Field created. You can now enter its value.');
+
+  const section = page.locator('section.panel').filter({
+    has: page.getByRole('heading', { name: 'Synthetic immediate wording', exact: true }),
+  });
+  const wording = section.getByLabel('Field wording', { exact: true });
+  await expect(wording).toBeEnabled();
+  await wording.focus();
+  await expect(wording).toBeFocused();
+  await wording.fill('Synthetic clarified wording');
+  page.once('dialog', (dialog) => dialog.accept());
+  await section.getByRole('button', { name: 'Rename field', exact: true }).click();
+  await expect(page.locator('#field-status')).toHaveText('Shared field definition saved.');
+  await expect(page.getByRole('heading', { name: 'Synthetic clarified wording', exact: true })).toBeVisible();
+
+  await page.reload();
+  await expect(page.getByRole('heading', { name: 'Synthetic clarified wording', exact: true })).toBeVisible();
+});

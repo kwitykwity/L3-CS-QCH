@@ -321,7 +321,7 @@ $('create-field-form').addEventListener('submit', async (event) => {
     const entry = buildEntry({
       ...field,
       value: dataType === 'MULTI_SELECT' ? [] : null,
-      permissions: { canManageValue: true },
+      permissions: field.permissions,
     }, canCreate);
     entries.push(entry);
     $('field-list').append(entry.panel);

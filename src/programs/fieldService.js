@@ -247,12 +247,24 @@ export function createFieldService({ store, allowDemoGrants = false }) {
     if (!validation.ok) throwInvalid(validation);
     const value = validation.value;
     return store.withTransaction(async (tx) => {
-      const { program } = await authorizeProgram(tx, userId, programId);
+      const { program, grants } = await authorizeProgram(tx, userId, programId);
       if (program.lifecycleStatus === 'RETIRED') throw programErrors.programRetired();
       const field = await insertFieldWithUse(tx, userId, value,
         [{ programId, isRequired: value.isRequired, displayOrder: value.displayOrder }], correlationId);
       const use = await tx.lockApplicabilityForUpdate(programId, field.fieldId);
-      return { status: 'CREATED', field: { ...(await fieldView(tx, field.fieldId)), applicability: toApplicabilityView(use) } };
+      // A new field is used only by this authorized Program.
+      return {
+        status: 'CREATED',
+        field: {
+          ...(await fieldView(tx, field.fieldId)),
+          applicability: toApplicabilityView(use),
+          permissions: {
+            canManageDefinition: true,
+            canManageValue: true,
+            canRetire: hasOrgScopeCapability(grants, MANAGE_ORGANIZATION, { allowDemoGrants }),
+          },
+        },
+      };
     });
   }
 
