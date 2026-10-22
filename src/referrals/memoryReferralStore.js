@@ -72,6 +72,11 @@
 //
 // Reporting (card 9): countReferrals({ from, to, programId?, departmentId? }) -> number
 //   (see its comment below for the exact SQL).
+// Reporting (card 12): aggregateReferrals({ from, to, programId?, departmentId? })
+//   -> { totalReferrals, rows } from ONE consistent read (see below).
+// Reporting (card 13): listTimingFacts({ from, to, programId?, departmentId? })
+//   -> [{ createdAt, firstRespondedAt, decision, firstResultedInServiceAt, serviceOutcome }]
+//   for the same cohort and scope as countReferrals (see its comment).
 //
 // Read methods (card 6, receiving queue + authorization):
 //   getActiveGrants(userId) -> [{ permission, scopeType, programId,
@@ -818,8 +823,104 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       ).length;
     },
 
+    // Reporting (card 12, PRD 12.3, 12.4, 12.7). Every count for one report
+    // from ONE consistent read, so the total and the breakdowns always
+    // agree. Cohort: committed referrals with from <= createdAt < to.
+    //   totalReferrals: made OR received in scope, each counted once
+    //     (same rule as countReferrals).
+    //   rows: one per (role, programId, departmentId), where role MADE
+    //     groups by the referring Program and its Department at creation,
+    //     and RECEIVED by the receiving Program and its Department at
+    //     creation. Scope filters each role on its own side.
+    // Azure SQL, ONE statement (Azure SQL Database has
+    // READ_COMMITTED_SNAPSHOT on by default, so a single statement reads one
+    // consistent version; if it is ever turned off, run it in a SNAPSHOT
+    // transaction instead):
+    //   WITH cohort AS (SELECT * FROM dbo.referrals
+    //                   WHERE created_at >= @from AND created_at < @to)
+    //   SELECT 'TOTAL' AS role, NULL AS program_id, NULL AS department_id,
+    //          COUNT(*) AS referral_count, 0, 0, 0, 0, 0, 0
+    //     FROM cohort
+    //     [WHERE referring_program_id = @p OR receiving_program_id = @p]         -- Program scope
+    //     [WHERE referring_department_id = @d OR receiving_department_id = @d]   -- Department scope
+    //   UNION ALL
+    //   SELECT 'RECEIVED', receiving_program_id, receiving_department_id, COUNT(*),
+    //          SUM(CASE WHEN decision = 'ACCEPTED' THEN 1 ELSE 0 END),
+    //          SUM(CASE WHEN decision = 'NOT_APPROPRIATE' THEN 1 ELSE 0 END),
+    //          SUM(CASE WHEN response_status = 'AWAITING_RESPONSE' THEN 1 ELSE 0 END),
+    //          SUM(CASE WHEN service_outcome = 'RESULTED_IN_SERVICE' THEN 1 ELSE 0 END),
+    //          SUM(CASE WHEN service_outcome = 'DID_NOT_RESULT_IN_SERVICE' THEN 1 ELSE 0 END),
+    //          SUM(CASE WHEN decision = 'ACCEPTED' AND service_outcome = 'NOT_RECORDED' THEN 1 ELSE 0 END)
+    //     FROM cohort [WHERE receiving_program_id = @p | receiving_department_id = @d]
+    //     GROUP BY receiving_program_id, receiving_department_id
+    //   UNION ALL
+    //   SELECT 'MADE', referring_program_id, referring_department_id, COUNT(*), 0, 0, 0, 0, 0, 0
+    //     FROM cohort [WHERE referring_program_id = @p | referring_department_id = @d]
+    //     GROUP BY referring_program_id, referring_department_id
+    // Returns counts only: no referral IDs or referral data (PRD 12.1).
+    async aggregateReferrals({ from, to, programId, departmentId }) {
+      // One synchronous pass over committed rows = one consistent read.
+      const cohort = referrals.filter((r) => r.createdAt >= from && r.createdAt < to);
+      const inScope = (side, r) => (programId !== undefined ? r[`${side}ProgramId`] === programId
+        : departmentId !== undefined ? r[`${side}DepartmentId`] === departmentId : true);
+      const groups = new Map();
+      const add = (role, side, r) => {
+        const key = `${role}:${r[`${side}ProgramId`]}:${r[`${side}DepartmentId`]}`;
+        if (!groups.has(key)) {
+          groups.set(key, {
+            role, programId: r[`${side}ProgramId`], departmentId: r[`${side}DepartmentId`], referralCount: 0,
+            accepted: 0, notAppropriate: 0, awaiting: 0, resultedInService: 0, didNotResultInService: 0, acceptedNotRecorded: 0,
+          });
+        }
+        const g = groups.get(key);
+        g.referralCount += 1;
+        if (role !== 'RECEIVED') return;
+        const outcome = r.serviceOutcome ?? 'NOT_RECORDED';
+        if (r.decision === 'ACCEPTED') g.accepted += 1;
+        if (r.decision === 'NOT_APPROPRIATE') g.notAppropriate += 1;
+        if (r.responseStatus === 'AWAITING_RESPONSE') g.awaiting += 1;
+        if (outcome === 'RESULTED_IN_SERVICE') g.resultedInService += 1;
+        if (outcome === 'DID_NOT_RESULT_IN_SERVICE') g.didNotResultInService += 1;
+        if (r.decision === 'ACCEPTED' && outcome === 'NOT_RECORDED') g.acceptedNotRecorded += 1;
+      };
+      let totalReferrals = 0;
+      for (const r of cohort) {
+        if (inScope('referring', r) || inScope('receiving', r)) totalReferrals += 1;
+        if (inScope('receiving', r)) add('RECEIVED', 'receiving', r);
+        if (inScope('referring', r)) add('MADE', 'referring', r);
+      }
+      return { totalReferrals, rows: [...groups.values()] };
+    },
+
     async listReferralsByCreator(userId, options = {}) {
       return newestFirst(referrals.filter((r) => r.createdByUserId === userId), options);
+    },
+
+    // Reporting (card 13). The timing facts of the cohort countReferrals
+    // counts: committed referrals with from <= createdAt < to, in the same
+    // scope. Only the five columns the timing metrics need; never
+    // participant data or IDs (PRD 10.5, 12.1).
+    // Azure SQL (durations are computed in the service, from these values):
+    //   SELECT created_at, first_responded_at, decision,
+    //          first_resulted_in_service_at, service_outcome
+    //   FROM dbo.referrals
+    //   WHERE created_at >= @from AND created_at < @to
+    //     [AND (referring_program_id = @programId OR receiving_program_id = @programId)]
+    //     [AND (referring_department_id = @departmentId OR receiving_department_id = @departmentId)]
+    //   Timestamps must come back as exact UTC instants (datetime2(3)).
+    async listTimingFacts({ from, to, programId, departmentId }) {
+      return referrals
+        .filter((r) =>
+          r.createdAt >= from && r.createdAt < to
+          && (programId === undefined || r.referringProgramId === programId || r.receivingProgramId === programId)
+          && (departmentId === undefined || r.referringDepartmentId === departmentId || r.receivingDepartmentId === departmentId))
+        .map((r) => ({
+          createdAt: r.createdAt,
+          firstRespondedAt: r.firstRespondedAt ?? null,
+          decision: r.decision ?? null,
+          firstResultedInServiceAt: r.firstResultedInServiceAt ?? null,
+          serviceOutcome: r.serviceOutcome,
+        }));
     },
 
     async listActiveNotAppropriateReasons() {
