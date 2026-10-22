@@ -7,7 +7,7 @@ export const DEV_USER_ID = 1;
 const NO_AGE_LIMIT = { ageLimitState: 'NO_RESTRICTION', ageMin: null, ageMax: null };
 const NO_AREA_LIMIT = { serviceAreaState: 'NO_RESTRICTION', serviceAreaZips: [] };
 
-export function syntheticSeed() {
+export function syntheticSeed({ programManagement = false, organizationManagement = false } = {}) {
   return {
     departments: [
       { departmentId: 1, name: 'Youth Services (sample)', lifecycleStatus: 'ACTIVE' },
@@ -43,5 +43,24 @@ export function syntheticSeed() {
     ],
     // No affiliation yet, so the first-use affiliation step is visible.
     users: [{ userId: DEV_USER_ID, isActive: true }],
+    // Explicit synthetic permissions for the local management UI.
+    // Default callers keep an unprivileged seed. No real QCH mappings.
+    grants: [...(programManagement ? [3, 7].map((programId) => ({
+      userId: DEV_USER_ID,
+      permission: 'MANAGE_PROGRAM',
+      scopeType: 'PROGRAM',
+      programId,
+      departmentId: null,
+      grantSource: 'IN_APP',
+    })) : []),
+      ...(organizationManagement ? [{
+        userId: DEV_USER_ID,
+        permission: 'MANAGE_ORGANIZATION',
+        scopeType: 'ORG',
+        programId: null,
+        departmentId: null,
+        grantSource: 'IN_APP',
+      }] : []),
+    ],
   };
 }

@@ -1,0 +1,73 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Program fields - QCH Connect</title>
+  <link rel="stylesheet" href="/referral/referral.css" />
+  <script type="module" src="fieldValues.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <a class="brand" href="/">QCH Connect</a>
+    <nav aria-label="Main navigation"><a href="/program-management/">Program Management</a></nav>
+    <div class="text-size" role="group" aria-labelledby="text-size-label">
+      <span id="text-size-label" class="text-size__label">Text size</span>
+      <button type="button" data-size="S" aria-pressed="false">S</button>
+      <button type="button" data-size="M" aria-pressed="true">M</button>
+      <button type="button" data-size="L" aria-pressed="false">L</button>
+      <button type="button" data-size="XL" aria-pressed="false">XL</button>
+    </div>
+  </header>
+  <main id="main" class="page">
+    <h1>Program fields</h1>
+    <p id="program-name"></p>
+    <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p>
+    <p>Save each field separately. Discontinued and retired fields remain visible as history.</p>
+    <div id="field-status" class="status status--info" role="status" aria-live="polite" tabindex="-1">
+      <span class="status__text">Loading fields...</span>
+    </div>
+    <button type="button" id="reload-fields" class="btn btn--secondary">Reload saved fields</button>
+    <section id="create-field-panel" class="panel" hidden>
+      <h2>Create a Program information field</h2>
+      <p>Create a new field only when an existing field does not represent the same meaning.</p>
+      <form id="create-field-form" novalidate>
+        <fieldset id="create-field-controls" class="plain">
+          <legend>New field</legend>
+          <div class="field">
+            <label for="new-field-label">Label <span aria-hidden="true">*</span></label>
+            <input id="new-field-label" type="text" maxlength="200" required aria-required="true" />
+          </div>
+          <div class="field">
+            <label for="new-field-type">Type <span aria-hidden="true">*</span></label>
+            <select id="new-field-type" required aria-required="true">
+              <option value="TEXT">Text</option>
+              <option value="NUMBER">Number</option>
+              <option value="DATE">Date</option>
+              <option value="BOOLEAN">Yes or no</option>
+              <option value="SINGLE_SELECT">Choose one option</option>
+              <option value="MULTI_SELECT">Choose several options</option>
+            </select>
+          </div>
+          <div id="new-options-group" class="field" hidden>
+            <label for="new-field-options">Options, one per line</label>
+            <textarea id="new-field-options" rows="4" aria-describedby="new-options-hint"></textarea>
+            <p id="new-options-hint">Provide 1 to 50 distinct options, each no more than 200 characters.</p>
+          </div>
+          <div class="field">
+            <input id="new-field-required" type="checkbox" />
+            <label for="new-field-required">Require a value for this Program</label>
+          </div>
+          <div class="field">
+            <label for="new-field-order">Display order</label>
+            <input id="new-field-order" type="number" min="0" max="10000" step="1" value="0" />
+          </div>
+          <button type="submit" class="btn btn--primary">Create field</button>
+        </fieldset>
+      </form>
+    </section>
+    <div id="field-list"></div>
+  </main>
+</body>
+</html>
