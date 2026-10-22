@@ -190,9 +190,32 @@ export function createFieldService({ store, allowDemoGrants = false }) {
 
   // ----- Program-level ---------------------------------------------------
 
+  // Reuse discovery exposes definitions from Programs this user manages.
+  // It never exposes another Program's saved values or permission records.
+  async function listAvailableFields(userId, programId) {
+    return store.withTransaction(async (tx) => {
+      const { grants } = await authorizeProgram(tx, userId, programId);
+      const existing = new Set((await tx.listProgramApplicability(programId)).map((row) => row.fieldId));
+      const found = new Map();
+      for (const sourceId of [...managed(grants)].sort((a, b) => a - b)) {
+        if (!(await tx.getProgram(sourceId))) continue;
+        for (const use of await tx.listProgramApplicability(sourceId)) {
+          if (existing.has(use.fieldId) || found.has(use.fieldId)) continue;
+          const field = await tx.getField(use.fieldId);
+          if (!field || field.appliesTo !== APPLIES_TO || field.lifecycleStatus !== 'ACTIVE') continue;
+          found.set(field.fieldId, await fieldView(tx, field.fieldId));
+        }
+      }
+      const fields = [...found.values()].sort((a, b) =>
+        a.label.localeCompare(b.label) || a.fieldId - b.fieldId);
+      return { programId, fields };
+    });
+  }
+
   async function listProgramFields(userId, programId) {
     return store.withTransaction(async (tx) => {
-      await authorizeProgram(tx, userId, programId);
+      const { program, grants } = await authorizeProgram(tx, userId, programId);
+      const mine = managed(grants);
       const uses = await tx.listProgramApplicability(programId);
       const fields = [];
       for (const use of uses) {
@@ -200,7 +223,19 @@ export function createFieldService({ store, allowDemoGrants = false }) {
         if ((await tx.getField(use.fieldId)).appliesTo !== APPLIES_TO) continue;
         const view = await fieldView(tx, use.fieldId);
         const value = valueFromRows(view.dataType, await tx.listFieldValues(programId, use.fieldId));
-        fields.push({ ...view, applicability: toApplicabilityView(use), value });
+        const usedBy = await tx.listFieldApplicability(use.fieldId);
+        fields.push({
+          ...view,
+          applicability: toApplicabilityView(use),
+          value,
+          permissions: {
+            canManageDefinition: usedBy.length > 0
+              && usedBy.every((row) => mine.has(row.programId)),
+            canManageValue: program.lifecycleStatus !== 'RETIRED'
+              && view.lifecycleStatus === 'ACTIVE',
+            canRetire: hasOrgScopeCapability(grants, MANAGE_ORGANIZATION, { allowDemoGrants }),
+          },
+        });
       }
       fields.sort((a, b) => a.applicability.displayOrder - b.applicability.displayOrder || a.fieldId - b.fieldId);
       return { programId, fields };
@@ -549,6 +584,7 @@ export function createFieldService({ store, allowDemoGrants = false }) {
   }
 
   return Object.freeze({
+    listAvailableFields,
     listProgramFields,
     createField,
     applyField,
