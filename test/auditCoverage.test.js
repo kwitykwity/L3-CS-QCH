@@ -3,9 +3,11 @@
 // Walks every action in the app that changes stored data and checks that
 // each writes exactly the expected audit events: right entity, action,
 // actor and correlation ID, in the same transaction. The memory store
-// enforces the dbo.audit_events rules (auditRules.js), so every event
-// here would also be accepted by Azure SQL. At the end, no audit event may
-// contain participant data.
+// checks every event against auditRules.js (the dbo.audit_events
+// constraints as written, plus stricter app rules). That is not proof of
+// what Azure SQL accepts; real SQL persistence is verified separately
+// (db/AUDIT_VERIFICATION.md). At the end, no audit event may contain
+// participant data.
 
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
@@ -119,6 +121,11 @@ test('every data-changing action writes exactly its audit events', async () => {
 
   // ----- Program information and lifecycle (card 14A) -----
   await step(R, ['PROGRAM UPDATED'], async (o) => programs.updateDetails(R, 11, { version: (await store.getProgram(11)).version, description: 'Synthetic description' }, o));
+  // Matching facts (card 14, #32): one PROGRAM UPDATED event per save.
+  await step(R, ['PROGRAM UPDATED'], async (o) => programs.updateMatchingFacts(R, 11, {
+    version: (await store.getProgram(11)).version, needCategoryIds: [],
+    ageLimitState: 'SET', ageMin: 18, ageMax: 24, serviceAreaState: 'SET', serviceAreaZips: ['11375'],
+  }, o));
   await step(R, ['PROGRAM DISCONTINUED'], async (o) => programs.discontinue(R, 10, { version: (await store.getProgram(10)).version }, o));
   await step(R, ['PROGRAM REACTIVATED'], async (o) => programs.reactivate(R, 10, { version: (await store.getProgram(10)).version }, o));
 

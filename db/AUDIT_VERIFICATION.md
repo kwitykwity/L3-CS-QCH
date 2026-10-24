@@ -15,32 +15,52 @@ This document records verification coverage; it does not change requirements.
 - PRs #21, #22, #24, #25 (Card 14): Program, Department, configurable
   field, option, and field value auditing (PROGRAM, DEPARTMENT, FIELD,
   FIELD_OPTION, PROGRAM_FIELD).
+- PR #32 (Card 14): matching-facts saves (PROGRAM UPDATED).
 - Staff affiliation changes (Card 2): USER UPDATED.
 - Existing application tests: test/referral.test.js, test/referralResponse.test.js,
   test/serviceOutcome.test.js, and the Program Management suites.
 
-## Schema rules enforced in every test (application side)
+## Audit rules checked in every test (application side)
 
-The in-memory stores refuse any audit event the dbo.audit_events INSERT
-would refuse in Azure SQL (src/referrals/auditRules.js):
+The in-memory stores check every audit event against
+src/referrals/auditRules.js before accepting it. The rules come in two
+kinds, and each refusal says which (`kind` is `SQL` or `APP`):
+
+**SQL rules**, the dbo.audit_events constraints as written in
+001_core_schema.sql:
 
 - entity_type in the ck_audit_entity list; action in the ck_audit_action list
-- entity_id a positive integer (NOT NULL)
+- entity_id an integer (BIGINT NOT NULL)
 - actor_user_id an existing user (fk_audit_actor)
 - correlation_id at most 64 characters (NVARCHAR(64))
-- before_json and after_json NULL or a JSON object (ck_audit_*_json)
+- before_json and after_json NULL, or JSON that ISJSON accepts
+  (ck_audit_*_json). This is judged on the serialized text, so a value
+  that serializes to a lone string, number or boolean is refused. Example:
+  a JavaScript Date at the top level becomes a quoted string, which ISJSON
+  refuses.
 
-A refusal throws, so the whole change rolls back, as in SQL. Because the
-rule applies to every write, the full test suite also proves that every
-audit event the application writes today would be accepted by Azure SQL.
-test/auditRules.test.js reads 001_core_schema.sql and fails if the lists
-ever drift from the CHECK constraints.
+**APP rules**, stricter than SQL on purpose (Azure SQL would accept these):
+
+- entity_id positive (SQL has no CHECK on entity_id; every audited key
+  comes from an IDENTITY(1,1) column)
+- before_json and after_json a JSON object (ISJSON also accepts an array)
+
+A refusal of either kind throws, so the whole change rolls back, as a
+refused INSERT would in SQL. test/auditRules.test.js reads
+001_core_schema.sql and fails if the SQL lists drift from the CHECK
+constraints, or if SQL adds an entity_id CHECK (then that rule should move
+to the SQL kind).
+
+**What this does not prove.** These tests show that every audit event the
+application writes today passes the schema rules as written. They do not
+prove that Azure SQL accepts, stores or rolls back those events. That
+needs the integration verification listed below.
 
 ## Coverage test
 
 test/auditCoverage.test.js walks every action that changes stored data
 (referral create, respond, outcome, both corrections, retry; affiliation;
-Program update, discontinue, reactivate, create, move; field create,
+Program update, matching facts, discontinue, reactivate, create, move; field create,
 apply, value, required/order, rename, replace, discontinue, reactivate,
 retire; option create, rename, discontinue, reactivate; Department
 create, rename, discontinue, reactivate). Each must write exactly its

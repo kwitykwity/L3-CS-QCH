@@ -70,10 +70,12 @@
 //       Written in the same transaction as the change it records. The store
 //       adds occurredAt (UTC) itself; callers never supply the timestamp.
 //       Refused (AuditRuleError, transaction rolls back) unless the event
-//       passes the dbo.audit_events rules: entity type and action from the
-//       CHECK lists, a positive entity ID, an existing actor (FK), a
-//       correlation ID of at most 64 characters, and JSON before/after
-//       (see auditRules.js).
+//       passes auditRules.js: the dbo.audit_events constraints (entity
+//       type and action from the CHECK lists, an integer entity ID, an
+//       existing actor (FK), a correlation ID of at most 64 characters,
+//       before/after JSON that ISJSON accepts) plus two stricter app rules
+//       (positive entity ID, JSON object). This mirrors the schema; it does
+//       not prove what Azure SQL accepts.
 //
 // Reporting (card 9): countReferrals({ from, to, programId?, departmentId? }) -> number
 //   (see its comment below for the exact SQL).
@@ -703,8 +705,9 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
           failNextAudit = false;
           throw new Error('simulated audit failure');
         }
-        // The same rules the dbo.audit_events INSERT must pass in Azure SQL.
-        // A refusal throws, so the whole transaction rolls back, as in SQL.
+        // The dbo.audit_events constraints plus the app's stricter rules
+        // (auditRules.js). A refusal throws, so the whole transaction rolls
+        // back, as a refused INSERT would in SQL.
         const actor = await base.getUser(event?.actorUserId);
         checkAuditEvent(event, { userExists: () => actor !== null });
         // The store sets the authoritative timestamp (PRD 9.6, 9.7); in SQL

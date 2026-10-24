@@ -228,7 +228,7 @@ export function createMemoryStore(
         failNextAudit = false;
         throw new Error('simulated audit failure');
       }
-      // The dbo.audit_events rules, checked before anything is applied.
+      // The audit rules (auditRules.js), checked before anything is applied.
       checkAuditEvent(event, { userExists: (id) => usersById.has(id) });
       user.currentProgramId = toProgramId;
       user.rowVersion += 1;
