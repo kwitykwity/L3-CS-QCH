@@ -31,6 +31,8 @@ stops it afterwards. To use a Chromium that is already installed, set
 | `test/regression/journeys.test.js` | Whole workflows through the integrated app over HTTP, switching between staff members |
 | `test/regression/accessibility.test.js` | Every page in `public/`: language, title, headings, labels, ids, required fields, status announcements, text size, link colors, and color contrast in both themes |
 | `e2e/directReferral.spec.js` | In Chromium: the New Referral entry screen (no path preselected; Direct Referral chosen by keyboard), Direct Referral completed by keyboard only, visible focus on every stop, Shift+Tab order, Enter safety, undo/redo, S/M/L/XL, phone width at XL, and an axe WCAG 2.2 AA scan of the entry screen and every Direct Referral state in light and dark themes |
+| `e2e/programManagement.spec.js`, `e2e/fieldValues.spec.js`, `e2e/organization.spec.js`, `e2e/matchingManagement.spec.js` | Card 14 (#32): each Program Management screen's main path in Chromium, with stale-page and lost-connection recovery and axe in both themes |
+| `e2e/programManagementJourneys.spec.js` | Card 52: the Program Management journeys the card 14 specs leave out, one block per area (fields, options, reuse, replacement, retirement, Departments, Program creation, Program moves): missing and duplicate input with focus on the problem, cancelled confirmations, stale pages, lost connections, what may be reused, replaced or retired, discontinued Departments as targets, referral history across a move, keyboard-only creation, XL at phone width on every screen, axe on error states |
 
 The journeys use the in-memory store. PRD 17.2 asks for the same journeys
 against Azure SQL; that waits on the Azure SQL store.
@@ -43,7 +45,7 @@ against Azure SQL; that waits on the Azure SQL store.
 | --- | --- | --- |
 | Direct Referral E2E (#8, #19; entry screen from #27) | Journeys 1, 4, 5, 6; `e2e/directReferral.spec.js` | Run A in a second browser |
 | Receiving lifecycle: queue and response (#10, #11) | Journeys 1, 2, 3, 6 (API; no screen yet) | None until a screen exists |
-| Program maintenance 14A: Program information and lifecycle (#21) | Journey 7: authorized edit, refusals for other roles, stale-version refusal, discontinue / reactivate, effect on new referral choices, preserved referral history, audit evidence (API; no screen yet) | None until a screen exists |
+| Program maintenance 14A: Program information and lifecycle (#21) | Journey 7: authorized edit, refusals for other roles, stale-version refusal, discontinue / reactivate, effect on new referral choices, preserved referral history, audit evidence (API). Screens (#32): `e2e/programManagement.spec.js` | Keyboard and Narrator checks recorded on #32 |
 | Keyboard workflows and focus | `e2e/` (Chromium, scripted keyboard) | Runs A and B in a second browser |
 | Labels, required fields, errors | `accessibility.test.js` (every page, including the guided-matching markup); axe in `e2e/` | Screen reader spot check |
 | Text sizing S/M/L/XL | `accessibility.test.js`; `e2e/` (computed sizes, kept work, reload) | Run C step 2 (browser zoom) |
@@ -55,8 +57,8 @@ against Azure SQL; that waits on the Azure SQL store.
 | --- | --- | --- | --- |
 | GPME E2E: guided matching and GPME-assisted referral | #16, #27 | An HTTP journey (match, choose, GPME_ASSISTED referral, evaluation saved) and `e2e/gpme.spec.js` (Run B automated, axe on results / no match / failure) | `test/gpme*.test.js` per card; the card 11 browser check in #27 |
 | Receiving lifecycle: outcome and corrections | #14 | A journey through record outcome, correct outcome, correct response, stale version, audit | `test/serviceOutcome.test.js` per card |
-| Program maintenance 14B: configurable fields and values | #22, #24 | A journey | `test/programFields*.test.js` per card |
-| Program maintenance 14C: create / move Programs, Department lifecycle | #25 | A journey | `test/programOrganization.test.js` per card |
+| Program maintenance 14B: configurable fields and values | #22, #24 | An HTTP journey | `test/programFields*.test.js` per card; in the browser (#32, card 52): `e2e/fieldValues.spec.js`, `e2e/programManagementJourneys.spec.js` (fields, options, reuse, replacement, retirement) |
+| Program maintenance 14C: create / move Programs, Department lifecycle | #25 | An HTTP journey | `test/programOrganization.test.js` per card; in the browser (#32, card 52): `e2e/organization.spec.js`, `e2e/programManagementJourneys.spec.js` (Departments, creation, moves, referral history after a move) |
 | P0 reporting: Total Referrals | #18 | A journey that reports on referrals created by the other journeys | `test/totalReferrals.test.js` known answers |
 
 ### Not merged yet (dependencies)
@@ -80,8 +82,28 @@ against Azure SQL; that waits on the Azure SQL store.
   the dark card (found by axe). The referral page's skip link had the same
   problem when it appears. Both stylesheets now color links from the theme
   (7:1 or more), and the start-page link has a visible focus outline.
+- **Focus did not move to the first missing field on five Program
+  Management forms (PRD 14.3; card 52).** Field creation, field reuse,
+  field replacement, Program creation and matching facts all looked for
+  the first `:invalid` element. The browser also marks the surrounding
+  `<fieldset>` as `:invalid`, and a fieldset cannot take focus, so focus
+  stayed on the status message. They now look for the first invalid
+  `input`, `select` or `textarea`. Four tests in
+  `e2e/programManagementJourneys.spec.js` fail without this fix. The
+  matching screen got the same one-line change; its existing test passes
+  either way.
 
 ## Found, not fixed here
+
+- **Two option refusals give a vague reason (card 52).** Adding an option
+  that already exists, or discontinuing a field's last active option, is
+  correctly refused by the server (`DUPLICATE_OPTION`,
+  `LAST_ACTIVE_OPTION`). The screen shows the general "The option changed
+  or this action is unavailable ... Reload saved fields" message and
+  locks that field until a reload. Departments already name the real
+  reason ("That Department name is already in use"). The tests check that
+  nothing changes, not the wording, so a clearer message will not break
+  them.
 
 - **The start page (`public/index.html`)** sets its text in pixels and
   has no S/M/L/XL control. It is a temporary backend status page with one
