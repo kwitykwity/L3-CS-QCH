@@ -26,6 +26,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 | [admin-guide.md](admin-guide.md) | Program Management and organization tasks for administrators |
 | [troubleshooting.md](troubleshooting.md) | Start-up problems, error codes, test problems, what is logged |
 | [operations.md](operations.md) | Monitoring expectations, verification procedures, recovery concepts, known dependencies |
+| [ai-interpretation-options.md](ai-interpretation-options.md) | Research only: three ways an open-ended "Find a Program" box could work, compared for pending decision 7 |
 
 ## Deployment and handoff
 
