@@ -1,0 +1,173 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Referral details · QCH Connect</title>
+  <link rel="stylesheet" href="/referral/referral.css" />
+  <script type="module" src="detail.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <a class="brand" href="/">QCH Connect</a>
+    <nav aria-label="Main navigation"><a href="/referral/">New referral</a> <a href="/receiving/">Received referrals</a></nav>
+    <div class="text-size" role="group" aria-labelledby="text-size-label">
+      <span id="text-size-label" class="text-size__label">Text size</span>
+      <button type="button" class="text-size__btn" data-size="S" aria-pressed="false">S</button>
+      <button type="button" class="text-size__btn" data-size="M" aria-pressed="true">M</button>
+      <button type="button" class="text-size__btn" data-size="L" aria-pressed="false">L</button>
+      <button type="button" class="text-size__btn" data-size="XL" aria-pressed="false">XL</button>
+    </div>
+  </header>
+  <main id="main" class="page">
+    <p><a href="/receiving/">Back to received referrals</a></p>
+    <h1 id="referral-heading" tabindex="-1">Referral details</h1>
+    <div id="status" class="status status--info" role="status" aria-live="polite" tabindex="-1" hidden>
+      <span class="status__badge" aria-hidden="true"></span>
+      <span class="status__text"></span>
+    </div>
+
+    <section id="info" class="panel" aria-labelledby="info-heading" hidden>
+      <h2 id="info-heading">Referral information</h2>
+      <dl id="info-list" class="summary"></dl>
+    </section>
+
+    <section id="progress" class="panel" aria-labelledby="progress-heading" hidden>
+      <h2 id="progress-heading">Where this referral stands</h2>
+      <p class="muted">Response, Decision and Service outcome are separate steps. Accepted does not mean the person received service; the receiving Program records that separately.</p>
+      <ol class="steps">
+        <li class="step">
+          <h3>1. Response</h3>
+          <p id="response-value"></p>
+        </li>
+        <li class="step">
+          <h3>2. Decision</h3>
+          <p id="decision-value"></p>
+          <p id="reason-value" hidden></p>
+          <p id="explanation-value" class="need" hidden></p>
+        </li>
+        <li class="step">
+          <h3>3. Service outcome</h3>
+          <p id="outcome-value"></p>
+          <p id="outcome-note" class="muted" hidden></p>
+        </li>
+      </ol>
+    </section>
+
+    <section id="conflict" class="panel" aria-labelledby="conflict-heading" hidden>
+      <h2 id="conflict-heading" tabindex="-1">Review before you continue</h2>
+      <p id="conflict-message"></p>
+      <dl id="conflict-current" class="summary" hidden></dl>
+      <button type="button" id="load-latest" class="btn btn--primary">Load the latest information</button>
+    </section>
+
+    <p id="readonly-note" class="muted" hidden>You can view this referral, but you do not have permission to change it right now.</p>
+
+    <section id="respond-panel" class="panel" aria-labelledby="respond-heading" hidden>
+      <h2 id="respond-heading">Respond to this referral</h2>
+      <form id="respond-form" novalidate>
+        <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p>
+        <fieldset id="respond-fields" class="plain">
+          <fieldset id="respond-decision" aria-describedby="respond-decision-error">
+            <legend>Decision <span class="req" aria-hidden="true">*</span></legend>
+            <div class="radios__options">
+              <label for="respond-accept"><input type="radio" id="respond-accept" name="respond-decision" value="ACCEPTED" /> Accept</label>
+              <label for="respond-na"><input type="radio" id="respond-na" name="respond-decision" value="NOT_APPROPRIATE" /> Not appropriate</label>
+            </div>
+            <p id="respond-decision-error" class="field__error" hidden></p>
+          </fieldset>
+          <p class="muted">Accepting means your Program will work with this referral. It does not record that service happened.</p>
+          <div id="respond-reason-group" class="field" hidden>
+            <label for="respond-reason">Reason <span class="req" aria-hidden="true">*</span></label>
+            <select id="respond-reason" aria-describedby="respond-reason-error">
+              <option value="">Choose a reason</option>
+            </select>
+            <p id="respond-reason-error" class="field__error" hidden></p>
+          </div>
+          <div id="respond-explanation-group" class="field" hidden>
+            <label for="respond-explanation">Explanation (optional)</label>
+            <textarea id="respond-explanation" rows="3" maxlength="1000" aria-describedby="respond-explanation-hint respond-explanation-error"></textarea>
+            <p id="respond-explanation-hint" class="muted">Sensitive. Only people who can view this referral see it. Up to 1000 characters.</p>
+            <p id="respond-explanation-error" class="field__error" hidden></p>
+          </div>
+          <button type="submit" id="respond-submit" class="btn btn--primary">Send response</button>
+        </fieldset>
+      </form>
+    </section>
+
+    <section id="outcome-panel" class="panel" aria-labelledby="outcome-heading" hidden>
+      <h2 id="outcome-heading">Record the service outcome</h2>
+      <form id="outcome-form" novalidate>
+        <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p>
+        <fieldset id="outcome-fields" class="plain">
+          <fieldset id="outcome-choice" aria-describedby="outcome-choice-error">
+            <legend>Did this referral result in service? <span class="req" aria-hidden="true">*</span></legend>
+            <div class="radios__options">
+              <label for="outcome-resulted"><input type="radio" id="outcome-resulted" name="outcome" value="RESULTED_IN_SERVICE" /> Resulted in service</label>
+              <label for="outcome-not-resulted"><input type="radio" id="outcome-not-resulted" name="outcome" value="DID_NOT_RESULT_IN_SERVICE" /> Did not result in service</label>
+            </div>
+            <p id="outcome-choice-error" class="field__error" hidden></p>
+          </fieldset>
+          <button type="submit" id="outcome-submit" class="btn btn--primary">Record outcome</button>
+        </fieldset>
+      </form>
+    </section>
+
+    <section id="correct-outcome-panel" class="panel" aria-labelledby="correct-outcome-heading" hidden>
+      <h2 id="correct-outcome-heading">Correct the service outcome</h2>
+      <form id="correct-outcome-form" novalidate>
+        <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p>
+        <fieldset id="correct-outcome-fields" class="plain">
+          <fieldset id="correct-outcome-choice" aria-describedby="correct-outcome-choice-error">
+            <legend>Correct outcome <span class="req" aria-hidden="true">*</span></legend>
+            <div class="radios__options">
+              <label for="co-resulted"><input type="radio" id="co-resulted" name="corrected-outcome" value="RESULTED_IN_SERVICE" /> Resulted in service</label>
+              <label for="co-not-resulted"><input type="radio" id="co-not-resulted" name="corrected-outcome" value="DID_NOT_RESULT_IN_SERVICE" /> Did not result in service</label>
+              <label for="co-not-recorded"><input type="radio" id="co-not-recorded" name="corrected-outcome" value="NOT_RECORDED" /> Not recorded (it was recorded by mistake)</label>
+            </div>
+            <p id="correct-outcome-choice-error" class="field__error" hidden></p>
+          </fieldset>
+          <p class="muted">The earlier value stays in the audit history.</p>
+          <button type="submit" id="correct-outcome-submit" class="btn btn--primary">Save corrected outcome</button>
+        </fieldset>
+      </form>
+    </section>
+
+    <section id="correct-decision-panel" class="panel" aria-labelledby="correct-decision-heading" hidden>
+      <h2 id="correct-decision-heading">Correct the decision</h2>
+      <form id="correct-decision-form" novalidate>
+        <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p>
+        <fieldset id="correct-decision-fields" class="plain">
+          <fieldset id="correct-decision-choice" aria-describedby="correct-decision-choice-error">
+            <legend>Correct decision <span class="req" aria-hidden="true">*</span></legend>
+            <div class="radios__options">
+              <label for="cd-accept"><input type="radio" id="cd-accept" name="corrected-decision" value="ACCEPTED" /> Accepted</label>
+              <label for="cd-na"><input type="radio" id="cd-na" name="corrected-decision" value="NOT_APPROPRIATE" /> Not appropriate</label>
+            </div>
+            <p id="correct-decision-choice-error" class="field__error" hidden></p>
+          </fieldset>
+          <p id="correct-decision-hint" class="muted">A Not appropriate referral cannot have a service outcome. To change an Accepted referral with a recorded outcome to Not appropriate, first correct the outcome to Not recorded.</p>
+          <div id="cd-reason-group" class="field" hidden>
+            <label for="cd-reason">Reason <span class="req" aria-hidden="true">*</span></label>
+            <select id="cd-reason" aria-describedby="cd-reason-error">
+              <option value="">Choose a reason</option>
+            </select>
+            <p id="cd-reason-error" class="field__error" hidden></p>
+          </div>
+          <div id="cd-explanation-group" class="field" hidden>
+            <label for="cd-explanation">Explanation (optional)</label>
+            <textarea id="cd-explanation" rows="3" maxlength="1000" aria-describedby="cd-explanation-hint cd-explanation-error"></textarea>
+            <p id="cd-explanation-hint" class="muted">Sensitive. Only people who can view this referral see it. Up to 1000 characters.</p>
+            <p id="cd-explanation-error" class="field__error" hidden></p>
+          </div>
+          <p class="muted">The earlier value stays in the audit history.</p>
+          <button type="submit" id="correct-decision-submit" class="btn btn--primary">Save corrected decision</button>
+        </fieldset>
+      </form>
+    </section>
+
+    <p><button type="button" id="reload" class="btn btn--secondary" hidden>Reload this referral</button></p>
+  </main>
+</body>
+</html>

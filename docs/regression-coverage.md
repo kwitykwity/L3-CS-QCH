@@ -33,6 +33,7 @@ stops it afterwards. To use a Chromium that is already installed, set
 | `e2e/directReferral.spec.js` | In Chromium: the New Referral entry screen (no path preselected; Direct Referral chosen by keyboard), Direct Referral completed by keyboard only, visible focus on every stop, Shift+Tab order, Enter safety, undo/redo, S/M/L/XL, phone width at XL, and an axe WCAG 2.2 AA scan of the entry screen and every Direct Referral state in light and dark themes |
 | `e2e/programManagement.spec.js`, `e2e/fieldValues.spec.js`, `e2e/organization.spec.js`, `e2e/matchingManagement.spec.js` | Card 14 (#32): each Program Management screen's main path in Chromium, with stale-page and lost-connection recovery and axe in both themes |
 | `e2e/programManagementJourneys.spec.js` | Card 52: the Program Management journeys the card 14 specs leave out, one block per area (fields, options, reuse, replacement, retirement, Departments, Program creation, Program moves): missing and duplicate input with focus on the problem, cancelled confirmations, stale pages, lost connections, what may be reused, replaced or retired, discontinued Departments as targets, referral history across a move, keyboard-only creation, XL at phone width on every screen, axe on error states |
+| `e2e/receiving.spec.js` | Task A: the receiving screens (received list, referral detail). The list shows only Programs I receive for, with Response, Decision and Service outcome kept separate, and stage filters. Accept, record and correct an outcome by keyboard (Accepted never reads as served). Not appropriate needs a reason, has no outcome, and becomes outcome-ready only after a correction to Accepted. A recorded outcome blocks a change to Not appropriate. Stale page, someone responding first, a lost connection, and Cancel: nothing is merged or sent twice. A referral I only sent is read-only, and the server refuses a direct request. An unknown ID reveals nothing. axe in both themes; XL at phone width |
 
 The journeys use the in-memory store. PRD 17.2 asks for the same journeys
 against Azure SQL; that waits on the Azure SQL store.
@@ -44,7 +45,7 @@ against Azure SQL; that waits on the Azure SQL store.
 | Area | Automated | Manual (checklist below) |
 | --- | --- | --- |
 | Direct Referral E2E (#8, #19; entry screen from #27) | Journeys 1, 4, 5, 6; `e2e/directReferral.spec.js` | Run A in a second browser |
-| Receiving lifecycle: queue and response (#10, #11) | Journeys 1, 2, 3, 6 (API; no screen yet) | None until a screen exists |
+| Receiving lifecycle: queue and response (#10, #11) | Journeys 1, 2, 3, 6 (API); screens (Task A): `e2e/receiving.spec.js` | Run D in a second browser |
 | Program maintenance 14A: Program information and lifecycle (#21) | Journey 7: authorized edit, refusals for other roles, stale-version refusal, discontinue / reactivate, effect on new referral choices, preserved referral history, audit evidence (API). Screens (#32): `e2e/programManagement.spec.js` | Keyboard and Narrator checks recorded on #32 |
 | Keyboard workflows and focus | `e2e/` (Chromium, scripted keyboard) | Runs A and B in a second browser |
 | Labels, required fields, errors | `accessibility.test.js` (every page, including the guided-matching markup); axe in `e2e/` | Screen reader spot check |
@@ -56,7 +57,7 @@ against Azure SQL; that waits on the Azure SQL store.
 | Area | Merged in | What this suite still needs | Covered elsewhere today |
 | --- | --- | --- | --- |
 | GPME E2E: guided matching and GPME-assisted referral | #16, #27 | An HTTP journey (match, choose, GPME_ASSISTED referral, evaluation saved) and `e2e/gpme.spec.js` (Run B automated, axe on results / no match / failure) | `test/gpme*.test.js` per card; the card 11 browser check in #27 |
-| Receiving lifecycle: outcome and corrections | #14 | A journey through record outcome, correct outcome, correct response, stale version, audit | `test/serviceOutcome.test.js` per card |
+| Receiving lifecycle: outcome and corrections | #14 | An HTTP journey through record outcome, correct outcome, correct response, stale version, audit; multi-user browser journeys (card 51) | `test/serviceOutcome.test.js` per card; screens (Task A): `e2e/receiving.spec.js` |
 | Program maintenance 14B: configurable fields and values | #22, #24 | An HTTP journey | `test/programFields*.test.js` per card; in the browser (#32, card 52): `e2e/fieldValues.spec.js`, `e2e/programManagementJourneys.spec.js` (fields, options, reuse, replacement, retirement) |
 | Program maintenance 14C: create / move Programs, Department lifecycle | #25 | An HTTP journey | `test/programOrganization.test.js` per card; in the browser (#32, card 52): `e2e/organization.spec.js`, `e2e/programManagementJourneys.spec.js` (Departments, creation, moves, referral history after a move) |
 | P0 reporting: Total Referrals | #18 | A journey that reports on referrals created by the other journeys | `test/totalReferrals.test.js` known answers |
@@ -162,3 +163,22 @@ date, browser, tester and any failure in the pull request.
 2. Reload: the chosen size is kept. Browser zoom to 200% still works with
    no sideways scrolling at a phone-sized window.
 3. Repeat steps 1 and 2 with the computer in dark mode.
+
+### Run D: receiving a referral (Task A)
+
+On `npm run dev:synthetic`, make a Direct Referral to Housing Help Desk
+(sample), then open Received referrals.
+
+1. Open the referral from the list with Enter. Response, Decision and
+   Service outcome show as three separate steps.
+2. Choose Accept with Space; Tab to "Send response"; Enter; confirm. The
+   outcome still reads "Not recorded", with the note that accepted is not
+   served.
+3. Record an outcome, then correct it. Each result is read out from the
+   status box.
+4. On another referral, choose Not appropriate and send with no reason:
+   the error is text with an icon, and focus moves to Reason.
+5. Open the same referral in two tabs. Change the outcome in one, then
+   save in the other: "Review before you continue" appears with what is
+   saved now, the save buttons are locked, and "Load the latest
+   information" unlocks them.
