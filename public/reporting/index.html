@@ -11,8 +11,8 @@
 
     <header class="topbar">
       <a href="/">&larr; QCH Connect home</a>
-      <div class="size-control" role="group" aria-labelledby="size-label">
-        <span id="size-label">Text size</span>
+      <div class="size-control" role="group" aria-labelledby="text-size-label">
+        <span id="text-size-label">Text size</span>
         <button type="button" class="btn" data-size="S" aria-pressed="false" aria-label="Small text, 12 pixels">S</button>
         <button type="button" class="btn" data-size="M" aria-pressed="true" aria-label="Medium text, 14 pixels, default">M</button>
         <button type="button" class="btn" data-size="L" aria-pressed="false" aria-label="Large text, 18 pixels">L</button>
@@ -28,6 +28,8 @@
       </p>
 
       <div id="error" class="message message--error" role="alert" hidden></div>
+
+      <p class="help">Fields marked <span aria-hidden="true">*</span> are required.</p>
 
       <form id="filters" class="card filters" novalidate>
         <div class="field">
