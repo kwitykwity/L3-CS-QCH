@@ -105,7 +105,7 @@ describe('every page', () => {
           assert.match(html, /id="main"/);
           assert.match(html, /Fields marked <span aria-hidden="true">\*<\/span> are required\./);
           for (const a of [...tags(html, 'input'), ...tags(html, 'select'), ...tags(html, 'textarea')]) {
-            if (/\brequired\b/.test(a)) assert.match(a, /aria-required="true"/, attr(a, 'id'));
+            if (/\srequired(?=\s|=|\/?$)/.test(a)) assert.match(a, /aria-required="true"/, attr(a, 'id'));
           }
         });
 
