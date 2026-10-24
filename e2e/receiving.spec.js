@@ -230,11 +230,35 @@ test.describe('changes that cannot be confirmed', () => {
     page.once('dialog', (d) => d.accept());
     await page.locator('#outcome-submit').click();
     await expect(page.locator('#conflict-message')).toContainText('could not confirm whether your change was saved');
+    await expect(status(page)).toHaveText(/could not confirm whether your change was saved\. It may have been saved\./);
+    await expect(status(page), 'an unknown outcome is never called "not saved"').not.toContainText('not saved');
     await expect(page.locator('#outcome-submit')).toBeDisabled();
     await page.unroute(url);
     await page.locator('#load-latest').click();
     await expect(page.locator('#outcome-submit')).toBeEnabled();
     expect((await saved(request, id)).serviceOutcome).toBe('NOT_RECORDED');
+  });
+
+  test('saved on the server but the answer was lost: says it may have saved, locks, and the latest shows it', async ({ page, request }) => {
+    const { id } = await makeReferral(page, request);
+    await open(page, id);
+    const url = `**/api/referrals/${id}/response`;
+    // The request reaches the server and commits; the browser never hears back.
+    await page.route(url, async (route) => { await route.fetch(); await route.abort(); });
+    await page.locator('#respond-accept').check();
+    page.once('dialog', (d) => d.accept());
+    await page.locator('#respond-submit').click();
+    await expect(page.locator('#conflict')).toBeVisible();
+    await expect(status(page)).toHaveText(/It may have been saved\./);
+    await expect(status(page)).not.toContainText('not saved');
+    await expect(page.locator('#respond-submit')).toBeDisabled();
+    expect((await saved(request, id)).decision, 'the change really was saved').toBe('ACCEPTED');
+    await page.unroute(url);
+
+    await page.locator('#load-latest').click();
+    await expect(step(page, 'decision')).toHaveText('Accepted');
+    await expect(page.locator('#respond-panel')).toBeHidden();
+    await expect(page.locator('#outcome-submit')).toBeEnabled();
   });
 
   test('cancelling a confirmation sends nothing', async ({ page, request }) => {
@@ -247,6 +271,106 @@ test.describe('changes that cannot be confirmed', () => {
     expect(sent).toEqual([]);
     expect((await saved(request, id)).responseStatus).toBe('AWAITING_RESPONSE');
   });
+});
+
+// Shared recovery path: every change goes through handle(). When the
+// server confirms a change but the reload right after it fails, every
+// action stays locked and the success message stays, until an explicit
+// reload succeeds.
+test.describe('saved, but the reload after it fails', () => {
+  const ALL_SUBMITS = ['#respond-submit', '#outcome-submit', '#correct-outcome-submit', '#correct-decision-submit'];
+
+  async function notAppropriateReason(request) {
+    const response = await request.get('/api/referrals/not-appropriate-reasons');
+    expect(response.ok()).toBeTruthy();
+    return (await response.json()).reasons[0].reasonId;
+  }
+
+  const CASES = [
+    {
+      name: 'first response (Accept)',
+      setup: async () => {},
+      choose: (page) => page.locator('#respond-accept').check(),
+      submit: '#respond-submit',
+      done: 'Response sent: Accepted. The service outcome is not recorded yet.',
+      saved: { decision: 'ACCEPTED' },
+      afterReload: { decision: 'Accepted', enabled: '#outcome-submit', hidden: '#respond-panel' },
+    },
+    {
+      name: 'record the service outcome',
+      setup: async (request, id) => {
+        await request.post(`/api/referrals/${id}/response`, { data: { decision: 'ACCEPTED' } });
+      },
+      choose: (page) => page.locator('#outcome-resulted').check(),
+      submit: '#outcome-submit',
+      done: 'Service outcome recorded: Resulted in service.',
+      saved: { serviceOutcome: 'RESULTED_IN_SERVICE' },
+      afterReload: { decision: 'Accepted', enabled: '#correct-outcome-submit', hidden: '#outcome-panel' },
+    },
+    {
+      name: 'correct the service outcome',
+      setup: async (request, id) => {
+        await request.post(`/api/referrals/${id}/response`, { data: { decision: 'ACCEPTED' } });
+        await request.post(`/api/referrals/${id}/outcome`, { data: { outcome: 'RESULTED_IN_SERVICE' } });
+      },
+      choose: (page) => page.locator('#co-not-resulted').check(),
+      submit: '#correct-outcome-submit',
+      done: 'Service outcome corrected to: Did not result in service.',
+      saved: { serviceOutcome: 'DID_NOT_RESULT_IN_SERVICE' },
+      afterReload: { decision: 'Accepted', enabled: '#correct-outcome-submit', hidden: '#outcome-panel' },
+    },
+    {
+      name: 'correct the decision',
+      setup: async (request, id) => {
+        const reasonId = await notAppropriateReason(request);
+        await request.post(`/api/referrals/${id}/response`, { data: { decision: 'NOT_APPROPRIATE', reasonId } });
+      },
+      choose: (page) => page.locator('#cd-accept').check(),
+      submit: '#correct-decision-submit',
+      done: 'Decision corrected to: Accepted.',
+      saved: { decision: 'ACCEPTED' },
+      afterReload: { decision: 'Accepted', enabled: '#outcome-submit', hidden: '#respond-panel' },
+    },
+  ];
+
+  for (const c of CASES) {
+    test(`${c.name}: actions stay locked until an explicit reload succeeds`, async ({ page, request }) => {
+      const { id } = await makeReferral(page, request);
+      await c.setup(request, id);
+      await open(page, id);
+
+      // From now on, loading this referral fails (the change itself still works).
+      const getUrl = `**/api/referrals/${id}`;
+      await page.route(getUrl, (route) => (route.request().method() === 'GET' ? route.abort() : route.fallback()));
+
+      await c.choose(page);
+      page.once('dialog', (d) => d.accept());
+      await page.locator(c.submit).click();
+
+      // Confirmed success stays on screen, and nothing can be sent.
+      await expect(status(page)).toContainText(c.done);
+      await expect(status(page)).toContainText('every action is locked');
+      for (const sel of ALL_SUBMITS) await expect(page.locator(sel), `${sel} is locked`).toBeDisabled();
+      expect(await page.locator('form button[type="submit"]:enabled').count()).toBe(0);
+      await expect(page.locator('#reload')).toBeVisible();
+      await expect(page.locator('#reload')).toBeEnabled();
+      expect(await saved(request, id)).toMatchObject(c.saved);
+
+      // A reload that fails again keeps the success message and the lock.
+      await page.locator('#reload').click();
+      await expect(status(page)).toContainText(c.done);
+      await expect(status(page)).toContainText('still could not load');
+      for (const sel of ALL_SUBMITS) await expect(page.locator(sel)).toBeDisabled();
+
+      // Only an explicit, successful reload unlocks, showing the saved state.
+      await page.unroute(getUrl);
+      await page.locator('#reload').click();
+      await expect(status(page)).toHaveText(`${c.done} Referral reloaded.`);
+      await expect(step(page, 'decision')).toHaveText(c.afterReload.decision);
+      await expect(page.locator(c.afterReload.hidden)).toBeHidden();
+      await expect(page.locator(c.afterReload.enabled)).toBeEnabled();
+    });
+  }
 });
 
 test.describe('who may act', () => {
