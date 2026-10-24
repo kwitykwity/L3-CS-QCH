@@ -95,7 +95,7 @@ async function mutate(entry, path, body, created) {
   }
   if (!entry.form.checkValidity()) {
     message('Check the required fields and text lengths.', true);
-    entry.form.querySelector(':invalid')?.focus();
+    entry.form.querySelector('input:invalid, select:invalid, textarea:invalid')?.focus();
     return;
   }
   if (!window.confirm(created
