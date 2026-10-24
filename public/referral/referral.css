@@ -250,3 +250,18 @@ dialog {
 dialog::backdrop { background: rgb(0 0 0 / 0.4); }
 
 [hidden] { display: none !important; }
+
+/* Received referrals (Task A): list items and the three separate steps
+   (Response, Decision, Service outcome). Long text wraps at any width. */
+.queue-list { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: 0.75rem; }
+.queue-item { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; }
+.queue-item h3 { margin: 0 0 0.25rem; overflow-wrap: anywhere; }
+.queue-item p { margin: 0.25rem 0; }
+.trio { grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); margin: 0.5rem 0; }
+.trio div { align-content: start; }
+.steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
+.step { border-left: 0.25rem solid var(--border); padding-left: 0.75rem; }
+.step h3 { margin: 0 0 0.25rem; }
+.step p { margin: 0.25rem 0; }
+.need { white-space: pre-wrap; overflow-wrap: anywhere; }
+#referral-heading { overflow-wrap: anywhere; }
