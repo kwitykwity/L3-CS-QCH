@@ -1,0 +1,179 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>QCH Connect - Reporting Center</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <link rel="stylesheet" href="/referral/referral.css" />
+    <style>
+      .reporting-container { max-width: 1100px; margin: 0 auto; padding: 1.5rem; }
+      .filter-bar { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; background: #f8f9fa; padding: 1rem; border-radius: 6px; margin-bottom: 1.5rem; }
+      .filter-group { display: flex; flex-direction: column; gap: 0.25rem; }
+      .filter-group label { font-size: 0.875rem; font-weight: 600; color: #333; }
+      .filter-group select, .filter-group input { padding: 0.5rem; border: 1px solid #ccc; border-radius: 4rem; min-width: 160px; }
+      .kpi-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 1rem; margin-bottom: 2rem; }
+      .kpi-card { background: #fff; border: 1px solid #e0e0e0; border-radius: 8px; padding: 1rem; box-shadow: 0 1px 3px rgba(0,0,0,0.05); }
+      .kpi-card h3 { margin: 0 0 0.5rem 0; font-size: 0.875rem; color: #666; font-weight: 500; }
+      .kpi-value { font-size: 1.75rem; font-weight: 700; color: #111; }
+      .kpi-status { font-size: 0.75rem; display: inline-block; padding: 0.15rem 0.5rem; border-radius: 4px; margin-top: 0.25rem; }
+      .status-CALCULATED { background: #e6f4ea; color: #137333; }
+      .status-PENDING { background: #fef7e0; color: #b06000; }
+      .status-NO_DATA { background: #f1f3f4; color: #5f6368; }
+      .metrics-section { margin-bottom: 2rem; }
+      .metrics-section h2 { border-bottom: 2px solid #eee; padding-bottom: 0.5rem; margin-bottom: 1rem; }
+      table.report-table { width: 100%; border-collapse: collapse; text-align: left; }
+      table.report-table th, table.report-table td { padding: 0.75rem; border-bottom: 1px solid #e0e0e0; font-size: 0.875rem; }
+      table.report-table th { background: #fafafa; font-weight: 600; }
+      .error-banner { background: #fce8e6; color: #c5221f; padding: 1rem; border-radius: 6px; margin-bottom: 1rem; display: none; }
+      .nav-back { margin-bottom: 1rem; display: inline-block; }
+    </style>
+  </head>
+  <body>
+    <div class="reporting-container">
+      <a href="/" class="nav-back">&larr; Back to QCH Connect Home</a>
+      <h1>Reporting Center</h1>
+      <p class="subtitle">Aggregate Referral Activity and Timing Metrics</p>
+
+      <div id="error-banner" class="error-banner" role="alert"></div>
+
+      <!-- Controls -->
+      <form id="filter-form" class="filter-bar">
+        <div class="filter-group">
+          <label for="period-select">Period</label>
+          <select id="period-select" name="period">
+            <option value="THIS_MONTH" selected>This Month</option>
+            <option value="LAST_MONTH">Last Month</option>
+            <option value="THIS_QUARTER">This Quarter</option>
+            <option value="LAST_QUARTER">Last Quarter</option>
+            <option value="THIS_YEAR">This Year</option>
+            <option value="CUSTOM">Custom Date</option>
+          </select>
+        </div>
+
+        <div class="filter-group" id="date-input-group" style="display: none;">
+          <label for="date-input">Anchor Date (YYYY-MM-DD)</label>
+          <input type="date" id="date-input" name="date" />
+        </div>
+
+        <div class="filter-group">
+          <label for="scope-type">Scope Type</label>
+          <select id="scope-type" name="scopeType">
+            <option value="ORGANIZATION" selected>Organization-Wide</option>
+            <option value="PROGRAM">Program</option>
+            <option value="DEPARTMENT">Department</option>
+          </select>
+        </div>
+
+        <div class="filter-group" id="scope-id-group" style="display: none;">
+          <label for="scope-id" id="scope-id-label">ID</label>
+          <input type="text" id="scope-id" name="scopeId" placeholder="e.g. 101" />
+        </div>
+
+        <button type="submit" class="button button--primary">Apply Filters</button>
+      </form>
+
+      <!-- KPI Summary Cards -->
+      <div class="metrics-section">
+        <h2>Summary Metrics</h2>
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <h3>Total Referrals</h3>
+            <div id="kpi-total" class="kpi-value">&mdash;</div>
+          </div>
+          <div class="kpi-card">
+            <h3>Accepted Rate</h3>
+            <div id="kpi-accepted-rate" class="kpi-value">&mdash;</div>
+            <div id="kpi-accepted-status" class="kpi-status">&mdash;</div>
+          </div>
+          <div class="kpi-card">
+            <h3>Not Appropriate Rate</h3>
+            <div id="kpi-not-appropriate-rate" class="kpi-value">&mdash;</div>
+            <div id="kpi-not-appropriate-status" class="kpi-status">&mdash;</div>
+          </div>
+          <div class="kpi-card">
+            <h3>Resulted-in-Service Rate</h3>
+            <div id="kpi-service-rate" class="kpi-value">&mdash;</div>
+            <div id="kpi-service-status" class="kpi-status">&mdash;</div>
+          </div>
+          <div class="kpi-card">
+            <h3>Awaiting Response</h3>
+            <div id="kpi-awaiting" class="kpi-value">&mdash;</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Timing Metrics -->
+      <div class="metrics-section">
+        <h2>Timing Metrics</h2>
+        <div class="kpi-grid">
+          <div class="kpi-card">
+            <h3>Avg Time to First Response</h3>
+            <div id="timing-response-avg" class="kpi-value">&mdash;</div>
+            <div id="timing-response-avg-status" class="kpi-status">&mdash;</div>
+          </div>
+          <div class="kpi-card">
+            <h3>Median Time to First Response</h3>
+            <div id="timing-response-median" class="kpi-value">&mdash;</div>
+            <div id="timing-response-median-status" class="kpi-status">&mdash;</div>
+          </div>
+          <div class="kpi-card">
+            <h3>Avg Time to Recorded Service</h3>
+            <div id="timing-service-avg" class="kpi-value">&mdash;</div>
+            <div id="timing-service-avg-status" class="kpi-status">&mdash;</div>
+          </div>
+          <div class="kpi-card">
+            <h3>Median Time to Recorded Service</h3>
+            <div id="timing-service-median" class="kpi-value">&mdash;</div>
+            <div id="timing-service-median-status" class="kpi-status">&mdash;</div>
+          </div>
+        </div>
+      </div>
+
+      <!-- Breakdowns -->
+      <div class="metrics-section">
+        <h2>Program Breakdown</h2>
+        <table class="report-table" id="program-breakdown-table">
+          <thead>
+            <tr>
+              <th>Program</th>
+              <th>Made</th>
+              <th>Received</th>
+              <th>Accepted</th>
+              <th>Not Appropriate</th>
+              <th>Awaiting Response</th>
+              <th>Acceptance Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="7">Loading program metrics&hellip;</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="metrics-section">
+        <h2>Department Breakdown</h2>
+        <table class="report-table" id="department-breakdown-table">
+          <thead>
+            <tr>
+              <th>Department</th>
+              <th>Made</th>
+              <th>Received</th>
+              <th>Accepted</th>
+              <th>Not Appropriate</th>
+              <th>Awaiting Response</th>
+              <th>Acceptance Rate</th>
+            </tr>
+          </thead>
+          <tbody>
+            <tr><td colspan="7">Loading department metrics&hellip;</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <p class="note">Aggregate reporting view only. No participant-level data is stored or displayed.</p>
+    </div>
+
+    <script src="app.js"></script>
+  </body>
+</html>
