@@ -511,3 +511,57 @@ describe('store contract: conditional Program update', () => {
     assert.equal(secondGotIt, true);
   });
 });
+
+describe('managed Program discovery', () => {
+  test('lists only granted Programs, including discontinued and retired, without routing or details', async () => {
+    const { store, programs } = setup();
+    const result = await programs.listManagedPrograms(MANAGER);
+    assert.deepEqual(result.programs.map((p) => p.programId).sort((a, b) => a - b), [11, 13, 14]);
+    assert.equal(result.programs.find((p) => p.programId === 13).lifecycleStatus, 'DISCONTINUED');
+    assert.equal(result.programs.find((p) => p.programId === 14).lifecycleStatus, 'RETIRED');
+    for (const row of result.programs) {
+      assert.deepEqual(Object.keys(row).sort(), [
+        'departmentId', 'departmentName', 'lifecycleStatus', 'name', 'programId', 'site',
+      ]);
+    }
+    assert.equal(programAudit(store).length, 0);
+    assert.deepEqual((await programs.listManagedPrograms(OTHER_MANAGER)).programs.map((p) => p.programId), [12]);
+  });
+
+  test('affiliation, revoked grants, demo grants, admin rights and broad scopes do not grant discovery', async () => {
+    const { programs } = setup();
+    for (const id of [NO_GRANTS, REVOKED, DEMO_USER, ADMIN_ONLY, WIDE_SCOPE]) {
+      assert.deepEqual(await programs.listManagedPrograms(id), { programs: [] }, `user ${id}`);
+    }
+    const demo = setup({ allowDemoGrants: true });
+    assert.deepEqual((await demo.programs.listManagedPrograms(DEMO_USER)).programs.map((p) => p.programId), [11]);
+  });
+
+  test('rejects inactive, missing and invalid identities', async () => {
+    const { programs } = setup();
+    for (const id of [INACTIVE, 999]) {
+      await rejectsWith(programs.listManagedPrograms(id), 'USER_NOT_ACTIVE');
+    }
+    for (const id of [0, -1, 1.5, '100', undefined]) {
+      await rejectsWith(programs.listManagedPrograms(id), 'NOT_AUTHENTICATED');
+    }
+  });
+
+  test('HTTP discovery is no-store, rejects queries without echo, and uses resolved identity', async () => {
+    const store = seed();
+    const app = createApp({
+      affiliationStore: store,
+      referralStore: store,
+      resolveIdentity: () => ({ userId: OTHER_MANAGER }),
+    });
+    const url = '/api/program-management/programs';
+    const listed = await request(app).get(url).set('X-User-Id', String(MANAGER));
+    assert.equal(listed.status, 200);
+    assert.equal(listed.headers['cache-control'], 'no-store');
+    assert.deepEqual(listed.body.programs.map((p) => p.programId), [12]);
+    const refused = await request(app).get(url).query({ [MARKER]: MARKER });
+    assert.equal(refused.status, 400);
+    assert.equal(refused.body.code, 'UNEXPECTED_FIELD');
+    assert.ok(!JSON.stringify(refused.body).includes(MARKER));
+  });
+});
