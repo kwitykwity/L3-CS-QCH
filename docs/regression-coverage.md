@@ -33,6 +33,7 @@ stops it afterwards. To use a Chromium that is already installed, set
 | `e2e/directReferral.spec.js` | In Chromium: the New Referral entry screen (no path preselected; Direct Referral chosen by keyboard), Direct Referral completed by keyboard only, visible focus on every stop, Shift+Tab order, Enter safety, undo/redo, S/M/L/XL, phone width at XL, and an axe WCAG 2.2 AA scan of the entry screen and every Direct Referral state in light and dark themes |
 | `e2e/programManagement.spec.js`, `e2e/fieldValues.spec.js`, `e2e/organization.spec.js`, `e2e/matchingManagement.spec.js` | Card 14 (#32): each Program Management screen's main path in Chromium, with stale-page and lost-connection recovery and axe in both themes |
 | `e2e/programManagementJourneys.spec.js` | Card 52: the Program Management journeys the card 14 specs leave out, one block per area (fields, options, reuse, replacement, retirement, Departments, Program creation, Program moves): missing and duplicate input with focus on the problem, cancelled confirmations, stale pages, lost connections, what may be reused, replaced or retired, discontinued Departments as targets, referral history across a move, keyboard-only creation, XL at phone width on every screen, axe on error states |
+| `e2e/screenReader.spec.js` | What a screen reader is given on New Referral (Direct and guided matching) and Program Management: landmarks and headings, control names and groups, required and invalid state, hints and errors as descriptions, toggle state, dialog names and descriptions, focus moves, and every live-region announcement in order |
 
 The journeys use the in-memory store. PRD 17.2 asks for the same journeys
 against Azure SQL; that waits on the Azure SQL store.
@@ -47,7 +48,7 @@ against Azure SQL; that waits on the Azure SQL store.
 | Receiving lifecycle: queue and response (#10, #11) | Journeys 1, 2, 3, 6 (API; no screen yet) | None until a screen exists |
 | Program maintenance 14A: Program information and lifecycle (#21) | Journey 7: authorized edit, refusals for other roles, stale-version refusal, discontinue / reactivate, effect on new referral choices, preserved referral history, audit evidence (API). Screens (#32): `e2e/programManagement.spec.js` | Keyboard and Narrator checks recorded on #32 |
 | Keyboard workflows and focus | `e2e/` (Chromium, scripted keyboard) | Runs A and B in a second browser |
-| Labels, required fields, errors | `accessibility.test.js` (every page, including the guided-matching markup); axe in `e2e/` | Screen reader spot check |
+| Labels, required fields, errors | `accessibility.test.js` (every page, including the guided-matching markup); axe in `e2e/`; `e2e/screenReader.spec.js` | VoiceOver run: [screen-reader-check.md](screen-reader-check.md) |
 | Text sizing S/M/L/XL | `accessibility.test.js`; `e2e/` (computed sizes, kept work, reload) | Run C step 2 (browser zoom) |
 | Contrast (text 4.5:1, controls and focus 3:1) | `accessibility.test.js` both themes; axe in `e2e/` both themes | None |
 
@@ -110,7 +111,8 @@ against Azure SQL; that waits on the Azure SQL store.
   link; PRD 13.5 navigation will replace it. Whoever builds that
   navigation should give it the text-size control.
 - **The browser tests run in Chromium only.** Safari and Edge, and a
-  screen reader, are covered by the short manual pass below.
+  screen reader, are covered by the short manual pass below and by
+  [screen-reader-check.md](screen-reader-check.md).
 
 ## Manual keyboard checklist (PRD 14.2, 14.3, 17.7)
 

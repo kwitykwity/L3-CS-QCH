@@ -19,6 +19,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 | [handoff-checklist.md](handoff-checklist.md) | Every handoff deliverable, where it lives, and what it waits on |
 | [dependencies.md](dependencies.md) | Direct dependencies and how to list every license |
 | [regression-coverage.md](regression-coverage.md) | Accessibility and end-to-end regression coverage, and the manual keyboard checklist |
+| [screen-reader-check.md](screen-reader-check.md) | VoiceOver script and record sheet: labels, required fields, errors, announcements, dialogs, focus |
 
 Elsewhere in the repository:
 

@@ -138,7 +138,12 @@ fieldset.plain:disabled { opacity: 0.75; }
 .program-options .program-meta { margin-left: auto; color: var(--muted); font-size: 0.875rem; text-align: right; }
 
 .field__error { color: var(--error); font-weight: 600; margin: 0.25rem 0 0; }
-.field__error::before { content: "⚠ Error: "; } /* text + icon, not color alone */
+/* Text + icon, not color alone. Only while there IS an error: every field
+   points at its error element (aria-describedby), and screen readers read a
+   hidden empty one too, so an unconditional prefix made every valid field
+   announce "Error:". The "/ ..." part is what screen readers say: the word,
+   without the symbol (older browsers use the first line). */
+.field__error:not(:empty)::before { content: "⚠ Error: "; content: "⚠ Error: " / "Error: "; }
 
 .required-note { margin: 0 0 1rem; }
 
@@ -213,7 +218,9 @@ h2:focus-visible, .status:focus-visible { outline: 3px solid var(--focus-ring); 
 .path-btn__title { font-weight: 700; color: var(--primary); }
 .path-btn__desc { color: var(--muted); font-size: 0.875rem; }
 .path-btn[aria-pressed="true"] { border: 3px solid var(--primary); padding: calc(0.75rem - 2px) calc(1rem - 2px); }
-.path-btn[aria-pressed="true"] .path-btn__title::before { content: "✔ "; }
+/* Decorative: the button already announces "selected" (aria-pressed), so the
+   check mark is hidden from screen readers ("/ ''"). */
+.path-btn[aria-pressed="true"] .path-btn__title::before { content: "✔ "; content: "✔ " / ""; }
 .path-btn:focus-visible { background-color: var(--focus-bg); }
 .path-panel { border-top: 1px solid var(--border); padding-top: 1rem; }
 h3 { font-size: 1.125rem; margin: 0 0 0.75rem; }
