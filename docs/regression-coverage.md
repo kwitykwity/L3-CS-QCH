@@ -31,6 +31,7 @@ stops it afterwards. To use a Chromium that is already installed, set
 | `test/regression/journeys.test.js` | Whole workflows through the integrated app over HTTP, switching between staff members |
 | `test/regression/accessibility.test.js` | Every page in `public/`: language, title, headings, labels, ids, required fields, status announcements, text size, link colors, and color contrast in both themes |
 | `e2e/directReferral.spec.js` | In Chromium: the New Referral entry screen (no path preselected; Direct Referral chosen by keyboard), Direct Referral completed by keyboard only, visible focus on every stop, Shift+Tab order, Enter safety, undo/redo, S/M/L/XL, phone width at XL, and an axe WCAG 2.2 AA scan of the entry screen and every Direct Referral state in light and dark themes |
+| `e2e/gpme.spec.js` | In Chromium, against the synthetic backend: matching with explained plausible / possible results, choosing a Program, submission as a GPME-assisted referral (body carries only the approved matching inputs), no plausible match vs technical failure, answers preserved, Try again, Direct Referral fallback (after a failure and with matching fully down), recovery after `GPME_UNAVAILABLE`, `GPME_RESULT_CHANGED` and a lost confirmation, keyboard-only journey, nothing sensitive in URL / storage / console, axe on every guided state in light and dark, XL at phone width. One known defect is recorded as `test.fixme`: the entry screen scrolls sideways at XL on a phone |
 
 The journeys use the in-memory store. PRD 17.2 asks for the same journeys
 against Azure SQL; that waits on the Azure SQL store.
@@ -53,7 +54,7 @@ against Azure SQL; that waits on the Azure SQL store.
 
 | Area | Merged in | What this suite still needs | Covered elsewhere today |
 | --- | --- | --- | --- |
-| GPME E2E: guided matching and GPME-assisted referral | #16, #27 | An HTTP journey (match, choose, GPME_ASSISTED referral, evaluation saved) and `e2e/gpme.spec.js` (Run B automated, axe on results / no match / failure) | `test/gpme*.test.js` per card; the card 11 browser check in #27 |
+| GPME E2E: guided matching and GPME-assisted referral | #16, #27 | Browser journey is covered by `e2e/gpme.spec.js` (below). Still needed: an HTTP journey (match, choose, GPME_ASSISTED referral, evaluation saved) in `test/regression/` | `test/gpme*.test.js` per card; `e2e/gpme.spec.js` |
 | Receiving lifecycle: outcome and corrections | #14 | A journey through record outcome, correct outcome, correct response, stale version, audit | `test/serviceOutcome.test.js` per card |
 | Program maintenance 14B: configurable fields and values | #22, #24 | A journey | `test/programFields*.test.js` per card |
 | Program maintenance 14C: create / move Programs, Department lifecycle | #25 | A journey | `test/programOrganization.test.js` per card |
