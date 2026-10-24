@@ -183,7 +183,7 @@ $('matching-form').addEventListener('submit', async (event) => {
   const form = $('matching-form');
   if (!form.checkValidity()) {
     message('Check the marked fields and age bounds.', true, false);
-    form.querySelector(':invalid')?.focus();
+    form.querySelector('input:invalid, select:invalid, textarea:invalid')?.focus();
     return;
   }
   const ageSet = $('age-limit-state').value === 'SET';

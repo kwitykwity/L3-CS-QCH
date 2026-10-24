@@ -298,7 +298,7 @@ $('create-field-form').addEventListener('submit', async (event) => {
   const form = $('create-field-form');
   if (!form.checkValidity()) {
     message('Check the new field label, options, and display order.', true);
-    form.querySelector(':invalid')?.focus();
+    form.querySelector('input:invalid, select:invalid, textarea:invalid')?.focus();
     return;
   }
   const dataType = $('new-field-type').value;

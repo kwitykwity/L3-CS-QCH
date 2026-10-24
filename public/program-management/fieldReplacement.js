@@ -96,7 +96,7 @@ $('replacement-form').addEventListener('submit', async (event) => {
       || field.permissions?.canManageDefinition !== true || field.lifecycleStatus !== 'ACTIVE') return;
   if (!$('replacement-form').checkValidity()) {
     message('Check the replacement label, type, and options.', true);
-    $('replacement-form').querySelector(':invalid')?.focus();
+    $('replacement-form').querySelector('input:invalid, select:invalid, textarea:invalid')?.focus();
     return;
   }
   if (!window.confirm('Replace this field for every Program using it? The old field will be discontinued. Its saved values remain as history and will not be copied to the replacement.')) return;

@@ -97,7 +97,7 @@ $('reuse-form').addEventListener('submit', async (event) => {
   if (busy || blocked || completed || !writable) return;
   if (!$('reuse-form').checkValidity() || !$('reuse-order').value) {
     message('Choose a field and a whole display order from 0 to 10000.', true);
-    ($('reuse-form').querySelector(':invalid') ?? $('reuse-order')).focus();
+    ($('reuse-form').querySelector('input:invalid, select:invalid, textarea:invalid') ?? $('reuse-order')).focus();
     return;
   }
   const field = fields.find((row) => row.fieldId === Number($('reuse-field').value));
