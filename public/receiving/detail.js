@@ -15,7 +15,13 @@
 // - Stale or unconfirmed changes (PRD 9.4, 13.4): nothing is merged or
 //   retried. The page shows the latest information it has, keeps the
 //   worker's choices on screen but locks every action until the worker
-//   loads the latest information and chooses again.
+//   loads the latest information and chooses again. A change whose outcome
+//   is unknown is described as "could not confirm", never "not saved",
+//   because it may have been saved.
+// - A saved change locks every action until the page has successfully
+//   reloaded the referral. If that reload fails, the actions stay locked
+//   and the confirmed-success message stays on screen; only an explicit,
+//   successful reload unlocks them.
 
 import { CONTACT_METHODS } from '/referral/validation.js';
 import {
@@ -34,6 +40,9 @@ let referral = null;
 let access = null;
 let busy = false;
 let blocked = false;
+// The success message of a change the server confirmed, kept until the page
+// has shown the saved result, so a failed reload never hides it.
+let savedNotice = null;
 
 setupTextSize();
 
@@ -187,12 +196,15 @@ async function loadReasons() {
   fillReasons($('cd-reason'), reasons, savedId);
 }
 
-// Loads the referral from the server and shows it. Returns true on success.
-async function load() {
+// Loads the referral from the server and shows it. Returns 'ok',
+// 'not-found', 'signed-out' or 'failed'. Only 'ok' unlocks the actions; a
+// failure leaves `blocked` as it was. With `quiet`, a failure shows no
+// message, so the caller can say what happened.
+async function load({ quiet = false } = {}) {
   if (!Number.isSafeInteger(referralId) || referralId <= 0) {
     hideReferral();
-    showStatus('This referral is not available. It may not exist, or you may not have access to it.', 'error');
-    return false;
+    if (!quiet) showStatus('This referral is not available. It may not exist, or you may not have access to it.', 'error');
+    return 'not-found';
   }
   busy = true;
   controls();
@@ -202,29 +214,38 @@ async function load() {
     referral = result.body.referral;
     access = result.body.viewerAccess;
     blocked = false;
+    savedNotice = null;
     $('conflict').hidden = true;
     if (access.canRespond || access.canCorrectResponse) await loadReasons();
     render();
     controls();
-    return true;
+    return 'ok';
   }
   controls();
+  const before = savedNotice ? `${savedNotice} ` : '';
   if (result.status === 404) {
     hideReferral();
     $('reload').hidden = true;
-    showStatus('This referral is not available. It may not exist, or you may not have access to it.', 'error');
-  } else if (result.status === 401) {
-    showStatus('Sign in again to see this referral.', 'error');
-  } else {
-    $('reload').hidden = false;
-    showStatus('The referral could not be loaded. Check your connection and try again.', 'error');
+    if (!quiet) showStatus(`${before}This referral is not available. It may not exist, or you may not have access to it.`, 'error');
+    return 'not-found';
   }
-  return false;
+  if (result.status === 401) {
+    if (!quiet) showStatus(`${before}Sign in again to see this referral.`, 'error');
+    return 'signed-out';
+  }
+  $('reload').hidden = false;
+  if (!quiet) {
+    showStatus(savedNotice
+      ? `${savedNotice} The page still could not load the updated referral, so every action stays locked. Check your connection, then use Reload this referral.`
+      : 'The referral could not be loaded. Check your connection and try again.', 'error');
+  }
+  return 'failed';
 }
 
 // ----- when a change cannot be confirmed or the referral moved on -----
 
-function showConflict(message, current) {
+// `uncertain`: the server may have saved the change; never say it did not.
+function showConflict(message, current, { uncertain = false } = {}) {
   blocked = true;
   $('conflict-message').textContent = message;
   const list = $('conflict-current');
@@ -242,7 +263,9 @@ function showConflict(message, current) {
   list.hidden = !current;
   $('conflict').hidden = false;
   controls();
-  showStatus('Your change was not saved. Review the latest information before trying again.', 'error', { focus: false });
+  showStatus(uncertain
+    ? 'We could not confirm whether your change was saved. It may have been saved. Load the latest information before doing anything else.'
+    : 'Your change was not saved. Review the latest information before trying again.', 'error', { focus: false });
   $('conflict-heading').focus();
 }
 
@@ -258,12 +281,25 @@ const FIELD_ERRORS = {
 async function handle(result, ids, done) {
   const code = result.body?.code;
   if (result.status === 200) {
-    if (await load()) showStatus(done, 'success');
-    else showStatus(`${done} The page could not reload the referral; use Reload this referral.`, 'success');
+    // Saved. Nothing else can be sent until the page shows the saved result.
+    savedNotice = done;
+    blocked = true;
+    controls();
+    const loaded = await load({ quiet: true });
+    if (loaded === 'ok') {
+      showStatus(done, 'success');
+    } else if (loaded === 'not-found') {
+      savedNotice = null;
+      showStatus(`${done} The referral can no longer be shown here.`, 'success');
+    } else if (loaded === 'signed-out') {
+      showStatus(`${done} Sign in again to see the updated referral. Every action is locked until it is shown.`, 'success');
+    } else {
+      showStatus(`${done} The page could not load the updated referral, so every action is locked. Use Reload this referral before doing anything else.`, 'success');
+    }
     return;
   }
   if (result.networkError || result.status >= 500 || (result.status >= 200 && result.status < 300)) {
-    showConflict('We could not confirm whether your change was saved. Nothing else will be sent. Load the latest information to check what was saved, then decide what to do.', null);
+    showConflict('We could not confirm whether your change was saved. It may have been saved. Nothing else will be sent. Load the latest information to check what was saved, then decide what to do.', null, { uncertain: true });
     return;
   }
   if (result.status === 409 && code === 'REFERRAL_CHANGED') {
@@ -430,13 +466,14 @@ for (const form of document.querySelectorAll('form')) {
 }
 
 $('load-latest').addEventListener('click', async () => {
-  if (await load()) showStatus('Latest information loaded. Review it, then choose again.', 'info');
+  if (await load() === 'ok') showStatus('Latest information loaded. Review it, then choose again.', 'info');
 });
 $('reload').addEventListener('click', async () => {
-  if (await load()) showStatus('Referral reloaded.', 'info');
+  const notice = savedNotice;
+  if (await load() === 'ok') showStatus(notice ? `${notice} Referral reloaded.` : 'Referral reloaded.', notice ? 'success' : 'info');
 });
 
 (async () => {
   showStatus('Loading referral…', 'info', { focus: false });
-  if (await load()) showStatus('Referral loaded.', 'info', { focus: false });
+  if (await load() === 'ok') showStatus('Referral loaded.', 'info', { focus: false });
 })();
