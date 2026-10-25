@@ -225,7 +225,9 @@ function buildEntry(field, writable) {
   if (field.permissions?.canManageDefinition === true && field.lifecycleStatus === 'ACTIVE') {
     const replacementLink = element('a', 'Replace field meaning', 'btn btn--secondary');
     replacementLink.href = `replace-field.html?programId=${programId}&fieldId=${field.fieldId}`;
-    entry.panel.append(replacementLink);
+    const replacementActions = element('div', undefined, 'actions');
+    replacementActions.append(replacementLink);
+    entry.panel.append(replacementActions);
   }
   entry.original = snapshot(entry);
   return entry;
@@ -372,7 +374,13 @@ function buildSettings(entry, writable) {
 
   const button = element('button', 'Save field settings', 'btn btn--secondary');
   button.type = 'submit';
-  fieldset.append(required, requiredLabel, orderLabel, order, button);
+  const requiredRow = element('div', undefined, 'field-required-row');
+  requiredRow.append(required, requiredLabel);
+  const orderGroup = element('div', undefined, 'field-order-group');
+  orderGroup.append(orderLabel, order);
+  const settingsActions = element('div', undefined, 'field-settings-actions');
+  settingsActions.append(orderGroup, button);
+  fieldset.append(requiredRow, settingsActions);
   form.append(fieldset);
   entry.panel.append(form);
   entry.settingsFieldset = fieldset;
@@ -448,14 +456,17 @@ function buildDefinition(entry) {
   label.htmlFor = input.id;
   const rename = element('button', 'Rename field', 'btn btn--secondary');
   rename.type = 'submit';
-  fieldset.append(label, input, rename);
+  fieldset.append(label, input);
+  const definitionActions = element('div', undefined, 'actions');
+  definitionActions.append(rename);
 
   const lifecycle = element('button',
     field.lifecycleStatus === 'DISCONTINUED' ? 'Reactivate field' : 'Discontinue field',
     'btn btn--secondary');
   lifecycle.type = 'button';
   lifecycle.disabled = field.lifecycleStatus === 'DISCONTINUED' && field.replacedByFieldId != null;
-  fieldset.append(lifecycle);
+  definitionActions.append(lifecycle);
+  fieldset.append(definitionActions);
   form.append(fieldset);
   entry.panel.append(form);
   entry.definitionFieldset = fieldset;

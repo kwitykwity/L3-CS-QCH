@@ -32,6 +32,10 @@ if (config.nodeEnv !== 'development') {
 }
 
 const store = createMemoryReferralStore(syntheticSeed({ programManagement: true, organizationManagement: true, receiving: true }));
+if (process.env.QCH_TASK_C_SYNTHETIC_DEMO === 'true') {
+  const { seedSyntheticProgramInformation } = await import('./syntheticProgramInformation.js');
+  await seedSyntheticProgramInformation(store, DEV_USER_ID);
+}
 const app = createApp({
   affiliationStore: store,
   referralStore: store,
