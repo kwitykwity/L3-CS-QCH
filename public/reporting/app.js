@@ -161,6 +161,22 @@ async function loadPrograms() {
   }
 }
 
+// Every Department, including ones with no referrals and ones no longer
+// active, so a report can be scoped to any of them (history stays selectable).
+async function loadDepartments() {
+  const res = await api.listDepartments();
+  if (res.networkError || res.status !== 200 || !Array.isArray(res.body?.departments)) return;
+  for (const d of res.body.departments) {
+    if (Number.isSafeInteger(d?.departmentId) && d.departmentId > 0 && typeof d.name === 'string' && d.name !== '') {
+      const status = typeof d.lifecycleStatus === 'string' && d.lifecycleStatus !== 'ACTIVE'
+        ? ` (${d.lifecycleStatus.toLowerCase()})`
+        : '';
+      known.departments.set(d.departmentId, `${d.name}${status}`);
+    }
+  }
+  fillTargets(true);
+}
+
 /* ---------- query and errors ---------- */
 
 function showError(message) {
@@ -304,5 +320,5 @@ els.filters.addEventListener('submit', (event) => {
   run();
 });
 
-await loadPrograms();
+await Promise.all([loadPrograms(), loadDepartments()]);
 run();

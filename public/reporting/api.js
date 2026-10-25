@@ -4,6 +4,7 @@
 //   GET /api/reports/total-referrals?...      (same query)
 //   GET /api/reports/timing-metrics?...       (same query)
 //   GET /api/programs                         (names for the Program picker)
+//   GET /api/reports/departments              (every Department, for the Department picker)
 //
 // - GET only, aggregate only. The reporting routes allowlist their query
 //   parameters, so only period, date, programId and departmentId are sent.
@@ -43,6 +44,7 @@ async function get(path, params = {}) {
 
 export const api = Object.freeze({
   listPrograms: () => get('/api/programs'),
+  listDepartments: () => get('/api/reports/departments'),
   activity: (params) => get('/api/reports/referral-activity', params),
   total: (params) => get('/api/reports/total-referrals', params),
   timing: (params) => get('/api/reports/timing-metrics', params),
