@@ -289,3 +289,24 @@ test('the page text a screen reader starts from: every page has one h1 and a mai
     await expect(page.getByRole('main'), path).toHaveCount(1);
   }
 });
+
+test('the skip link moves keyboard focus into the main content on every page (found by ear in Safari)', async ({ page }) => {
+  // Safari only moves keyboard focus to a focusable target, so <main> must be
+  // focusable (tabindex="-1"); without it the next Tab went back to the header.
+  for (const path of [
+    '/referral/', '/program-management/', '/program-management/fields.html',
+    '/program-management/matching.html', '/program-management/organization.html',
+    '/program-management/organization-programs.html', '/program-management/reuse-field.html',
+    '/program-management/replace-field.html',
+  ]) {
+    await page.goto(path);
+    // Some pages move focus to a message on load, so focus the link directly.
+    await page.getByRole('link', { name: 'Skip to main content' }).focus();
+    await page.keyboard.press('Enter');
+    await expect(page.getByRole('main'), path).toBeFocused();
+    // The next Tab goes forward from the main content, never back up to the
+    // header (on a page with nothing to edit yet it may leave the page).
+    await page.keyboard.press('Tab');
+    expect(await page.evaluate(() => !!document.activeElement.closest('header')), path).toBe(false);
+  }
+});

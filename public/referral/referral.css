@@ -181,6 +181,10 @@ input:focus-visible, select:focus-visible, textarea:focus-visible,
 .btn:focus-visible, .text-size__btn:focus-visible { color: var(--text); }
 input[type="radio"]:focus-visible { outline-offset: 3px; }
 h2:focus, .status:focus { outline: none; }
+/* The skip link target: Safari only moves keyboard focus to a focusable
+   target, so <main> has tabindex="-1". The next Tab shows a ring; the whole
+   page needs none. */
+main[tabindex="-1"]:focus { outline: none; }
 h2:focus-visible, .status:focus-visible { outline: 3px solid var(--focus-ring); }
 
 .status {
