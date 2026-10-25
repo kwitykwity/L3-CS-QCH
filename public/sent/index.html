@@ -1,0 +1,58 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Referrals I sent · QCH Connect</title>
+  <link rel="stylesheet" href="/referral/referral.css" />
+  <script type="module" src="list.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <a class="brand" href="/">QCH Connect</a>
+    <nav aria-label="Main navigation"><a href="/referral/">New referral</a> <a href="/sent/" aria-current="page">Referrals I sent</a> <a href="/receiving/">Received referrals</a></nav>
+    <div class="text-size" role="group" aria-labelledby="text-size-label">
+      <span id="text-size-label" class="text-size__label">Text size</span>
+      <button type="button" class="text-size__btn" data-size="S" aria-pressed="false">S</button>
+      <button type="button" class="text-size__btn" data-size="M" aria-pressed="true">M</button>
+      <button type="button" class="text-size__btn" data-size="L" aria-pressed="false">L</button>
+      <button type="button" class="text-size__btn" data-size="XL" aria-pressed="false">XL</button>
+    </div>
+  </header>
+  <main id="main" class="page">
+    <h1>Referrals I sent</h1>
+    <p class="lead">Referrals you created, and what the receiving Program has done with each one. Response, Decision and Service outcome are separate steps. Accepted does not mean the person received service.</p>
+    <div id="status" class="status status--info" role="status" aria-live="polite" tabindex="-1" hidden>
+      <span class="status__badge" aria-hidden="true"></span>
+      <span class="status__text"></span>
+    </div>
+
+    <section id="filters" class="panel" aria-labelledby="filter-heading" hidden>
+      <h2 id="filter-heading">Choose what to show</h2>
+      <form id="filter-form" novalidate>
+        <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p>
+        <div class="field">
+          <label for="stage-filter">Where the referral stands</label>
+          <select id="stage-filter">
+            <option value="">All referrals</option>
+            <option value="AWAITING_RESPONSE">Awaiting response</option>
+            <option value="ACCEPTED_OUTCOME_PENDING">Accepted, service outcome not recorded</option>
+            <option value="COMPLETE">Complete</option>
+          </select>
+        </div>
+        <button type="submit" id="show" class="btn btn--primary">Show referrals</button>
+      </form>
+    </section>
+
+    <section id="results" class="panel" aria-labelledby="results-heading" hidden>
+      <h2 id="results-heading" tabindex="-1">Referrals</h2>
+      <p id="results-count" class="muted"></p>
+      <ul id="referral-list" class="queue-list"></ul>
+      <button type="button" id="load-more" class="btn btn--secondary" hidden>Show more referrals</button>
+    </section>
+
+    <button type="button" id="retry" class="btn btn--secondary" hidden>Try loading again</button>
+  </main>
+</body>
+</html>
