@@ -1,7 +1,7 @@
 // Reporting journey through the integrated app (Trello: "Testing:
 // Reporting browser journeys", API part; Final Technical PRD 12.2 to 12.7,
-// 17.6). The browser part waits for the Reporting UI; it will check the
-// SAME KNOWN_ANSWERS on screen (reportingFixture.js).
+// 17.6). The browser part (e2e/reportingKnownAnswers.spec.js) checks the
+// SAME known answers on screen (reportingFixture.js).
 //
 // Covered: every period type, organization / Program / Department scope
 // (including Department history after a Program moves), known answers for
@@ -11,7 +11,7 @@
 
 import { test, describe, before } from 'node:test';
 import assert from 'node:assert/strict';
-import { AS_OF, IDS, KNOWN_ANSWERS, USERS, buildReportingWorld } from './reportingFixture.js';
+import { AS_OF, IDS, KNOWN_ANSWERS, KNOWN_BREAKDOWNS, KNOWN_SCOPES, USERS, buildReportingWorld } from './reportingFixture.js';
 
 const REPORTS = ['total-referrals', 'timing-metrics', 'referral-activity'];
 
@@ -181,38 +181,32 @@ describe('future and out-of-range dates are refused, never reported (PRD 12.6)',
 
 describe('scope: Program and Department, with history (PRD 12.4, 12.7)', () => {
   test('Program scope counts referrals made OR received by it, each once, in every report', async () => {
-    const q = { period: 'YEARLY', date: '2026-10-24', programId: String(IDS.P12) };
-    const total = await world.report('total-referrals', q);
-    const timing = await world.report('timing-metrics', q);
-    const activity = await world.report('referral-activity', q);
-    // Made by P12: A3 A4 A7. Received by P12: A1 A2 A8 A9. Union = 7.
-    assert.equal(total.body.value, 7);
-    assert.deepEqual(total.body.scope, { type: 'PROGRAM', programId: IDS.P12 });
-    assert.equal(timing.body.cohortSize, 7);
-    // First (h): A1 2, A2 4, A3 1, A4 24, A7 1, A9 3 -> sorted 1 1 2 3 4 24,
-    // median (2 + 3) / 2 = 2.5, average 35 / 6; awaiting A8.
-    assertTiming(timing.body.timeToFirstResponse, { status: 'OK', qualifyingCount: 6, pendingCount: 1, averageMs: (35 / 6) * 3600000, medianMs: 2.5 * 3600000 }, 'P12 first response');
-    // Reached Resulted: A1 72, A7 24 -> median 48, average 48; pending A4, A9.
-    assertTiming(timing.body.timeToRecordedService, { status: 'OK', qualifyingCount: 2, pendingCount: 2, averageMs: 48 * 3600000, medianMs: 48 * 3600000 }, 'P12 recorded service');
-    assert.equal(activity.body.summary.totalReferrals, 7);
-    assert.deepEqual([activity.body.summary.made, activity.body.summary.received], [3, 4]);
-    assert.deepEqual(activity.body.summary.acceptanceRate, { numerator: 3, denominator: 3, value: 100, state: 'CALCULATED' });
-    assert.deepEqual(activity.body.summary.resultedInServiceRate, { numerator: 1, denominator: 2, value: 50, state: 'CALCULATED' });
+    const expected = KNOWN_SCOPES.P12_YEAR;
+    const total = await world.report('total-referrals', expected.query);
+    const timing = await world.report('timing-metrics', expected.query);
+    const activity = await world.report('referral-activity', expected.query);
+    assert.equal(total.body.value, expected.total);
+    assert.deepEqual(total.body.scope, expected.scope);
+    assert.equal(timing.body.cohortSize, expected.total);
+    assertTiming(timing.body.timeToFirstResponse, expected.timeToFirstResponse, 'P12 first response');
+    assertTiming(timing.body.timeToRecordedService, expected.timeToRecordedService, 'P12 recorded service');
+    assert.equal(activity.body.summary.totalReferrals, expected.total);
+    assert.deepEqual([activity.body.summary.made, activity.body.summary.received], [expected.made, expected.received]);
+    assert.deepEqual(activity.body.summary.acceptanceRate, expected.acceptanceRate);
+    assert.deepEqual(activity.body.summary.resultedInServiceRate, expected.resultedInServiceRate);
   });
 
   test('Department scope uses the Department at creation: moving Program 12 later changes no past count', async () => {
-    const year = { period: 'YEARLY', date: '2026-10-24' };
-    // D2 (P12, P13 at creation): every referral except A5 (P10 -> P11) = 8.
-    // If the CURRENT Department were used, D2 would be only A4, A6 = 2.
-    // D1 (P10, P11): every referral except A4 (P12 -> P13) = 8, not 9.
-    const d1 = await world.report('total-referrals', { ...year, departmentId: String(IDS.D1) });
-    const d2 = await world.report('total-referrals', { ...year, departmentId: String(IDS.D2) });
-    assert.deepEqual([d1.body.value, d2.body.value], [8, 8]);
-    for (const report of ['timing-metrics', 'referral-activity']) {
-      const r1 = await world.report(report, { ...year, departmentId: String(IDS.D1) });
-      const r2 = await world.report(report, { ...year, departmentId: String(IDS.D2) });
-      const size = (b) => b.cohortSize ?? b.summary.totalReferrals;
-      assert.deepEqual([size(r1.body), size(r2.body)], [8, 8], report);
+    // See KNOWN_SCOPES: D1 = 8 and D2 = 8. If the CURRENT Department were
+    // used, D2 would be only 2.
+    for (const expected of [KNOWN_SCOPES.D1_YEAR, KNOWN_SCOPES.D2_YEAR]) {
+      const total = await world.report('total-referrals', expected.query);
+      assert.equal(total.body.value, expected.total);
+      assert.deepEqual(total.body.scope, expected.scope);
+      for (const report of ['timing-metrics', 'referral-activity']) {
+        const { body } = await world.report(report, expected.query);
+        assert.equal(body.cohortSize ?? body.summary.totalReferrals, expected.total, report);
+      }
     }
     assert.equal((await world.store.getProgram(IDS.P12)).departmentId, IDS.D1, 'the Program really did move');
   });
@@ -220,26 +214,12 @@ describe('scope: Program and Department, with history (PRD 12.4, 12.7)', () => {
   test('Program and Department breakdowns (organization-wide year)', async () => {
     const { body } = await world.report('referral-activity', KNOWN_ANSWERS.YEAR.query);
     const pick = (row) => ({
-      made: row.made, received: row.received, accepted: row.accepted, notAppropriate: row.notAppropriate,
-      awaitingResponse: row.awaitingResponse, acceptance: [row.acceptanceRate.value, row.acceptanceRate.state],
-      resulted: [row.resultedInServiceRate.value, row.resultedInServiceRate.state],
+      name: row.name, made: row.made, received: row.received, accepted: row.accepted, notAppropriate: row.notAppropriate,
+      awaitingResponse: row.awaitingResponse, resultedInService: row.resultedInService,
+      acceptanceRate: row.acceptanceRate, resultedInServiceRate: row.resultedInServiceRate,
     });
-    assert.deepEqual(Object.fromEntries(body.programs.map((p) => [p.programId, pick(p)])), {
-      // P10 made A1 A2 A5 A6 A8 A9; received A7 (accepted, resulted).
-      10: { made: 6, received: 1, accepted: 1, notAppropriate: 0, awaitingResponse: 0, acceptance: [100, 'CALCULATED'], resulted: [100, 'CALCULATED'] },
-      // P11 received A3 (not appropriate) and A5 (awaiting): 0%, and no outcome possible.
-      11: { made: 0, received: 2, accepted: 0, notAppropriate: 1, awaitingResponse: 1, acceptance: [0, 'CALCULATED'], resulted: [null, 'NO_DATA'] },
-      // P12 made A3 A4 A7; received A1 A2 A8 A9.
-      12: { made: 3, received: 4, accepted: 3, notAppropriate: 0, awaitingResponse: 1, acceptance: [100, 'CALCULATED'], resulted: [50, 'CALCULATED'] },
-      // P13 received A4 (no outcome yet) and A6 (Did Not, after correction).
-      13: { made: 0, received: 2, accepted: 2, notAppropriate: 0, awaitingResponse: 0, acceptance: [100, 'CALCULATED'], resulted: [0, 'CALCULATED'] },
-    });
-    assert.deepEqual(Object.fromEntries(body.departments.map((d) => [d.departmentId, pick(d)])), {
-      // D1 made 6 (by P10); received 3 (A3, A5 by P11; A7 by P10).
-      1: { made: 6, received: 3, accepted: 1, notAppropriate: 1, awaitingResponse: 1, acceptance: [50, 'CALCULATED'], resulted: [100, 'CALCULATED'] },
-      // D2 made 3 (by P12, its Department at the time); received 6.
-      2: { made: 3, received: 6, accepted: 5, notAppropriate: 0, awaitingResponse: 1, acceptance: [100, 'CALCULATED'], resulted: [33.33, 'CALCULATED'] },
-    });
+    assert.deepEqual(Object.fromEntries(body.programs.map((p) => [p.programId, pick(p)])), KNOWN_BREAKDOWNS.programs);
+    assert.deepEqual(Object.fromEntries(body.departments.map((d) => [d.departmentId, pick(d)])), KNOWN_BREAKDOWNS.departments);
     // Department totals add up to the organization: made 6 + 3 = 9, received 3 + 6 = 9.
     assert.equal(body.departments.reduce((n, d) => n + d.made, 0), body.summary.made);
     assert.equal(body.departments.reduce((n, d) => n + d.received, 0), body.summary.received);

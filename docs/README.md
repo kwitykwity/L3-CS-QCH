@@ -27,6 +27,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 | [admin-guide.md](admin-guide.md) | Program Management and organization tasks for administrators |
 | [troubleshooting.md](troubleshooting.md) | Start-up problems, error codes, test problems, what is logged |
 | [operations.md](operations.md) | Monitoring expectations, verification procedures, recovery concepts, known dependencies |
+| [security-regression.md](security-regression.md) | What the security tests prove for every route, what they found, and what to re-run once the production architecture is confirmed (Task F) |
 | [ai-interpretation-options.md](ai-interpretation-options.md) | Research only: three ways an open-ended "Find a Program" box could work, compared for pending decision 7 |
 
 ## Deployment and handoff
@@ -47,3 +48,5 @@ Elsewhere in the repository:
   001 to 003: run order, required `sqlcmd` flags, checks, and what to do if
   a run fails partway. [`db/AUDIT_VERIFICATION.md`](../db/AUDIT_VERIFICATION.md)
   covers the audit rules.
+
+- [Task C: current Program information](task-c-program-information.md): scope, reconciliation, and storage-independent interface.
