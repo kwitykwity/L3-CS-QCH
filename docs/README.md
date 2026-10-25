@@ -5,7 +5,8 @@ Handoff documentation (Trello cards 18 and Task H; Final Technical PRD 18,
 production decisions that are still open with QCH IT separate.
 
 **Status: draft, not yet exercised.** Nothing here has run in QCH's
-environment. The application runs on in-memory stores with synthetic data.
+environment. This documentation does not complete production deployment,
+restore verification, or QCH handoff acceptance. The application runs on in-memory stores with synthetic data.
 Where production data will live (SharePoint Lists or a relational database
 such as the Azure SQL design in `db/`), hosting, sign-in and email are open
 decisions, listed in

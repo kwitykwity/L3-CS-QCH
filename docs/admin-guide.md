@@ -1,5 +1,7 @@
 # Administrative guide
 
+**Status: draft.** Part of the handoff documentation. It does not complete production deployment, restore verification, or QCH handoff acceptance.
+
 How QCH staff with administrative permissions keep Programs and the
 organization up to date in QCH Connect, as built today. Every action
 below is checked on the server, saved together with an audit event, and
@@ -23,8 +25,13 @@ refused safely if someone else changed the same record first.
 | --- | --- |
 | Edit a Program's information, discontinue or reactivate it, edit its matching facts, fields and values | `MANAGE_PROGRAM` for that Program |
 | Change a shared field's wording or options, replace or discontinue it | `MANAGE_PROGRAM` for **every** Program that uses the field |
-| Retire a field | `MANAGE_ORGANIZATION` (organization-wide), and only 90 days after it was discontinued |
+| Retire a field | `MANAGE_ORGANIZATION` (organization-wide), and only 90 days after it was discontinued (see the note below) |
 | Create a Program, move a Program to another Department, create or rename a Department, discontinue or reactivate a Department | `MANAGE_ORGANIZATION` |
+
+**About the 90 days:** the exact 90-day wait before a field can be retired
+is the team's implementation decision (`RETIRE_AFTER_DAYS` in
+`src/programs/fieldService.js`), not confirmed QCH policy. QCH may set a
+different period.
 
 Creating a Program does **not** give anyone permission to manage it. Its
 managers need a `MANAGE_PROGRAM` grant first.
@@ -71,7 +78,7 @@ codes where participants must live). Each limit has four states:
 | Fix the wording without changing the meaning | **Rename field**. Every Program sharing it sees the new wording |
 | Change what the field means | **Replace field meaning**. The old field is discontinued for every Program and keeps its saved values as history; the new field starts empty |
 | Stop collecting it | **Discontinue field**. Values stay visible as history |
-| End it for good | **Retire field** (organization permission, 90 days after discontinuing). Deletes nothing |
+| End it for good | **Retire field** (organization permission, 90 days after discontinuing; see the note below). Deletes nothing |
 | Manage choices | Add, rename, discontinue or reactivate an option. A choice field always keeps at least one active option |
 
 ### Departments (`/program-management/organization.html`)

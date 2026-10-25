@@ -378,8 +378,9 @@ to provide, the handoff checklist, and dependency licenses.
 ## What is built and what is not
 
 Built and tested on in-memory stores with synthetic data: Direct
-Referrals, the receiving API (respond, outcomes, corrections; its screens
-are in review in PR #37), Guided Program Matching, Program Management
+Referrals, receiving (the received list and referral screens: respond,
+record and correct outcomes, correct decisions; merged in #37), Guided
+Program Matching, Program Management
 (Programs, matching facts, fields, values, Departments), the report APIs
 (Total Referrals, Timing Metrics, Referral activity), permission checks by
 grant, and the audit trail. The schema design and migrations are in `db/`.

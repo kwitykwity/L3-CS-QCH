@@ -1,5 +1,7 @@
 # How QCH Connect is built today
 
+**Status: draft.** Part of the handoff documentation. It does not complete production deployment, restore verification, or QCH handoff acceptance.
+
 For a technical person picking up the code. It describes the application
 as it exists on `main`, not the planned production setup. Decisions that
 are still open with QCH IT are in
@@ -21,7 +23,7 @@ build step.
 | How it starts | What you get |
 | --- | --- |
 | `npm start` (`src/server.js`), the production entry point | The pages and `GET /health`. Every `/api` route answers **401**, because no sign-in is wired in, and would answer **503** after that, because no data store is wired in. This is deliberate: it fails closed. |
-| `npm run dev:synthetic` (`scripts/dev-synthetic-server.js`) | The whole app on an in-memory store with synthetic data and one fixed developer identity, on 127.0.0.1 only. Refuses to start unless `NODE_ENV=development`. This is how the team and the browser tests use the app. |
+| `npm run dev:synthetic` (`scripts/dev-synthetic-server.js`) | The whole app on an in-memory store with synthetic data and one fixed developer identity (who also receives referrals for one sample Program), on 127.0.0.1 only. Refuses to start unless `NODE_ENV=development`. This is how the team and the browser tests use the app. |
 | Tests (`npm test`, `npm run test:e2e`) | Each test builds the app with its own in-memory store and its own `resolveIdentity`. |
 
 Requirements: Node.js 24.15.0 for development (pinned in `.nvmrc` and
@@ -40,7 +42,7 @@ Requirements: Node.js 24.15.0 for development (pinned in `.nvmrc` and
 | `src/reporting/` | Aggregate reports: Total Referrals, Timing Metrics, Referral activity |
 | `src/notifications/` | New-referral email delivery with retries. Built and tested, **not yet called** by referral creation; only a simulated outbox exists |
 | `src/authorization/` | Capability, resource and scope checks shared by every service |
-| `public/` | The pages: start page, `referral/` (New Referral), `program-management/`, and their scripts and one shared stylesheet |
+| `public/` | The pages: start page, `referral/` (New Referral), `receiving/` (received referrals), `program-management/`, and their scripts and one shared stylesheet |
 | `db/` | The current SQL schema design (migrations 001 to 003), a synthetic dev seed, and audit checks. Not used by the running app yet |
 | `scripts/` | The synthetic dev server and its seed, the runtime check, and the license lister |
 | `test/`, `e2e/` | Node tests (`node:test`, supertest) and Chromium browser tests (Playwright, axe) |
@@ -120,7 +122,7 @@ details are in the README sections and the header comment of each
 | `/` | Start page with links and a backend status | Temporary; to be replaced by navigation (PRD 13.5) |
 | `/referral/` | Choose a Program (guided matching or Direct Referral) and send a referral | Built |
 | `/program-management/` | Program information and lifecycle, matching facts, fields and options, field reuse and replacement, Departments, creating and moving Programs | Built |
-| `/receiving/` | Received referrals, respond, record and correct outcomes | In review (Trello Task A, PR #37) |
+| `/receiving/` | Received referrals, respond, record and correct outcomes | Built (Trello Task A, merged in #37 as e3fd11e) |
 | Reports | | Not built (Trello Task B) |
 | Permission administration | | Not built |
 

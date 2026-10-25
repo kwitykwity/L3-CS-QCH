@@ -1,5 +1,7 @@
 # Operations: monitoring, verification and recovery
 
+**Status: draft.** Part of the handoff documentation. It does not complete production deployment, restore verification, or QCH handoff acceptance.
+
 What a person running QCH Connect needs to watch, check and know how to
 recover, written for the application as it exists today. Hosting,
 storage and alerting are not chosen yet
@@ -44,8 +46,14 @@ only, never a real participant.
    sender sees the result; each step has one audit event.
 7. One generic email arrives in the test Program's configured inbox, and
    its delivery row ends `SENT`.
-8. A staff member without permission for that Program cannot open it
-   (404) or change it (403).
+8. Permission checks, two different refusals:
+   - A staff member with **no access** to the referral (for example staff
+     of an unrelated Program) gets **404** for reading it **and** for any
+     change they send, the same answer as for a referral that does not
+     exist, so nothing is revealed.
+   - A staff member who **can view** the referral but lacks the action
+     permission (for example view-only receiving staff) can read it but
+     gets **403** for the change.
 
 The manual keyboard and screen-reader checks are in
 [regression-coverage.md](regression-coverage.md).
