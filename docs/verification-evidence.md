@@ -106,9 +106,11 @@ for what must be re-run once these are decided.
 
 ## Integrated revision
 
-This branch merged with `main` at `6cd459c` (after #33, #41, #42, #44,
-#47 and #50), validated at `7785894`. The commit that adds this section
-changes only this document.
+This branch merged with `main` at `81c91fe` (after #33, #38, #41, #42,
+#44, #47 and #50), validated at `04b3617`. The commit that adds this
+section changes only this document. An earlier integration with `main`
+at `6cd459c` (validated at `7785894`: 1,402 Node passed, 125 Chromium
+passed, 1 skipped) is superseded by this one.
 
 | | |
 | --- | --- |
@@ -119,10 +121,10 @@ changes only this document.
 | Suite | Result |
 | --- | --- |
 | `npm test` (Node, including `test/regression/` and the docs checks) | 1,402 passed, 0 failed |
-| `npm run test:e2e` (Chromium) | 125 passed, 0 failed, 1 skipped (the known `test.fixme` in `e2e/gpme.spec.js`, XL entry screen at phone width) |
+| `npm run test:e2e` (Chromium) | 135 passed, 0 failed, 1 skipped (the known `test.fixme` in `e2e/gpme.spec.js`, XL entry screen at phone width) |
 
 The five `e2e/mvpJourney.spec.js` journeys and the Reporting Center XL
 reflow fix still pass alongside the specs that arrived from `main` since
 the original run (`gpme`, `currentProgramInformation`,
-`reportingKnownAnswers`). No new failures were found, so nothing else
-was changed.
+`reportingKnownAnswers`, `receivingLifecycle`). No new failures were
+found, so nothing else was changed.
