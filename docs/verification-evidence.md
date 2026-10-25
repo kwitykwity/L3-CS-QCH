@@ -63,7 +63,7 @@ Every item on the card, and where it is verified:
 | --- | --- |
 | Direct Referral | `e2e/directReferral.spec.js` (9), `test/regression/journeys.test.js` |
 | Find a Program / GPME | `e2e/mvpJourney.spec.js` (above); `test/gpme*.test.js`; the dedicated GPME browser spec `e2e/gpme.spec.js` (merged in #33) |
-| Receiving queue and access | `e2e/receiving.spec.js` (19); multi-person access in #38 (open) |
+| Receiving queue and access | `e2e/receiving.spec.js` (19); multi-person access, `e2e/receivingLifecycle.spec.js` (card 51, merged in #38) |
 | Referral response, service outcome, corrections | `e2e/receiving.spec.js`; `e2e/mvpJourney.spec.js`; `test/serviceOutcome.test.js` |
 | Program Management | `e2e/programManagement*.spec.js`, `fieldValues`, `organization`, `matchingManagement` (59); `e2e/mvpJourney.spec.js` step 1; current Program information for matching, `e2e/currentProgramInformation.spec.js` (Task C, merged in #44) |
 | Reporting | `e2e/reportingDepartments.spec.js`; `e2e/mvpJourney.spec.js` steps 4 and the Reporting Center checks below; `test/regression/reportingJourney.test.js`; the same known answers on screen, `e2e/reportingKnownAnswers.spec.js` (Task M, merged in #50) |
