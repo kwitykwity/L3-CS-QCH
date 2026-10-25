@@ -1,5 +1,7 @@
 # Troubleshooting
 
+**Status: draft.** Part of the handoff documentation. It does not complete production deployment, restore verification, or QCH handoff acceptance.
+
 Common problems when running or testing QCH Connect today, and what they
 mean. Production-specific problems (hosting, the production store, Entra,
 Microsoft Graph) cannot be listed yet; see

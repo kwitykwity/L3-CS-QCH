@@ -1,5 +1,7 @@
 # Pending QCH IT Architecture Decisions
 
+**Status: draft.** Part of the handoff documentation. It does not complete production deployment, restore verification, or QCH handoff acceptance.
+
 Production decisions that belong to QCH IT (or to QCH), are not settled,
 and change how QCH Connect is deployed or stored. Until each one is made,
 this repository does **not** assume an answer. The application code runs
@@ -108,7 +110,6 @@ decision above (or another QCH input) it depends on.
 | Calling the notification module when a referral is created | Engineering | Nothing |
 | Microsoft Graph sender and a retry timer in the hosted app | External, then engineering | Decisions 2 and 6 |
 | Managing a Program's notification email (routing) | Engineering | Nothing; Program creation says routing is set up separately, and no screen or route sets it yet |
-| Receiving screens (received list, respond, outcome, corrections) | Engineering | In review (Task A, PR #37) |
 | Reporting screens | Engineering | Nothing (Trello Task B) |
 | Program Management and matching changes asked for at the midpoint (for example a "program is full" status) | Requirement | Reconciling the Oct 23 requests with the Final Technical PRD (Trello Tasks C and D) |
 | AI-assisted matching | External | Decision 7, and the PRD reconciliation above |

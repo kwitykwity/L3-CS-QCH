@@ -3,7 +3,8 @@
 Every handoff item in PRD 19, where it lives, and what it still waits on.
 
 **Status: draft.** Production deployment, the operational documentation,
-and handoff acceptance are all unfinished. Several items wait on
+restore verification and handoff acceptance are all unfinished. Writing
+these documents does not complete any of them. Several items wait on
 production decisions that are still open with QCH IT, including where data
 will live; see [pending-qch-it-decisions.md](pending-qch-it-decisions.md).
 

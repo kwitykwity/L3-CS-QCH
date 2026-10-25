@@ -1,5 +1,7 @@
 # Data Dictionary
 
+**Status: draft.** Part of the handoff documentation. It does not complete production deployment, restore verification, or QCH handoff acceptance.
+
 Every table and column in the team's current SQL schema design:
 [`db/migrations/`](../db/migrations/) 001 (core schema), 002 (reference
 data) and 003 (GPME matching states), in that order.
@@ -97,7 +99,7 @@ Extra information a Program can carry beyond the common columns (PRD 4.2,
 | `label` | NVARCHAR(200) | The wording staff see |
 | `applies_to` | NVARCHAR(20) | `PROGRAM_INFO` (used today) or `REFERRAL_FORM` (extra referral questions, not used yet) |
 | `data_type` | NVARCHAR(20) | `TEXT`, `NUMBER`, `DATE`, `BOOLEAN`, `SINGLE_SELECT` or `MULTI_SELECT` |
-| `lifecycle_status` | NVARCHAR(20) | Retiring is allowed 90 days after discontinuing (team decision) and deletes nothing |
+| `lifecycle_status` | NVARCHAR(20) | Retiring is allowed 90 days after discontinuing (the team's implementation decision, not confirmed QCH policy) and deletes nothing |
 | `replaced_by_field_id` | INT → field_definitions | The new field that replaced this one, when its meaning changed |
 | `discontinued_at`, `retired_at`, `created_at` | DATETIME2 | Lifecycle times |
 | `row_version` | ROWVERSION | Change detection |
