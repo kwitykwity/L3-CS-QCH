@@ -45,7 +45,7 @@ it. `NODE_ENV` is set by the deployment and must be exactly `production`.
 | Entra access | Which Entra group or assignment grants access to the app. Entra decides who can open the app; action permissions are managed inside QCH Connect. | 3.4, 22 | Needed |
 | Tenant MFA | Confirmation that QCH's tenant-level MFA applies to QCH Connect sign-in. The app relies on Entra for MFA and does not add its own. | 3.1 | Needed |
 | Azure Key Vault | A Key Vault for production secrets, and the way the app is allowed to read it. | 15.2 | Needed |
-| Shared mailbox | The Exchange Online shared mailbox notifications are sent from. | 11.1 | Needed |
+| Shared mailbox | The Exchange Online shared mailbox notifications are sent from. QCH IT has created it (the address is not recorded here). Still needed: how the app may send as it (Send As or Graph permission, app identity) and the production configuration. Until then the app uses the simulated outbox. | 11.1 | Needed (mailbox created; sending permission and configuration pending) |
 | Azure Monitor / Application Insights | A resource for app logs and alerts, including alerts on repeated notification failures. Logs never hold participant data. | 11.6, 15.3 | Needed |
 | Deployment tooling | Which CI/CD tool or process QCH IT wants for deployments. | 18.2, 22 | Needed |
 | Non-production environment | A QCH-provided non-production environment, if one is available in time (Plan A). Otherwise the team uses its own synthetic-only environment (Plan B). | 16.4 | Needed |
