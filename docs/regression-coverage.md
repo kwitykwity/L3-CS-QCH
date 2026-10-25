@@ -51,6 +51,7 @@ against Azure SQL; that waits on the Azure SQL store.
 | Labels, required fields, errors | `accessibility.test.js` (every page, including the guided-matching markup); axe in `e2e/` | Screen reader spot check |
 | Text sizing S/M/L/XL | `accessibility.test.js`; `e2e/` (computed sizes, kept work, reload) | Run C step 2 (browser zoom) |
 | Contrast (text 4.5:1, controls and focus 3:1) | `accessibility.test.js` both themes; axe in `e2e/` both themes | None |
+| P0 reporting: Total Referrals (#18), Timing Metrics (#26), Referral Activity (#30) | `test/regression/reportingJourney.test.js` over the known-answer world in `reportingFixture.js` (nine referrals built through the real API): every period type, organization / Program / Department scope with Department history, Zero vs No Data vs Pending vs Unknown vs error, partial periods, future and pre-2000 dates (API; no screen yet) | None until a screen exists |
 
 ### Merged on `main`: coverage still to add here (next slice of this card)
 
@@ -60,14 +61,12 @@ against Azure SQL; that waits on the Azure SQL store.
 | Receiving lifecycle: outcome and corrections | #14 | An HTTP journey through record outcome, correct outcome, correct response, stale version, audit; multi-user browser journeys (card 51) | `test/serviceOutcome.test.js` per card; screens (Task A): `e2e/receiving.spec.js` |
 | Program maintenance 14B: configurable fields and values | #22, #24 | An HTTP journey | `test/programFields*.test.js` per card; in the browser (#32, card 52): `e2e/fieldValues.spec.js`, `e2e/programManagementJourneys.spec.js` (fields, options, reuse, replacement, retirement) |
 | Program maintenance 14C: create / move Programs, Department lifecycle | #25 | An HTTP journey | `test/programOrganization.test.js` per card; in the browser (#32, card 52): `e2e/organization.spec.js`, `e2e/programManagementJourneys.spec.js` (Departments, creation, moves, referral history after a move) |
-| P0 reporting: Total Referrals | #18 | A journey that reports on referrals created by the other journeys | `test/totalReferrals.test.js` known answers |
 
 ### Not merged yet (dependencies)
 
 | Area | Pull request | Then |
 | --- | --- | --- |
-| P0 reporting: Time to First Response, Time to Recorded Service | #26 | Add to the reporting journey |
-| P0 reporting: referral activity report (breadth) | #30 (replaces #29) | Add to the reporting journey |
+| Reporting browser journeys (Reporting Center screens) | No Reporting UI on `main` or in an open PR yet | Check `KNOWN_ANSWERS` from `test/regression/reportingFixture.js` on screen: periods and scopes, Zero / No Data / Pending / Unknown / error states, partial-period ("data as of") message, future-date refusal |
 | Any journey against Azure SQL (PRD 17.2) | No Azure SQL store yet | Run these journeys against it |
 
 ## Fixed in this pass
