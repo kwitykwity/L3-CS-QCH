@@ -48,3 +48,5 @@ Elsewhere in the repository:
   001 to 003: run order, required `sqlcmd` flags, checks, and what to do if
   a run fails partway. [`db/AUDIT_VERIFICATION.md`](../db/AUDIT_VERIFICATION.md)
   covers the audit rules.
+
+- [Task C: current Program information](task-c-program-information.md): scope, reconciliation, and storage-independent interface.
