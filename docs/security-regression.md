@@ -92,6 +92,14 @@ and an active user with no grants.
   are set by the app or by QCH's hosting in front of it is part of the
   hosting decision; see below.
 
+## Dependency update and stale pull requests (Task P)
+
+The `body-parser` security update (#35) and the security claims of the
+closed pull requests #17 and #29 are checked against `main` in
+[stale-pr-verification.md](stale-pr-verification.md). #17's
+transaction-authorization protection is covered on `main`, and #29 is
+superseded.
+
 ## Re-run once QCH IT confirms the production architecture
 
 These depend on choices that are still open. Each must be verified against
