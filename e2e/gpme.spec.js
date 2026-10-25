@@ -699,6 +699,41 @@ test.describe('describe what the participant needs', () => {
     await expect(page.locator('#step-details')).toBeHidden();
   });
 
+  test('the description never rides along with the referral, or with matching (PRD 5.3, 8.2)', async ({ page }) => {
+    // A marker that cannot occur anywhere else, so any copy of the text is found.
+    const marker = 'zq-marker-7431';
+    const description = `A 25 year old who wants to finish school and find a job ${marker}`;
+    const posts = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST') posts.push({ url: new URL(request.url()).pathname, raw: request.postData() ?? '' });
+    });
+    await openGuided(page);
+    await page.locator('#describe').fill(description);
+    await page.locator('#describe-go').click();
+    await expect(page.locator('#understood')).toBeVisible();
+    await findPrograms(page);
+    await expect(page.locator('#match-results')).toBeVisible();
+    await page.getByRole('button', { name: `Choose ${EVENING}` }).click();
+    await fillReferral(page);
+    await page.locator('#send').click();
+    await expect(status(page)).toContainText('Referral received !');
+
+    // The text went to exactly one place: the interpret request.
+    const carrying = posts.filter((post) => post.raw.includes(marker));
+    expect(carrying.map((post) => post.url)).toEqual(['/api/gpme/interpret']);
+    // The real referral request: sent, free of the text, and carrying only
+    // the three approved matching inputs under `gpme`.
+    const referrals = posts.filter((post) => post.url === '/api/referrals');
+    expect(referrals).toHaveLength(1);
+    const body = JSON.parse(referrals[0].raw);
+    expect(JSON.stringify(body)).not.toContain(marker);
+    expect(Object.keys(body.gpme).sort()).toEqual(['ageRange', 'needCategoryIds']);
+    expect(Object.keys(body)).not.toEqual(expect.arrayContaining(['description', 'text']));
+    // And nothing kept it in the page's storage or address.
+    const kept = await page.evaluate(() => JSON.stringify({ ...localStorage, ...sessionStorage }) + location.href);
+    expect(kept).not.toContain(marker);
+  });
+
   test('says so when nothing is understood, and leaves the answers to the worker', async ({ page }) => {
     await openGuided(page);
     await page.locator('#describe').fill('please help');

@@ -281,8 +281,11 @@ describe('screen logic for the describe step', () => {
 });
 
 describe('privacy and scope boundaries', () => {
-  const ui = (name) => readFileSync(new URL(`../public/referral/${name}`, import.meta.url), 'utf8');
-  const src = (name) => readFileSync(new URL(`../src/gpme/${name}`, import.meta.url), 'utf8');
+  // Checkouts use LF or CRLF (core.autocrlf on Windows); these source checks
+  // must not depend on which, so everything is read as LF.
+  const lf = (text) => text.replace(/\r\n?/g, '\n');
+  const ui = (name) => lf(readFileSync(new URL(`../public/referral/${name}`, import.meta.url), 'utf8'));
+  const src = (name) => lf(readFileSync(new URL(`../src/gpme/${name}`, import.meta.url), 'utf8'));
 
   test('the description is never put in browser storage, a URL, or the console', () => {
     const code = (file) => ui(file).replace(/\/\/.*$/gm, '');
@@ -304,7 +307,10 @@ describe('privacy and scope boundaries', () => {
     }
   });
 
-  test('the description is not sent with a referral', () => {
+  // A source-level guard only. The proof that the description is not in a
+  // referral request is the browser test "the description never rides along
+  // with the referral" in e2e/gpme.spec.js, which checks the real request body.
+  test('the description is not read anywhere near the referral payload', () => {
     const code = ui('app.js');
     assert.ok(!/describe['"]\)\.value/.test(code.replace(/hasGuidedAnswers[\s\S]*?\n}\n/, '')
       .replace(/async function describeNeed[\s\S]*?\n}\n/, '')));
