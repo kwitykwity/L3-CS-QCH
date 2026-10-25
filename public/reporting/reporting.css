@@ -71,7 +71,9 @@ a { color: var(--primary); }
   background: var(--card);
 }
 
-.size-control { display: flex; align-items: center; gap: 0.5rem; }
+/* Wraps instead of pushing past the edge at XL on a phone (WCAG 1.4.10,
+   PRD 14.5; found in Task G). */
+.size-control { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem; min-width: 0; max-width: 100%; }
 
 main { max-width: 72rem; margin: 0 auto; padding: 1.5rem; }
 h1 { margin: 0 0 0.25rem; font-size: 1.75rem; }
@@ -89,7 +91,7 @@ h3 { margin: 0; font-size: 1rem; font-weight: 600; }
 }
 
 .filters { display: flex; flex-wrap: wrap; gap: 1rem; align-items: flex-end; margin: 1.5rem 0 0.5rem; }
-.field { display: flex; flex-direction: column; gap: 0.25rem; min-width: 14rem; max-width: 22rem; }
+.field { display: flex; flex-direction: column; gap: 0.25rem; min-width: min(14rem, 100%); max-width: 22rem; }
 .field label { font-weight: 600; }
 
 select, input[type="date"] {
@@ -124,7 +126,7 @@ select, input[type="date"] {
 .message--info { color: var(--info); }
 .message--info::before { content: "Note: "; font-weight: 700; }
 
-.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 1rem; }
+.grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); gap: 1rem; }
 .metric { display: flex; flex-direction: column; gap: 0.25rem; }
 .metric__value { margin: 0; font-size: 1.75rem; font-weight: 700; overflow-wrap: anywhere; }
 .metric__meta { margin: 0; display: flex; flex-wrap: wrap; gap: 0.5rem; align-items: center; font-size: 0.875rem; color: var(--muted); }
@@ -135,7 +137,7 @@ select, input[type="date"] {
 .badge--no-data, .badge--na { color: var(--muted); }
 .badge--unknown { color: var(--error); }
 
-.context { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem; margin: 0; }
+.context { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); gap: 0.75rem; margin: 0; }
 .context dt { color: var(--muted); font-size: 0.875rem; }
 .context dd { margin: 0; font-weight: 600; }
 
