@@ -447,6 +447,57 @@ describe('retry timer', () => {
     assert.deepEqual(logger.lines, [{ level: 'error', line: '[notification] event=retry_run_failed error=RangeError' }]);
   });
 
+  test('a run that fails synchronously does not block the next run', async () => {
+    const logger = captureLogger();
+    let calls = 0;
+    const notifier = {
+      // Throws before returning a promise on the first call (Christina's
+      // reproduction on #42), then works.
+      retryPendingDeliveries() {
+        calls += 1;
+        if (calls === 1) throw new TypeError('synthetic synchronous failure');
+        return Promise.resolve({ SENT: 0, PENDING: 0, FAILED: 0, ERROR: 0 });
+      },
+    };
+    const timers = fakeTimers();
+    const retries = startNotificationRetries({ notifier, logger, timers });
+
+    assert.equal(await retries.runOnce(), null, 'the failed run resolves to null');
+    assert.deepEqual(await retries.runOnce(), { SENT: 0, PENDING: 0, FAILED: 0, ERROR: 0 });
+    assert.equal(calls, 2, 'the second call executes');
+
+    // The timer path recovers the same way.
+    timers.state.fn();
+    await new Promise((resolve) => setImmediate(resolve));
+    assert.equal(calls, 3);
+    assert.deepEqual(logger.lines, [{ level: 'error', line: '[notification] event=retry_run_failed error=TypeError' }]);
+  });
+
+  test('a run that rejects does not block the next run, and overlap protection still holds', async () => {
+    let calls = 0;
+    let finish;
+    const notifier = {
+      retryPendingDeliveries() {
+        calls += 1;
+        if (calls === 1) return Promise.reject(new Error('synthetic rejection'));
+        return new Promise((resolve) => { finish = resolve; });
+      },
+    };
+    const retries = startNotificationRetries({ notifier, logger: captureLogger(), timers: fakeTimers() });
+    assert.equal(await retries.runOnce(), null);
+
+    const second = retries.runOnce();
+    const joined = retries.runOnce(); // overlaps the second run: joins it
+    assert.equal(joined, second, 'an overlapping call joins the run in progress');
+    assert.equal(calls, 2);
+    finish({ SENT: 1, PENDING: 0, FAILED: 0, ERROR: 0 });
+    assert.deepEqual(await second, { SENT: 1, PENDING: 0, FAILED: 0, ERROR: 0 });
+
+    retries.runOnce();
+    assert.equal(calls, 3, 'a new run starts once the previous one has finished');
+    finish({});
+  });
+
   test('refuses a missing notifier or a bad interval', () => {
     assert.throws(() => startNotificationRetries({}), /needs a notifier/);
     assert.throws(() => startNotificationRetries({ notifier: { retryPendingDeliveries() {} }, intervalMs: 0 }), /intervalMs/);
