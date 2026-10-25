@@ -5,6 +5,13 @@ Everything QCH Connect needs from QCH IT to run in production, in one list
 value. Real values are entered by QCH IT into App Service settings or Azure
 Key Vault, never into this repository.
 
+**Some rows describe the earlier plan, not a final choice.** Rows that name
+Azure App Service or Azure SQL come from the plan the team started with.
+Where production data lives (SharePoint Lists or a relational database such
+as Azure SQL) and where the app is hosted are still open; see
+[pending-qch-it-decisions.md](pending-qch-it-decisions.md). Once QCH IT
+decides, those rows are rewritten to match.
+
 Status key: **Needed** = not yet recorded here as provided. **Provided** = in
 place. Update a row as QCH IT responds.
 **Policy** = a QCH decision, not an IT setup item.
@@ -22,7 +29,7 @@ table does not list.
 | `AZURE_CLIENT_SECRET` | Secret for that app registration | Azure Key Vault (PRD 15.2) | Staff sign-in; Microsoft Graph too, if QCH IT uses the same registration | Needed |
 | `AZURE_REDIRECT_URI` | Address Entra ID returns to after sign-in | App Service settings | Staff sign-in | Needed |
 | `KEY_VAULT_URI` | Address of the Key Vault that holds the secrets | App Service settings | Reading secrets at startup | Needed |
-| `DATABASE_URL` | Azure SQL connection information | Azure Key Vault (PRD 15.2) | Everything that stores data | Needed |
+| `DATABASE_URL` | Connection information for the production data store (Azure SQL in the earlier plan; depends on the storage decision) | Azure Key Vault (PRD 15.2) | Everything that stores data | Needed |
 | `NOTIFICATION_MAILBOX` | Exchange Online shared mailbox that sends referral emails | App Service settings | New-referral emails (Card 15) | Needed |
 
 `PORT` and `NODE_ENV` are not QCH IT secrets or settings to invent. `PORT`
@@ -45,7 +52,7 @@ it. `NODE_ENV` is set by the deployment and must be exactly `production`.
 | Entra access | Which Entra group or assignment grants access to the app. Entra decides who can open the app; action permissions are managed inside QCH Connect. | 3.4, 22 | Needed |
 | Tenant MFA | Confirmation that QCH's tenant-level MFA applies to QCH Connect sign-in. The app relies on Entra for MFA and does not add its own. | 3.1 | Needed |
 | Azure Key Vault | A Key Vault for production secrets, and the way the app is allowed to read it. | 15.2 | Needed |
-| Shared mailbox | The Exchange Online shared mailbox notifications are sent from. | 11.1 | Needed |
+| Shared mailbox | The Exchange Online shared mailbox notifications are sent from. QCH IT has created it (the address is not recorded here). Still needed: how the app may send as it (Send As or Graph permission, app identity) and the production configuration. Until then the app uses the simulated outbox. | 11.1 | Needed (mailbox created; sending permission and configuration pending) |
 | Azure Monitor / Application Insights | A resource for app logs and alerts, including alerts on repeated notification failures. Logs never hold participant data. | 11.6, 15.3 | Needed |
 | Deployment tooling | Which CI/CD tool or process QCH IT wants for deployments. | 18.2, 22 | Needed |
 | Non-production environment | A QCH-provided non-production environment, if one is available in time (Plan A). Otherwise the team uses its own synthetic-only environment (Plan B). | 16.4 | Needed |
@@ -56,6 +63,9 @@ it. `NODE_ENV` is set by the deployment and must be exactly `production`.
 
 | Item | Why it matters | PRD | Status |
 | --- | --- | --- | --- |
+| Production data store | SharePoint Lists or a relational database such as the Azure SQL design. Decides how the store, migrations, backups and reports are built (pending decision 1). | 1.4, 9 | Policy |
+| AI boundary | Whether any AI service may be used for matching, and under what rules. Nothing in the app uses AI today (pending decision 7). | 1.4, 15 | Policy |
+| Archive | Whether and how old referrals are archived (pending decision 4). | 9.11, 22 | Policy |
 | Retention and purge | How long referral data is kept. The team will not invent an automatic deletion rule. | 9.11, 22 | Policy |
 | Initial permission administrators and break-glass access | Who the first designated permission administrators are, and the controlled, documented, QCH-approved emergency (break-glass) administrative access. Administrator identity is configuration, never hard-coded. | 3.8 | Policy |
 | Business time zone | The QCH-approved business time zone for displaying times and drawing reporting period boundaries (with daylight-saving handling). Times are stored in UTC; a fixed offset such as UTC-5 is not allowed. | 9.7 | Policy |

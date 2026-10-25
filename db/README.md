@@ -1,8 +1,15 @@
 # Database migrations
 
-This folder holds the proposed Azure SQL schema for QCH Connect. QCH IT will
-own and set up the production Azure SQL database. Nothing in this folder
-creates an Azure resource.
+This folder holds the proposed Azure SQL schema for QCH Connect. Nothing in
+this folder creates an Azure resource.
+
+**This is the team's current design, not a confirmed production store.**
+Whether production data lives in a relational database like this or in
+SharePoint Lists is still open with QCH IT (decision 1 in
+[`docs/pending-qch-it-decisions.md`](../docs/pending-qch-it-decisions.md)).
+The application today runs on in-memory stores and never connects to a
+database. Every table and column is described in
+[`docs/data-dictionary.md`](../docs/data-dictionary.md).
 
 ## Files
 

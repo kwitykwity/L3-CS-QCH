@@ -11,11 +11,18 @@
 // - Data lives in memory and disappears when the process stops.
 // - This is NOT the demo sign-in from PRD 16.1; that is a separate card.
 //   The fixed identity here exists only inside this script.
+// - New-referral notifications (Task E) go to the simulated outbox, kept
+//   in memory: no email is sent and no mailbox is used. The outbox refuses
+//   to start outside development and test. Each delivery is logged as a
+//   [notification] line with IDs and the outcome only.
 
 import 'dotenv/config';
 import { loadConfig } from '../src/config.js';
 import { createApp } from '../src/app.js';
 import { createMemoryReferralStore } from '../src/referrals/memoryReferralStore.js';
+import { createNotificationService } from '../src/notifications/notificationService.js';
+import { startNotificationRetries } from '../src/notifications/retryTimer.js';
+import { createSimulatedOutboxSender } from '../src/notifications/simulatedOutbox.js';
 import { DEV_USER_ID, syntheticSeed } from './syntheticSeed.js';
 
 let config;
@@ -36,10 +43,16 @@ if (process.env.QCH_TASK_C_SYNTHETIC_DEMO === 'true') {
   const { seedSyntheticProgramInformation } = await import('./syntheticProgramInformation.js');
   await seedSyntheticProgramInformation(store, DEV_USER_ID);
 }
+const notifier = createNotificationService({
+  store: store.notificationStore,
+  sender: createSimulatedOutboxSender({ nodeEnv: config.nodeEnv }),
+});
+startNotificationRetries({ notifier });
 const app = createApp({
   affiliationStore: store,
   referralStore: store,
   resolveIdentity: () => ({ userId: DEV_USER_ID }),
+  notifier,
 });
 
 app.listen(config.port, '127.0.0.1', () => {

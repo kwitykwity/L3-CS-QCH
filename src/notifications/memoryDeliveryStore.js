@@ -52,15 +52,32 @@
 // A delivery row holds IDs, status, counts, timestamps, a category and a
 // correlation ID only. No message body, subject, recipient, or participant
 // data (PRD 11.5).
+//
+// `source` (optional): where committed referrals and recipients come from.
+//   { referralExists(referralId) -> boolean,
+//     getRecipientForReferral(referralId) -> string | null }
+// The referral store passes one so deliveries see the referrals it has
+// committed (src/referrals/memoryReferralStore.js, notificationStore).
+// Without it, the `programs` and `referrals` seed arrays are used (tests).
 
 const STATUSES = Object.freeze(['PENDING', 'SENT', 'FAILED']);
 
 export function createMemoryDeliveryStore(
   { programs = [], referrals = [] } = {},
-  { now = () => new Date() } = {},
+  { now = () => new Date(), source = null } = {},
 ) {
   const programsById = new Map(programs.map((p) => [p.programId, { ...p }]));
   const referralsById = new Map(referrals.map((r) => [r.referralId, { ...r }]));
+  const lookup = source ?? {
+    async referralExists(referralId) {
+      return referralsById.has(referralId);
+    },
+    async getRecipientForReferral(referralId) {
+      const referral = referralsById.get(referralId);
+      if (!referral) return null;
+      return programsById.get(referral.receivingProgramId)?.notificationEmail ?? null;
+    },
+  };
   const deliveries = new Map();
   const byReferralAndType = new Map();
   let nextDeliveryId = 1;
@@ -97,20 +114,17 @@ export function createMemoryDeliveryStore(
 
   return {
     async referralExists(referralId) {
-      return referralsById.has(referralId);
+      return (await lookup.referralExists(referralId)) === true;
     },
 
     async getRecipientForReferral(referralId) {
       maybeFail('getRecipientForReferral');
-      const referral = referralsById.get(referralId);
-      if (!referral) return null;
-      const program = programsById.get(referral.receivingProgramId);
-      return program?.notificationEmail ?? null;
+      return (await lookup.getRecipientForReferral(referralId)) ?? null;
     },
 
     async getOrCreateDelivery({ referralId, notificationType, correlationId = null }) {
       // Stands in for fk_notifications_referral.
-      if (!referralsById.has(referralId)) throw new Error('fk_notifications_referral');
+      if ((await lookup.referralExists(referralId)) !== true) throw new Error('fk_notifications_referral');
       const existingId = byReferralAndType.get(key(referralId, notificationType));
       if (existingId) return { delivery: copy(deliveries.get(existingId)), created: false };
 
