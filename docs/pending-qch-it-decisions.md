@@ -72,7 +72,7 @@ secrets, the mailbox, the database connection) are listed separately in
 | | |
 | --- | --- |
 | Decision | How QCH Connect sends the "new referral" email: the shared mailbox it sends from, the Graph permission QCH IT approves (Send As or equivalent), and whether mail sending shares the sign-in app registration. |
-| Why it matters | The notification module (`src/notifications/`) is built and tested with a simulated outbox, but there is no Graph sender, and it is not yet called when a referral is created. Recipients come from each Program's `notification_email`, which has no management screen yet. |
+| Why it matters | The notification module (`src/notifications/`) is built and tested with a simulated outbox, and is started after each referral commits (Task E), but there is no Graph sender, so production sends nothing yet. Recipients come from each Program's `notification_email`, which has no management screen yet. |
 | Until then | The simulated outbox, which refuses to start outside development and test. |
 | Status | Open |
 
@@ -107,8 +107,7 @@ decision above (or another QCH input) it depends on.
 | Staff sign-in through Entra ID | External, then engineering | Decision 5 |
 | Demo sign-in for non-production demos (PRD 16.1) | Engineering | Nothing |
 | Permission administration screens (grant and remove capabilities in the app, PRD 3.8) | Engineering | Nothing to build; QCH names the first administrators (policy) |
-| Calling the notification module when a referral is created | Engineering | Nothing |
-| Microsoft Graph sender and a retry timer in the hosted app | External, then engineering | Decisions 2 and 6 |
+| Microsoft Graph sender, and starting the notifier and retry timer in the hosted app | External, then engineering | Decisions 2 and 6 |
 | Managing a Program's notification email (routing) | Engineering | Nothing; Program creation says routing is set up separately, and no screen or route sets it yet |
 | Reporting screens | Engineering | Nothing (Trello Task B) |
 | Program Management and matching changes asked for at the midpoint (for example a "program is full" status) | Requirement | Reconciling the Oct 23 requests with the Final Technical PRD (Trello Tasks C and D) |

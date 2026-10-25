@@ -3,8 +3,18 @@
 // 6.1, 6.2, 7.2, 7.3, 8.1, 8.7, 9.1, 9.3, 9.6; cards 3 and 11).
 //
 // Sequence (PRD 2.2): validate -> authorize -> verify receiving Program
-// -> transaction -> create referral + permanent Referral ID -> commit.
-// Notification is triggered only after commit, by a later card (PRD 11.4).
+// -> transaction -> create referral + permanent Referral ID -> commit
+// -> notification (PRD 11.4).
+//
+// Notification (Task E): after the transaction has committed, the
+// optional `notifier` (src/notifications/notificationService.js) is
+// started for the referral and NOT awaited. The caller gets its answer
+// without waiting for email, and nothing the notifier does can change,
+// delay or undo the referral (PRD 6.2, 11.6). It runs for a retry of the
+// same Submission ID too: the notifier keeps one delivery per referral, so
+// a repeat never sends twice, and it fills the gap if the first request
+// stopped between the commit and the notification. Only IDs are passed;
+// the recipient is looked up server-side (PRD 11.3).
 //
 // - Identity is the server-derived userId only (PRD 3.2). CREATE_REFERRAL
 //   needs app access only, which an active user has (PRD 3.6).
@@ -114,10 +124,26 @@ async function getSelectableProgram(store, programId) {
   return { program, department };
 }
 
+function defaultLogNotifyFailure(err) {
+  console.error(`[referrals] notification could not be started (${safeErrorKind(err)})`);
+}
+
 export function createReferralService({
   store, gpmeRuleVersion = GPME_RULE_VERSION, logGpmeFailure = defaultLogGpmeFailure,
+  notifier = null, logNotifyFailure = defaultLogNotifyFailure,
 } = {}) {
   if (!store) throw new Error('createReferralService requires a store');
+
+  // Starts the notification for a committed referral, on a later tick,
+  // without waiting for it. Never throws into the referral path.
+  function notifyCommitted(referralId, correlationId) {
+    if (!notifier) return;
+    Promise.resolve()
+      .then(() => notifier.notifyReferralCommitted({ referralId, correlationId }))
+      .catch((err) => {
+        try { logNotifyFailure(err); } catch { /* logging must not throw either */ }
+      });
+  }
 
   // Re-runs GPME inside the referral transaction (card 11). Returns the
   // evaluation to save, or throws a fixed error. A technical failure is
@@ -178,6 +204,14 @@ export function createReferralService({
     }
     const request = validation.value;
 
+    const result = await createInTransaction(userId, request, correlationId);
+    // Only reached once the referral is committed (RECEIVED) or found
+    // committed (ALREADY_RECEIVED).
+    notifyCommitted(result.referral.referralId, correlationId);
+    return result;
+  }
+
+  async function createInTransaction(userId, request, correlationId) {
     try {
       return await store.withTransaction(async (tx) => {
         await requireActiveUser(tx, userId);
