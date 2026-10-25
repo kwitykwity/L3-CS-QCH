@@ -8,6 +8,11 @@ QCH IT answers pending decision 7 in
 [pending-qch-it-decisions.md](pending-qch-it-decisions.md). Any change it
 leads to must be reconciled into the Final Technical PRD first.
 
+**Nothing here authorizes an AI service or sending participant data
+anywhere.** The provider privacy, retention and region details below come
+from public pages; they must be verified with QCH IT and the provider
+before any architecture decision.
+
 ## What QCH asked for (Oct 23 midpoint check-in)
 
 - **A text box instead of only picking from lists.** Staff describe a need
@@ -37,7 +42,7 @@ An option that breaks one needs a PRD change first, not just code.
 | Today | PRD | What a text box does to it |
 | --- | --- | --- |
 | Matching reads only need categories, an age range and a ZIP code. Notes and Referral Context never reach it | 8.2 | A free-text box is a new input that will hold participant details. **Every option needs a PRD change for this** |
-| Same inputs, same Program data, same rule version give the same result. No scores; order never means "better" | 8.4 | Kept if the text is only turned into those same inputs. Lost if a model picks or ranks Programs |
+| Same inputs, same Program data, same rule version give the same result. No scores; order never means "better" | 8.4 | Matching on the **confirmed** inputs stays repeatable. The interpretation step itself may not be: with an AI model (Options B and C), the same text can produce different suggested inputs on different tries. Lost entirely if a model picks or ranks Programs |
 | Explanations come from Program facts only | 8.6 | Same as above |
 | Missing Program information is never treated as "no restriction" | 8.10 | A model reading documents could guess. The rules engine never does |
 | Direct Referral works even if matching fails | 8.8 | Must stay true: if interpretation is down, staff can still pick from the lists |
@@ -63,6 +68,14 @@ Why this shape: a mistake by the interpreter is visible and fixable before
 matching runs; matching stays testable and explainable; and the
 interpreter can be swapped later (Option A today, Option B if approved)
 without touching the rules engine.
+
+What it does **not** make repeatable: the interpretation. Repeatable
+matching on confirmed inputs does not mean the suggestions are
+repeatable. Option A's word lists give the same suggestions for the same
+text and the same list version. An AI model (Options B and C) may suggest
+different inputs for identical text on different tries. Staff
+confirmation is what keeps a varying suggestion from reaching matching
+unchecked; it does not remove the variation.
 
 What it does not solve by itself: enrollment status, open slots and class
 times are **Program facts**, not interpretation. They need new fields in
@@ -133,9 +146,11 @@ Studio answering from QCH's program documents in SharePoint). Microsoft
 says such an agent answers on behalf of the signed-in user and only from
 SharePoint content that user can already open, needs Dataverse search,
 and keeps conversation transcripts that include the source content it
-used. It would not use the rules engine or Program Management data unless
-that data lives in SharePoint (pending decision 1). Licensing was not
-confirmed in this research.
+used. It would not use the rules engine. Whether it could use Program
+Management data depends on the integration capabilities QCH approves, on
+permissions, and on the chosen architecture (including where data lives,
+pending decision 1); this research did not confirm any particular way.
+Licensing was not confirmed either.
 
 | Question | B1 (app calls a QCH model) | B2 (Microsoft 365 agent) |
 | --- | --- | --- |
@@ -178,10 +193,11 @@ publish different terms, and all of them change over time.
 | | A: in the app | B1: QCH's Azure model | B2: Microsoft 365 agent | C: external API |
 | --- | --- | --- | --- | --- |
 | Data leaves QCH Connect | No | Yes, stays in QCH's tenant | Yes, separate tool | Yes, leaves QCH's Microsoft tenant |
-| Approval needed before building | PRD change only | QCH IT + PRD | QCH IT + licensing | Written QCH IT exception + PRD |
+| Approval needed before building | PRD reconciliation | QCH IT + PRD reconciliation | QCH IT + licensing + PRD reconciliation | Written QCH IT exception + PRD reconciliation |
 | Understands new wording | Only listed words | Yes | Yes | Yes |
-| Keeps matching explainable and repeatable | Yes | Yes, if it only interprets | No (separate answers) | Yes, if it only interprets |
-| Can start before QCH IT answers | Yes, with synthetic data | No | No | No |
+| Matching on confirmed inputs is explainable and repeatable | Yes | Yes, if it only interprets | No (separate answers) | Yes, if it only interprets |
+| Same text always gives the same suggestions | Yes, for the same word-list version | No, may vary | No, may vary | No, may vary |
+| Can start before QCH IT answers | Yes, once the PRD is reconciled, with synthetic data | No | No | No |
 
 ## Questions for QCH IT and QCH
 
@@ -198,16 +214,20 @@ publish different terms, and all of them change over time.
 
 ## What the research suggests (for Christina to decide)
 
-Option A fits inside today's boundary and could be built with synthetic
-data without waiting on QCH IT, using the interpret, confirm, then match
-shape. If QCH IT later approves a Microsoft-hosted model, B1 can replace
+Option A fits inside today's boundary and does not need a QCH IT
+decision. It still **must not be implemented until the free-text input is
+reconciled into the Final Technical PRD** (it changes PRD 8.2, see above)
+and that change is approved. After that, it could be built with synthetic
+data, using the interpret, confirm, then match shape. If QCH IT later approves a Microsoft-hosted model, B1 can replace
 the interpreter without changing the rules engine. Option C should only be
 considered with a written exception from QCH IT. Enrollment status is
 needed in every option and is a separate Program Management change.
 
 ## Sources
 
-Checked October 24, 2026. These terms change; recheck before any decision.
+Checked October 24, 2026. These are public pages, and the terms change.
+Verify every provider-specific privacy, retention and region claim with
+QCH IT and the provider before any architecture decision.
 
 - Microsoft: [Data, privacy, and security for Models Sold by Azure](https://learn.microsoft.com/en-us/azure/foundry/responsible-ai/openai/data-privacy)
 - Microsoft: [Abuse monitoring](https://learn.microsoft.com/en-us/azure/ai-foundry/openai/concepts/abuse-monitoring)
