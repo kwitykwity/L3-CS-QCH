@@ -3,7 +3,10 @@
 Every handoff item in PRD 19, where it lives, and what it still waits on.
 
 **Status: draft.** Production deployment, the operational documentation,
-and handoff acceptance are all unfinished.
+restore verification and handoff acceptance are all unfinished. Writing
+these documents does not complete any of them. Several items wait on
+production decisions that are still open with QCH IT, including where data
+will live; see [pending-qch-it-decisions.md](pending-qch-it-decisions.md).
 
 Handoff is complete when each deliverable is delivered and any remaining
 gap has an agreed resolution or acceptance plan (PRD 19.6). **An agreed gap
@@ -19,17 +22,17 @@ pull request), **Not started**.
 
 | Deliverable | Where it lives | Status | Waiting on |
 | --- | --- | --- | --- |
-| Authoritative source code | This repository during development; a QCH-owned repository at handoff | Draft | QCH IT repository location (19.3) |
+| Authoritative source code | This repository during development; a QCH-owned repository at handoff. How it is built: [architecture.md](architecture.md) | Draft | QCH IT repository location (19.3) |
 | Deployment documentation | `docs/deployment.md` | Draft | QCH IT deployment tooling and resource details |
 | Environment and configuration documentation | `docs/qch-it-requirements.md`, README Configuration table | Draft | QCH IT values and confirmations |
-| Database schema and migrations | `db/migrations/`, `db/README.md` | Draft | Migrations 001 and 002 merged (PR #4); migration 003 merged (PR #15). Migration-history handling not built. |
-| Data Dictionary | Not written | Not started | Nothing blocking: the merged schema (001, 002, 003) can be documented now. |
-| Administrative instructions | Not written | Not started | Permission administration and Program management features |
-| Backup and restore procedure | Not written | Not started | QCH IT backup approach |
-| Recovery procedure | `docs/deployment.md` (app); `db/README.md` (failed migration) | Draft | QCH IT backup and restore details |
-| Troubleshooting guide | Not written | Not started | Features and monitoring in place |
+| Database schema and migrations | `db/migrations/`, `db/README.md` | Draft (design) | The storage decision (pending decision 1): the SQL design (001 to 003) is the team's current design, not a confirmed production store. Migration-history handling not built. |
+| Data Dictionary | [data-dictionary.md](data-dictionary.md) | Draft | Revisit once the storage decision is made |
+| Administrative instructions | [admin-guide.md](admin-guide.md) | Draft | Permission administration screens (not built) and Program notification email management (not built) |
+| Backup and restore procedure | Not written | Not started | Storage and hosting decisions (pending decisions 1 and 2), then QCH IT's backup approach |
+| Recovery procedure | [operations.md](operations.md) (concepts); [deployment.md](deployment.md) (failed release); `db/README.md` (failed migration) | Draft | QCH IT backup and restore details |
+| Troubleshooting guide | [troubleshooting.md](troubleshooting.md) | Draft | Production-specific problems, once hosting, store, sign-in and email exist |
 | Dependency and licensing information | `docs/dependencies.md`, `npm run licenses` | Draft | QCH decision on the project's own license |
-| Operational and monitoring guidance | Not written (PR #12 adds notification logging notes to the README) | Not started | Application Insights resource from QCH IT |
+| Operational and monitoring guidance | [operations.md](operations.md) (expectations and verification); README Notifications section | Draft | Hosting and monitoring decision (pending decision 2); readiness check not built |
 | App registration, Key Vault, shared mailbox and environment guidance | `docs/qch-it-requirements.md` | Draft | QCH IT setup |
 
 ## Ownership and access (PRD 19.4)
