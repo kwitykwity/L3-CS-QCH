@@ -1,0 +1,63 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Referral status · QCH Connect</title>
+  <link rel="stylesheet" href="/referral/referral.css" />
+  <script type="module" src="detail.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <a class="brand" href="/">QCH Connect</a>
+    <nav aria-label="Main navigation"><a href="/referral/">New referral</a> <a href="/sent/">Referrals I sent</a> <a href="/receiving/">Received referrals</a></nav>
+    <div class="text-size" role="group" aria-labelledby="text-size-label">
+      <span id="text-size-label" class="text-size__label">Text size</span>
+      <button type="button" class="text-size__btn" data-size="S" aria-pressed="false">S</button>
+      <button type="button" class="text-size__btn" data-size="M" aria-pressed="true">M</button>
+      <button type="button" class="text-size__btn" data-size="L" aria-pressed="false">L</button>
+      <button type="button" class="text-size__btn" data-size="XL" aria-pressed="false">XL</button>
+    </div>
+  </header>
+  <main id="main" class="page">
+    <p><a href="/sent/">Back to referrals I sent</a></p>
+    <h1 id="referral-heading" tabindex="-1">Referral status</h1>
+    <div id="status" class="status status--info" role="status" aria-live="polite" tabindex="-1" hidden>
+      <span class="status__badge" aria-hidden="true"></span>
+      <span class="status__text"></span>
+    </div>
+
+    <section id="progress" class="panel" aria-labelledby="progress-heading" hidden>
+      <h2 id="progress-heading">Where this referral stands</h2>
+      <p id="awaiting-note" class="awaiting" hidden>Awaiting response. The receiving Program has not responded yet. This changes only when they respond.</p>
+      <ol class="steps">
+        <li class="step">
+          <h3>1. Response</h3>
+          <p id="response-value"></p>
+        </li>
+        <li class="step">
+          <h3>2. Decision</h3>
+          <p id="decision-value"></p>
+          <p id="reason-value" hidden></p>
+          <p id="explanation-value" class="need" hidden></p>
+        </li>
+        <li class="step">
+          <h3>3. Service outcome</h3>
+          <p id="outcome-value"></p>
+          <p id="outcome-note" class="muted" hidden></p>
+        </li>
+      </ol>
+      <p class="muted">Only the receiving Program can respond to this referral or record its outcome.</p>
+      <p id="receiver-link" hidden><a id="receiver-href" href="#">Open it as the receiving Program</a></p>
+    </section>
+
+    <section id="info" class="panel" aria-labelledby="info-heading" hidden>
+      <h2 id="info-heading">What you sent</h2>
+      <dl id="info-list" class="summary"></dl>
+    </section>
+
+    <p><button type="button" id="reload" class="btn btn--secondary" hidden>Reload this referral</button></p>
+  </main>
+</body>
+</html>

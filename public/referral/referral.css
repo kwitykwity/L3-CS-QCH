@@ -275,6 +275,8 @@ dialog::backdrop { background: rgb(0 0 0 / 0.4); }
 .step h3 { margin: 0 0 0.25rem; }
 .step p { margin: 0.25rem 0; }
 .need { white-space: pre-wrap; overflow-wrap: anywhere; }
+/* Awaiting response, said in words and weight, with a border: never color alone (Task L). */
+.awaiting { font-weight: 700; border-left: 0.25rem solid currentColor; padding-left: 0.5rem; margin: 0.25rem 0; }
 #referral-heading { overflow-wrap: anywhere; }
 
 /* Program fields layout only. Preserve shared themes and text sizing. */
