@@ -52,7 +52,7 @@ against Azure SQL; that waits on the Azure SQL store.
 | Labels, required fields, errors | `accessibility.test.js` (every page, including the guided-matching markup); axe in `e2e/` | Screen reader spot check |
 | Text sizing S/M/L/XL | `accessibility.test.js`; `e2e/` (computed sizes, kept work, reload) | Run C step 2 (browser zoom) |
 | Contrast (text 4.5:1, controls and focus 3:1) | `accessibility.test.js` both themes; axe in `e2e/` both themes | None |
-| P0 reporting: Total Referrals (#18), Timing Metrics (#26), Referral Activity (#30) | `test/regression/reportingJourney.test.js` over the known-answer world in `reportingFixture.js` (nine referrals built through the real API): every period type, organization / Program / Department scope with Department history, Zero vs No Data vs Pending vs Unknown vs error, partial periods, future and pre-2000 dates (API; no screen yet) | None until a screen exists |
+| P0 reporting: Total Referrals (#18), Timing Metrics (#26), Referral Activity (#30) | `test/regression/reportingJourney.test.js` over the known-answer world in `reportingFixture.js` (nine referrals built through the real API): every period type, organization / Program / Department scope with Department history, Zero vs No Data vs Pending vs Unknown vs error, partial periods, future and pre-2000 dates (API). On screen (Task M): `e2e/reportingKnownAnswers.spec.js` opens the Reporting Center over the SAME world and checks every period type, Program scope, Department scope with history, the Program and Department tables, Zero / No data / Pending / N/A, the partial-period note, future-date refusal, and no numbers for an inactive or signed-out person. `KNOWN_SCOPES` and `KNOWN_BREAKDOWNS` are shared by both | None |
 
 ### Merged on `main`: coverage still to add here (next slice of this card)
 
@@ -67,7 +67,6 @@ against Azure SQL; that waits on the Azure SQL store.
 
 | Area | Pull request | Then |
 | --- | --- | --- |
-| Reporting browser journeys (Reporting Center screens) | No Reporting UI on `main` or in an open PR yet | Check `KNOWN_ANSWERS` from `test/regression/reportingFixture.js` on screen: periods and scopes, Zero / No Data / Pending / Unknown / error states, partial-period ("data as of") message, future-date refusal |
 | Any journey against Azure SQL (PRD 17.2) | No Azure SQL store yet | Run these journeys against it |
 
 ## Fixed in this pass
