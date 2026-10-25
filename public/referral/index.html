@@ -28,7 +28,7 @@
       <!-- Status: announced to screen readers; tone is shown with an icon and a word, never color alone -->
       <div id="status" class="status" role="status" aria-live="polite" tabindex="-1" hidden>
         <span class="status__badge" aria-hidden="true"></span>
-        <span class="status__text"></span>
+        <span id="status-text" class="status__text"></span>
       </div>
       <div class="status-actions">
         <button type="button" id="check-again" class="btn btn--secondary" hidden>Check whether it was received</button>
@@ -120,7 +120,7 @@
                Announced; shown with an icon and a word, never color alone. -->
           <div id="match-message" class="status" role="status" aria-live="polite" tabindex="-1" hidden>
             <span class="status__badge" aria-hidden="true"></span>
-            <span class="status__text"></span>
+            <span id="match-message-text" class="status__text"></span>
           </div>
           <div class="status-actions">
             <button type="button" id="match-retry" class="btn btn--primary" hidden>Try again</button>

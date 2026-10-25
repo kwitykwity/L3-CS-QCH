@@ -77,7 +77,33 @@ function initTextSize() {
 // Status area
 // ---------------------------------------------------------------------------
 
+// VoiceOver (Safari) drops a live-region message that appears at the same
+// moment focus moves, so after a failed send or search the summary ("...
+// Nothing was sent.") was never heard. PRD 14.3 keeps focus on the first
+// invalid field, so that field also carries the summary in its description
+// until its error is fixed or the message is replaced.
+function linkSummaryToFocused(textId) {
+  unlinkSummary();
+  const el = document.activeElement;
+  if (!el || el === document.body) return;
+  const own = el.getAttribute('aria-describedby') ?? '';
+  el.dataset.ownDescribedby = own;
+  el.setAttribute('aria-describedby', `${textId} ${own}`.trim());
+}
+
+function unlinkSummary(only = null) {
+  const elements = only ? [only] : [...document.querySelectorAll('[data-own-describedby]')];
+  for (const el of elements) {
+    if (!el || !('ownDescribedby' in el.dataset)) continue;
+    const own = el.dataset.ownDescribedby;
+    if (own) el.setAttribute('aria-describedby', own);
+    else el.removeAttribute('aria-describedby');
+    delete el.dataset.ownDescribedby;
+  }
+}
+
 function showStatus(message, tone, { focus = true } = {}) {
+  unlinkSummary();
   const box = $('status');
   box.className = `status status--${tone}`;
   box.querySelector('.status__text').textContent = message;
@@ -88,6 +114,7 @@ function showStatus(message, tone, { focus = true } = {}) {
 // Every new message replaces the previous one; actions that belonged to
 // the previous message are hidden too, so no stale banner remains.
 function hideStatus() {
+  unlinkSummary();
   $('status').hidden = true;
   $('send-direct').hidden = true;
   $('check-again').hidden = true;
@@ -316,6 +343,7 @@ function clearPath() {
 const GUIDED_INPUTS = ['ageMin', 'ageMax', 'matchZip'];
 
 function showMatchMessage(message, tone, { retry = null, edit = false, direct = false, focus = true } = {}) {
+  unlinkSummary();
   const box = $('match-message');
   box.className = `status status--${tone}`;
   box.querySelector('.status__text').textContent = message;
@@ -328,6 +356,7 @@ function showMatchMessage(message, tone, { retry = null, edit = false, direct = 
 }
 
 function hideMatchMessage() {
+  unlinkSummary();
   $('match-message').hidden = true;
   $('match-retry').hidden = true;
   $('match-edit').hidden = true;
@@ -488,6 +517,7 @@ async function searchWith(answers, { focus = true } = {}) {
     showMatchMessage(result.message, result.tone, { focus: false });
     setGuidedErrors(errors);
     focusGuidedField(firstGuidedError(errors));
+    linkSummaryToFocused('match-message-text');
     return result;
   }
   // No plausible match and technical failure are different states with
@@ -512,6 +542,7 @@ async function findPrograms(event) {
     hideResults();
     showMatchMessage(GUIDED_MESSAGES.INVALID, 'error', { focus: false });
     focusGuidedField(firstGuidedError(errors));
+    linkSummaryToFocused('match-message-text');
     return;
   }
   await searchWith(toMatchRequest(values));
@@ -591,6 +622,7 @@ function setFieldError(inputId, errorId, message) {
     // "false", not removed: without the attribute, Safari/VoiceOver reports
     // an empty required field as "invalid data" before the user did anything.
     $(inputId).setAttribute('aria-invalid', message ? 'true' : 'false');
+    if (!message) unlinkSummary($(inputId));
   }
 }
 
@@ -691,6 +723,7 @@ async function applyResult(result) {
     for (const field of result.fieldErrors) errors[field] = SERVER_FIELD_MESSAGES[field] ?? 'Check this field.';
     showStatus(result.message, result.tone, { focus: false });
     showFieldErrors(errors);
+    linkSummaryToFocused('status-text');
     return;
   }
   if (result.next === 'CHOOSE_AFFILIATION' || result.next === 'RELOAD_AFFILIATION') {
@@ -773,6 +806,7 @@ async function submitReferral(event) {
     // Nothing is sent; entered work is kept (PRD 14.3).
     showStatus('Some information needs attention. Nothing was sent.', 'error', { focus: false });
     showFieldErrors(errors);
+    linkSummaryToFocused('status-text');
     return;
   }
   clearFieldErrors();

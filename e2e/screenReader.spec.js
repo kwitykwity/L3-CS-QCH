@@ -121,6 +121,12 @@ test.describe('New Referral page: what a screen reader is told', () => {
     const name = page.getByRole('textbox', { name: 'Participant name' });
     await expect(name).toBeFocused();
     await expect(name).toHaveAttribute('aria-invalid', 'true');
+    // VoiceOver drops the live summary when focus moves at the same moment
+    // (found by ear in Safari), so the focused field also carries it. PRD
+    // 14.3 keeps focus on the first invalid field.
+    await expect(name).toHaveAccessibleDescription(/^Some information needs attention\. Nothing was sent\./);
+    await expect(page.getByRole('textbox', { name: 'What do they need?' }))
+      .not.toHaveAccessibleDescription(/Nothing was sent/);
     await expect(name).toHaveAccessibleDescription(/Enter the participant's name\./);
     const need = page.getByRole('textbox', { name: 'What do they need?' });
     await expect(need).toHaveAttribute('aria-invalid', 'true');
@@ -199,6 +205,10 @@ test.describe('New Referral page: what a screen reader is told', () => {
     await page.getByRole('button', { name: 'Find Programs' }).click();
     await expect(needs).toHaveAccessibleDescription(/Choose at least one need\./);
     await expect(needs.getByRole('checkbox').first()).toBeFocused();
+    // VoiceOver drops the live message when focus moves at the same moment,
+    // so the focused control also carries it (found by ear in Safari).
+    await expect(needs.getByRole('checkbox').first())
+      .toHaveAccessibleDescription(/Some answers need attention\. Nothing was searched\./);
 
     // Results: focus moves to the results heading so the reader starts there.
     await needs.getByRole('checkbox', { name: 'Employment (sample)' }).check();
