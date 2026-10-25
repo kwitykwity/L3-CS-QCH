@@ -97,10 +97,10 @@ function readQuery(query, allowed) {
 // allowDemoGrants: honor DEMO receiving grants. Defaults to false, and is
 // refused at start-up unless nodeEnv is 'development' or 'test', so
 // production and unknown environments fail closed (PRD 16.1, 17.4).
-export function createReferralRouter({ store, resolveIdentity, allowDemoGrants = false, nodeEnv }) {
+export function createReferralRouter({ store, resolveIdentity, allowDemoGrants = false, nodeEnv, notifier = null }) {
   assertDemoGrantsAllowed(allowDemoGrants, nodeEnv);
   const router = express.Router();
-  const service = store ? createReferralService({ store }) : null;
+  const service = store ? createReferralService({ store, notifier }) : null;
   const queries = store ? createReferralQueryService({ store, allowDemoGrants }) : null;
   const responses = store ? createResponseService({ store, allowDemoGrants }) : null;
   const outcomes = store ? createOutcomeService({ store, allowDemoGrants }) : null;

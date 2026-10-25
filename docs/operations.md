@@ -16,8 +16,8 @@ step-by-step release procedure is [deployment.md](deployment.md).
 | `GET /health` answers `200 {"status":"ok"}` | The server process is up. It does not check the store, sign-in or email | Built |
 | Store availability | Every action needs the store; `503 NOT_CONFIGURED` means none is configured | A readiness check is not built (depends on the storage decision) |
 | `[error]` log lines | Unexpected failures. A rise means something is wrong | Built; no alerting yet |
-| Notification final failures (`warn`, status `FAILED`) | A receiving Program may not know a referral arrived. The referral itself is safe | Built in the module; the module is not yet called, and no alerting exists |
-| Notifications stuck `PENDING` | Retries are not running | A retry timer in the hosted app is not built |
+| Notification final failures (`warn`, status `FAILED`) | A receiving Program may not know a referral arrived. The referral itself is safe | Built and called after each referral commits (simulated outbox in development); no alerting exists |
+| Notifications stuck `PENDING` | Retries are not running | The retry timer exists (`src/notifications/retryTimer.js`) and runs in development; production wiring waits on the sender and store |
 | Sign-in failures | Staff cannot open the app | Not built (Entra) |
 
 Alerts belong in QCH's monitoring service (the earlier plan named Azure
