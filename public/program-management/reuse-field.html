@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Reuse a field - QCH Connect</title>
+  <link rel="stylesheet" href="/referral/referral.css" />
+  <script type="module" src="fieldReuse.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <a class="brand" href="/">QCH Connect</a>
+    <nav aria-label="Main navigation"><a href="/program-management/">Program Management</a></nav>
+    <div class="text-size" role="group" aria-labelledby="text-size-label">
+      <span id="text-size-label" class="text-size__label">Text size</span>
+      <button type="button" data-size="S" aria-pressed="false">S</button>
+      <button type="button" data-size="M" aria-pressed="true">M</button>
+      <button type="button" data-size="L" aria-pressed="false">L</button>
+      <button type="button" data-size="XL" aria-pressed="false">XL</button>
+    </div>
+  </header>
+    <main id="main" class="page">
+    <h1>Reuse an existing field</h1>
+    <p>Choose an active field from another Program you manage. The definition is shared; saved values are not copied.</p>
+    <p>Changing a shared definition later requires management permission for every Program using it.</p>
+    <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p>
+    <div id="reuse-status" class="status status--info" role="status" aria-live="polite" tabindex="-1">
+      <span class="status__text">Loading available fields...</span>
+    </div>
+    <button type="button" id="reload-reuse" class="btn btn--secondary">Reload available fields</button>
+    <form id="reuse-form" novalidate>
+      <fieldset id="reuse-controls" class="plain" disabled>
+        <legend>Field settings for this Program</legend>
+        <div class="field">
+          <label for="reuse-field">Existing field <span aria-hidden="true">*</span></label>
+          <select id="reuse-field" required aria-required="true">
+            <option value="">Choose a field</option>
+          </select>
+        </div>
+        <p id="reuse-preview"></p>
+        <div class="field">
+          <input id="reuse-mandatory" type="checkbox" />
+          <label for="reuse-mandatory">Require a value for this Program</label>
+        </div>
+        <div class="field">
+          <label for="reuse-order">Display order</label>
+          <input id="reuse-order" type="number" min="0" max="10000" step="1" value="0" />
+        </div>
+        <button type="submit" class="btn btn--primary">Use this field</button>
+      </fieldset>
+    </form>
+    <p><a id="reuse-back" href="fields.html">Return to Program fields</a></p>
+  </main>
+</body>
+</html>

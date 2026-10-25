@@ -126,13 +126,52 @@ test.describe('matching, explanations and selection (PRD 8.1, 8.4, 8.6)', () => 
     await expect(matchMessage(page)).toContainText('earlier results were cleared');
   });
 
+  // The synthetic seed has no Program without need categories, so the two
+  // "not checked" cases below take the real match response and set
+  // notCheckedForNeedCount, which is how the backend reports such Programs
+  // (src/gpme/matchPrograms.js). Everything else in the response is real.
+  async function reportNotChecked(page, count, overrides = {}) {
+    await page.route('**/api/gpme/match', async (route) => {
+      const response = await route.fetch();
+      const body = await response.json();
+      await route.fulfill({ response, json: { ...body, notCheckedForNeedCount: count, ...overrides } });
+    });
+  }
+
   test('a Program with no need categories on file is described as not checked, never as unsuitable (PRD 8.10)', async ({ page }) => {
+    await reportNotChecked(page, 2);
+    await openGuided(page);
+    await answerEducationEmployment(page);
+    await findPrograms(page);
+
+    await expect(page.locator('#match-results')).toBeVisible();
+    const note = page.locator('#not-checked-note');
+    await expect(note).toBeVisible();
+    await expect(note).toContainText('2 Programs have no need categories on file, so matching could not check them.');
+    await expect(note).toContainText('use Direct Referral');
+    await expect(note).not.toContainText(/not (eligible|suitable)|excluded|rejected|unsuitable/i);
+    // They are not listed in either group: the real results are unchanged.
+    await expect(page.locator('#plausible-list > li')).toHaveCount(1);
+    await expect(page.locator('#possible-list > li')).toHaveCount(1);
+  });
+
+  test('with no plausible match, Programs with no need categories are still described as not checked', async ({ page }) => {
+    await reportNotChecked(page, 1, { status: 'NO_PLAUSIBLE_MATCH', plausible: [], possible: [] });
+    await openGuided(page);
+    await answerEducationEmployment(page);
+    await findPrograms(page);
+
+    await expect(page.locator('#match-results')).toBeHidden();
+    await expect(matchMessage(page)).toContainText('No plausible match');
+    await expect(matchMessage(page)).toContainText('1 Program has no need categories on file, so matching could not check it.');
+  });
+
+  test('the not-checked note is hidden when every Program has need categories', async ({ page }) => {
     await openGuided(page);
     await need(page, 'Employment (sample)').check();
     await findPrograms(page);
     await expect(page.locator('#match-results')).toBeVisible();
-    // Nothing in the synthetic seed lacks categories, so this checks the
-    // wording is only shown when it applies.
+    // Nothing in the synthetic seed lacks categories, so the wording must not appear.
     await expect(page.locator('#not-checked-note')).toBeHidden();
   });
 
@@ -645,8 +684,10 @@ test.describe('keyboard and accessibility of the guided journey (PRD 14.2, 14.3,
     await page.locator('.text-size__btn[data-size="M"]').click();
   });
 
-  // KNOWN DEFECT, found by this suite and not fixed here (test-only task):
-  // at XL on a 375px screen the "How do you want to choose the Program?"
+  // KNOWN DEFECT (pre-existing; also fails with PR #32's CSS), found by this
+  // suite and not fixed here (test-only task). Follow-up:
+  // https://github.com/kwitykwity/L3-CS-QCH/issues/46
+  // At XL on a 375px screen the "How do you want to choose the Program?"
   // group on the entry screen (.path-btn, #path-label) is 16px wider than
   // the screen, so the page scrolls sideways. directReferral.spec.js misses
   // it because it only measures after the entry screen is hidden. Remove

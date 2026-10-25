@@ -1,0 +1,114 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Program Management · QCH Connect</title>
+  <link rel="stylesheet" href="/referral/referral.css" />
+  <script type="module" src="app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <a class="brand" href="/">QCH Connect</a>
+    <nav aria-label="Main navigation"><a href="/referral/">New referral</a> <a href="organization.html">Organization management</a></nav>
+    <div class="text-size" role="group" aria-labelledby="text-size-label">
+      <span id="text-size-label" class="text-size__label">Text size</span>
+      <button type="button" class="text-size__btn" data-size="S" aria-pressed="false">S</button>
+      <button type="button" class="text-size__btn" data-size="M" aria-pressed="true">M</button>
+      <button type="button" class="text-size__btn" data-size="L" aria-pressed="false">L</button>
+      <button type="button" class="text-size__btn" data-size="XL" aria-pressed="false">XL</button>
+    </div>
+  </header>
+  <main id="main" class="page">
+    <h1>Program Management</h1>
+    <p class="lead">Maintain information for Programs you are authorized to manage.</p>
+    <div id="status" class="status status--info" role="status" aria-live="polite" tabindex="-1" hidden>
+      <span class="status__badge" aria-hidden="true"></span>
+      <span class="status__text"></span>
+    </div>
+
+    <section class="panel" aria-labelledby="chooser-heading">
+      <h2 id="chooser-heading">Your Programs</h2>
+      <p id="programs-loading" class="muted">Loading your Programs…</p>
+      <p id="programs-empty" hidden>No Programs are currently assigned to you for management.</p>
+      <form id="chooser-form" novalidate hidden>
+        <div class="field">
+          <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p><label for="program-select">Program <span class="req" aria-hidden="true">*</span></label>
+          <select id="program-select" required aria-required="true" aria-describedby="program-select-hint">
+            <option value="">Choose a Program</option>
+          </select>
+          <p id="program-select-hint" class="muted">Discontinued Programs remain available for maintenance.</p>
+        </div>
+        <button type="submit" id="open-program" class="btn btn--primary">Open Program</button>
+      </form>
+      <button type="button" id="retry-list" class="btn btn--secondary" hidden>Try loading again</button>
+    </section>
+
+    <section id="editor" class="panel" aria-labelledby="editor-heading" hidden>
+      <h2 id="editor-heading" tabindex="-1"></h2>
+      <dl class="summary">
+        <div><dt>Department</dt><dd id="department-name"></dd></div>
+        <div><dt>Status</dt><dd id="program-status"></dd></div>
+      </dl>
+      <p id="retired-note" hidden>This Program is retired. Its information is available for reference.</p>
+
+      <div id="conflict" class="panel" role="region" aria-labelledby="conflict-heading" hidden>
+        <h3 id="conflict-heading" tabindex="-1">This Program changed</h3>
+        <p>Your entered work is still below. Review the latest saved information before making another change.</p>
+        <dl id="current-values" class="summary"></dl>
+        <button type="button" id="load-current" class="btn btn--secondary">Discard my edits and load latest</button>
+      </div>
+
+      <form id="details-form" novalidate>
+        <fieldset id="details-fields" class="plain">
+          <legend>Common Program information</legend>
+          <p class="muted">These fields are optional. Clearing a field removes its saved value.</p>
+          <div class="field">
+            <label for="site">Site</label>
+            <input id="site" type="text" maxlength="200" autocomplete="off" aria-describedby="site-error" />
+            <p id="site-error" class="field__error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="description">Description</label>
+            <textarea id="description" rows="4" maxlength="4000" aria-describedby="description-error"></textarea>
+            <p id="description-error" class="field__error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="eligibilityNotes">Eligibility notes</label>
+            <textarea id="eligibilityNotes" rows="4" maxlength="4000" aria-describedby="eligibilityNotes-error"></textarea>
+            <p id="eligibilityNotes-error" class="field__error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="scheduleNotes">Schedule notes</label>
+            <textarea id="scheduleNotes" rows="3" maxlength="2000" aria-describedby="scheduleNotes-error"></textarea>
+            <p id="scheduleNotes-error" class="field__error" hidden></p>
+          </div>
+          <div class="field">
+            <label for="costNotes">Cost notes</label>
+            <textarea id="costNotes" rows="3" maxlength="1000" aria-describedby="costNotes-error"></textarea>
+            <p id="costNotes-error" class="field__error" hidden></p>
+          </div>
+        </fieldset>
+        <div class="actions">
+          <button type="submit" id="save" class="btn btn--primary">Save changes</button>
+          <button type="button" id="discard" class="btn btn--secondary">Discard edits</button>
+        </div>
+      </form>
+      <div class="actions">
+        <button type="button" id="lifecycle" class="btn btn--secondary"></button>
+        <button type="button" id="reload-program" class="btn btn--secondary">Reload saved information</button>
+      </div>
+    </section>
+
+    <dialog id="confirm-dialog" aria-labelledby="confirm-heading" aria-describedby="confirm-message">
+      <h2 id="confirm-heading">Confirm action</h2>
+      <p id="confirm-message"></p>
+      <div class="actions">
+        <button type="button" id="confirm-stay" class="btn btn--secondary" autofocus>Keep editing</button>
+        <button type="button" id="confirm-proceed" class="btn btn--primary">Continue</button>
+      </div>
+    </dialog>
+  </main>
+</body>
+</html>

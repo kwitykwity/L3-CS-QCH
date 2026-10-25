@@ -30,6 +30,7 @@ import {
   programIdsWithCapability,
 } from '../authorization/referralAccess.js';
 import { programErrors } from './errors.js';
+import { matchingFactsOf, validateMatchingChange } from './validateMatchingChange.js';
 import {
   EDITABLE_FIELDS,
   validateLifecycleChange,
@@ -99,12 +100,116 @@ export function createProgramService({ store, allowDemoGrants = false }) {
     return programErrors.programChanged(toManagedProgram(now, department));
   }
 
+  // Discovery uses the same server-side grants as individual management
+  // actions. Lifecycle does not hide discontinued Programs from managers.
+  async function listManagedPrograms(userId) {
+    if (!Number.isSafeInteger(userId) || userId <= 0) {
+      throw programErrors.notAuthenticated();
+    }
+    return store.withTransaction(async (tx) => {
+      const user = await tx.getUser(userId);
+      if (!user || !user.isActive) throw programErrors.userNotActive();
+      const grants = await tx.getActiveGrants(userId);
+      const ids = [...programIdsWithCapability(grants, MANAGE_PROGRAM, { allowDemoGrants })]
+        .filter((id) => id > 0).sort((a, b) => a - b);
+      const programs = [];
+      for (const id of ids) {
+        const program = await tx.getProgram(id);
+        if (!program) continue;
+        const department = await tx.getDepartment(program.departmentId);
+        programs.push({
+          programId: program.programId,
+          name: program.name,
+          site: program.site ?? null,
+          departmentId: program.departmentId,
+          departmentName: department?.name ?? null,
+          lifecycleStatus: program.lifecycleStatus,
+        });
+      }
+      programs.sort((a, b) => a.name.localeCompare(b.name)
+        || (a.site ?? '').localeCompare(b.site ?? '')
+        || a.programId - b.programId);
+      return { programs };
+    });
+  }
+
   // Read for the maintenance screen, with the version to send back.
   async function getProgram(userId, programId) {
     checkIds(userId, programId);
     return store.withTransaction(async (tx) => {
       const { program, department } = await authorize(tx, userId, programId, MANAGE_PROGRAM);
       return { program: toManagedProgram(program, department) };
+    });
+  }
+
+  async function getMatchingFacts(userId, programId) {
+    checkIds(userId, programId);
+    return store.withTransaction(async (tx) => {
+      const { program, department } = await authorize(tx, userId, programId, MANAGE_PROGRAM);
+      const categories = await tx.listNeedCategories();
+      return {
+        program: toManagedProgram(program, department),
+        facts: matchingFactsOf(program),
+        categories: categories.map((row) => ({
+          needCategoryId: row.needCategoryId,
+          name: row.name,
+          lifecycleStatus: row.lifecycleStatus,
+        })),
+      };
+    });
+  }
+
+  async function updateMatchingFacts(userId, programId, body, { correlationId = null } = {}) {
+    checkIds(userId, programId);
+    return store.withTransaction(async (tx) => {
+      const { program, department } = await authorize(tx, userId, programId, MANAGE_PROGRAM);
+      if (program.lifecycleStatus === 'RETIRED') throw programErrors.programRetired();
+      const validation = validateMatchingChange(body);
+      if (!validation.ok) throwInvalid(validation);
+      const { version, facts } = validation.value;
+      const stale = () => programErrors.programChanged({
+        ...toManagedProgram(program, department),
+        matchingFacts: matchingFactsOf(program),
+      });
+      if (program.version !== version) throw stale();
+
+      const categories = await tx.listNeedCategories();
+      const previousIds = new Set(program.needCategoryIds ?? []);
+      const allowed = new Set(categories
+        .filter((row) => row.lifecycleStatus === 'ACTIVE' || previousIds.has(row.needCategoryId))
+        .map((row) => row.needCategoryId));
+      if (facts.needCategoryIds.some((id) => !allowed.has(id))) {
+        throw programErrors.invalidRequest(['needCategoryIds']);
+      }
+
+      const before = matchingFactsOf(program);
+      const comparable = {
+        ...before,
+        needCategoryIds: [...before.needCategoryIds].sort((a, b) => a - b),
+        serviceAreaZips: [...before.serviceAreaZips].sort(),
+      };
+      if (JSON.stringify(comparable) === JSON.stringify(facts)) throw programErrors.noChange();
+
+      // SQL implementations must update the Program, category links and ZIP
+      // rows in this same transaction, using the Program version.
+      const updated = await tx.updateProgram({
+        programId, expectedVersion: version, set: structuredClone(facts),
+      });
+      if (!updated) throw stale();
+      await tx.appendAuditEvent({
+        entityType: 'PROGRAM',
+        entityId: programId,
+        action: 'UPDATED',
+        actorUserId: userId,
+        before: { matching_facts: before },
+        after: { matching_facts: facts },
+        correlationId,
+      });
+      return {
+        status: 'UPDATED',
+        program: toManagedProgram(updated, department),
+        facts: matchingFactsOf(updated),
+      };
     });
   }
 
@@ -191,8 +296,11 @@ export function createProgramService({ store, allowDemoGrants = false }) {
   }
 
   return Object.freeze({
+    listManagedPrograms,
     getProgram,
     updateDetails,
+    getMatchingFacts,
+    updateMatchingFacts,
     discontinue: (userId, programId, body, options) =>
       changeLifecycle(userId, programId, body, 'DISCONTINUED', options),
     reactivate: (userId, programId, body, options) =>
