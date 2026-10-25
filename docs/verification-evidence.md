@@ -103,3 +103,26 @@ focus to the Program box. The test now checks both behaviors.
 See [pending-qch-it-decisions.md](pending-qch-it-decisions.md) and
 [security-regression.md](security-regression.md) (Task F, merged in #47)
 for what must be re-run once these are decided.
+
+## Integrated revision
+
+This branch merged with `main` at `6cd459c` (after #33, #41, #42, #44,
+#47 and #50), validated at `7785894`. The commit that adds this section
+changes only this document.
+
+| | |
+| --- | --- |
+| Runtime | Node 22.23.4 (workspace; the team's pinned version is 24.15.0) |
+| Browser | Chromium (Playwright) with axe-core, WCAG 2.2 AA tags |
+| Date | October 25, 2026 |
+
+| Suite | Result |
+| --- | --- |
+| `npm test` (Node, including `test/regression/` and the docs checks) | 1,402 passed, 0 failed |
+| `npm run test:e2e` (Chromium) | 125 passed, 0 failed, 1 skipped (the known `test.fixme` in `e2e/gpme.spec.js`, XL entry screen at phone width) |
+
+The five `e2e/mvpJourney.spec.js` journeys and the Reporting Center XL
+reflow fix still pass alongside the specs that arrived from `main` since
+the original run (`gpme`, `currentProgramInformation`,
+`reportingKnownAnswers`). No new failures were found, so nothing else
+was changed.
