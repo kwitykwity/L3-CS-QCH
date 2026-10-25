@@ -84,6 +84,12 @@ test.describe('New Referral page: what a screen reader is told', () => {
     await expect(page.getByRole('heading', { name: '2. Referral details' })).toBeFocused();
     await expect(page.getByText('Fields marked * are required.')).toBeVisible();
 
+    // Nothing is wrong yet, so nothing may say "invalid". The attribute must
+    // be an explicit "false": without it, Safari/VoiceOver reports an empty
+    // native-required field as "invalid data" on first visit (found by ear).
+    for (const id of ['affiliation-select', 'participantName', 'contactValue', 'referralContext']) {
+      await expect(page.locator(`#${id}`), id).toHaveAttribute('aria-invalid', 'false');
+    }
     const name = page.getByRole('textbox', { name: 'Participant name' });
     await expect(name).toHaveAttribute('aria-required', 'true');
     const need = page.getByRole('textbox', { name: 'What do they need?' });
@@ -126,7 +132,7 @@ test.describe('New Referral page: what a screen reader is told', () => {
 
     // Fixing a field clears its error state for the reader too.
     await name.fill('Synthetic Person Reader');
-    await expect(name).not.toHaveAttribute('aria-invalid', 'true');
+    await expect(name).toHaveAttribute('aria-invalid', 'false');
     await expect(name).toHaveAccessibleDescription('');
   });
 

@@ -377,8 +377,7 @@ function hasGuidedAnswers() {
 function setGuidedErrors(errors) {
   setFieldError(null, 'needs-error', errors.needs ?? null);
   setFieldError('ageMin', 'ageRange-error', errors.ageRange ?? null);
-  if (errors.ageRange) $('ageMax').setAttribute('aria-invalid', 'true');
-  else $('ageMax').removeAttribute('aria-invalid');
+  $('ageMax').setAttribute('aria-invalid', errors.ageRange ? 'true' : 'false');
   setFieldError('matchZip', 'matchZip-error', errors.matchZip ?? null);
 }
 
@@ -589,8 +588,9 @@ function setFieldError(inputId, errorId, message) {
   error.textContent = message ?? '';
   error.hidden = !message;
   if (inputId) {
-    if (message) $(inputId).setAttribute('aria-invalid', 'true');
-    else $(inputId).removeAttribute('aria-invalid');
+    // "false", not removed: without the attribute, Safari/VoiceOver reports
+    // an empty required field as "invalid data" before the user did anything.
+    $(inputId).setAttribute('aria-invalid', message ? 'true' : 'false');
   }
 }
 

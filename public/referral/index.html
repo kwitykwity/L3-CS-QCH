@@ -48,7 +48,7 @@
           <p id="affiliation-prompt" class="muted"></p>
           <div class="field">
             <label for="affiliation-select">Your Program <span class="req" aria-hidden="true">*</span></label>
-            <select id="affiliation-select" required aria-required="true" aria-describedby="affiliation-error">
+            <select id="affiliation-select" required aria-required="true" aria-invalid="false" aria-describedby="affiliation-error">
               <option value="">Choose your Program</option>
             </select>
             <p id="affiliation-error" class="field__error" hidden></p>
@@ -192,7 +192,7 @@
             <div class="field">
               <label for="participantName">Participant name <span class="req" aria-hidden="true">*</span></label>
               <input id="participantName" name="participantName" type="text" autocomplete="off" maxlength="200"
-                required aria-required="true" aria-describedby="participantName-error" />
+                required aria-required="true" aria-invalid="false" aria-describedby="participantName-error" />
               <p id="participantName-error" class="field__error" hidden></p>
             </div>
 
@@ -205,14 +205,14 @@
             <div class="field" id="contactValue-field" hidden>
               <label for="contactValue"><span id="contactValue-label">Phone number</span> <span class="req" aria-hidden="true">*</span></label>
               <input id="contactValue" name="contactValue" type="tel" autocomplete="off" maxlength="320"
-                aria-required="true" aria-describedby="contactValue-error" />
+                aria-required="true" aria-invalid="false" aria-describedby="contactValue-error" />
               <p id="contactValue-error" class="field__error" hidden></p>
             </div>
 
             <div class="field">
               <label for="referralContext">What do they need? <span class="req" aria-hidden="true">*</span></label>
               <textarea id="referralContext" name="referralContext" rows="4" maxlength="4000"
-                required aria-required="true" aria-describedby="referralContext-hint referralContext-error"></textarea>
+                required aria-required="true" aria-invalid="false" aria-describedby="referralContext-hint referralContext-error"></textarea>
               <p id="referralContext-hint" class="muted">Visible to you and to staff authorized for the receiving Program.</p>
               <p id="referralContext-error" class="field__error" hidden></p>
             </div>
