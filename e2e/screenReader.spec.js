@@ -140,6 +140,15 @@ test.describe('New Referral page: what a screen reader is told', () => {
     await name.fill('Synthetic Person Reader');
     await expect(name).toHaveAttribute('aria-invalid', 'false');
     await expect(name).toHaveAccessibleDescription('');
+
+    // When the first problem is the contact choice, focus lands on a radio,
+    // and the group carries the summary until a choice is made.
+    await page.getByRole('button', { name: 'Send referral' }).click();
+    const contactGroup = page.getByRole('group', { name: 'Best way to reach them' });
+    await expect(contactGroup.getByRole('radio').first()).toBeFocused();
+    await expect(contactGroup).toHaveAccessibleDescription(/^Some information needs attention\. Nothing was sent\./);
+    await contactGroup.getByRole('radio', { name: 'No reliable contact' }).check();
+    await expect(contactGroup).not.toHaveAccessibleDescription(/Nothing was sent/);
   });
 
   test('a send is announced in order: "Sending referral ..." then "Referral received !" with the ID (PRD 7.1, 7.4)', async ({ page }) => {
@@ -207,11 +216,14 @@ test.describe('New Referral page: what a screen reader is told', () => {
     await expect(needs.getByRole('checkbox').first()).toBeFocused();
     // VoiceOver drops the live message when focus moves at the same moment,
     // so the focused control also carries it (found by ear in Safari).
-    await expect(needs.getByRole('checkbox').first())
-      .toHaveAccessibleDescription(/Some answers need attention\. Nothing was searched\./);
+    // VoiceOver reads the group's description for a checkbox, so the group
+    // carries it.
+    await expect(needs).toHaveAccessibleDescription(/^Some answers need attention\. Nothing was searched\./);
+    await expect(needs).toHaveAccessibleDescription(/Choose at least one need\./);
 
     // Results: focus moves to the results heading so the reader starts there.
     await needs.getByRole('checkbox', { name: 'Employment (sample)' }).check();
+    await expect(needs).not.toHaveAccessibleDescription(/Nothing was searched/);
     await page.getByRole('button', { name: 'Find Programs' }).click();
     await expect(page.getByRole('heading', { name: 'Programs that may fit' })).toBeFocused();
     await expect(page.getByRole('button', { name: /^Choose / }).first()).toBeVisible();

@@ -84,8 +84,12 @@ function initTextSize() {
 // until its error is fixed or the message is replaced.
 function linkSummaryToFocused(textId) {
   unlinkSummary();
-  const el = document.activeElement;
-  if (!el || el === document.body) return;
+  const focused = document.activeElement;
+  if (!focused || focused === document.body) return;
+  // On a checkbox or radio, VoiceOver reads the group's description, not
+  // the box's own (heard in the Safari run), so the summary goes on the group.
+  const el = (focused.matches('input[type="checkbox"], input[type="radio"]')
+    && focused.closest('fieldset[aria-describedby]')) || focused;
   const own = el.getAttribute('aria-describedby') ?? '';
   el.dataset.ownDescribedby = own;
   el.setAttribute('aria-describedby', `${textId} ${own}`.trim());
@@ -622,7 +626,12 @@ function setFieldError(inputId, errorId, message) {
     // "false", not removed: without the attribute, Safari/VoiceOver reports
     // an empty required field as "invalid data" before the user did anything.
     $(inputId).setAttribute('aria-invalid', message ? 'true' : 'false');
-    if (!message) unlinkSummary($(inputId));
+  }
+  // Fixed: the field (or its group) stops carrying the failed-send summary.
+  if (!message) {
+    for (const el of document.querySelectorAll('[data-own-describedby]')) {
+      if (el.dataset.ownDescribedby.split(' ').includes(errorId)) unlinkSummary(el);
+    }
   }
 }
 
