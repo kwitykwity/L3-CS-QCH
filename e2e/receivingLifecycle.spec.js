@@ -11,7 +11,14 @@
 // decided only by this test's resolveIdentity (from a test-only cookie),
 // the same seam the real Entra sign-in will use; the app never reads an
 // identity from the page, the body or the URL. SYNTHETIC data only.
+//
+// Cleanup: every browser context as() opens is tracked and closed after
+// each test, passed or failed, so none of them keeps a connection to the
+// private server. The server is then stopped with a bounded wait: idle
+// connections are closed at once, and anything still open after
+// SERVER_CLOSE_GRACE_MS is reported and closed, so teardown can never hang.
 
+import http from 'node:http';
 import { test, expect } from '@playwright/test';
 import { expectNoAxeViolations } from './helpers.js';
 import { syntheticSeed, NOT_APPROPRIATE_REASONS, RECEIVING_CAPABILITIES } from '../scripts/syntheticSeed.js';
@@ -32,9 +39,14 @@ const grant = (userId, permission, programId) => ({
   userId, permission, scopeType: 'PROGRAM', programId, departmentId: null, grantSource: 'IN_APP',
 });
 
+const CONTEXT_CLOSE_MS = 5_000;
+const SERVER_CLOSE_GRACE_MS = 5_000;
+
 let server;
 let base;
 let store;
+const contexts = new Set();  // every context as() has opened and not closed
+const sockets = new Set();   // open connections to the private server
 let n = 0;
 const RUN = Date.now().toString(36);
 
@@ -63,29 +75,97 @@ test.beforeAll(async () => {
   };
   const app = createApp({ affiliationStore: store, referralStore: store, resolveIdentity, nodeEnv: 'test' });
   server = app.listen(0, '127.0.0.1');
+  server.on('connection', (socket) => {
+    sockets.add(socket);
+    socket.once('close', () => sockets.delete(socket));
+  });
   await new Promise((resolve, reject) => { server.once('listening', resolve); server.once('error', reject); });
   base = `http://127.0.0.1:${server.address().port}`;
 });
 
-test.afterAll(async () => {
-  await new Promise((resolve, reject) => server.close((e) => (e ? reject(e) : resolve())));
+// Resolves to true if `promise` settles within `ms`, false otherwise.
+// Never rejects, and never leaves its timer running.
+async function settlesWithin(promise, ms) {
+  let timer;
+  const timedOut = new Promise((resolve) => { timer = setTimeout(() => resolve(false), ms); });
+  try {
+    return await Promise.race([promise.then(() => true, () => true), timedOut]);
+  } finally {
+    clearTimeout(timer);
+  }
+}
+
+// Closes every context opened so far. Runs after every test, including a
+// failed one, so no context outlives the test that opened it.
+async function closeContexts() {
+  const open = [...contexts];
+  contexts.clear();
+  const closed = await Promise.all(open.map((context) => settlesWithin(context.close(), CONTEXT_CLOSE_MS)));
+  const stuck = closed.filter((ok) => !ok).length;
+  if (stuck) console.warn(`[card 51] ${stuck} browser context(s) did not close within ${CONTEXT_CLOSE_MS} ms`);
+}
+
+// Stops the private server with a bounded wait. With every context closed
+// there should be nothing left; anything still open is reported and closed.
+async function stopServer() {
+  if (!server) return;
+  const closed = new Promise((resolve, reject) => server.close((e) => (e ? reject(e) : resolve())));
+  server.closeIdleConnections();
+  if (await settlesWithin(closed, SERVER_CLOSE_GRACE_MS)) {
+    await closed;
+    return;
+  }
+  console.warn(`[card 51] ${sockets.size} connection(s) still open ${SERVER_CLOSE_GRACE_MS} ms after close; closing them`);
+  server.closeAllConnections();
+  await closed;
+}
+
+test.afterEach(async () => {
+  await closeContexts();
 });
 
-// One browser context per person.
+test.afterAll(async () => {
+  await closeContexts();
+  await stopServer();
+});
+
+// One browser context per person. Tracked from the moment it exists, so it
+// is closed even if a later step in this function fails.
 async function as(browser, person) {
   const context = await browser.newContext();
+  contexts.add(context);
   await context.addCookies([{ name: COOKIE, value: String(person), url: base }]);
   return context.newPage();
 }
 
 // A request straight to the server as `person`, skipping every screen.
-async function api(person, method, path, body) {
-  const response = await fetch(base + path, {
-    method,
-    headers: { cookie: `${COOKIE}=${person}`, ...(body ? { 'content-type': 'application/json' } : {}) },
-    body: body ? JSON.stringify(body) : undefined,
+// It uses its own connection and closes it after the response (no shared
+// keep-alive pool), so it never leaves a connection open at teardown.
+function api(person, method, path, body) {
+  const payload = body ? JSON.stringify(body) : null;
+  return new Promise((resolve, reject) => {
+    const req = http.request(base + path, {
+      method,
+      agent: false,
+      headers: {
+        connection: 'close',
+        cookie: `${COOKIE}=${person}`,
+        ...(payload ? { 'content-type': 'application/json', 'content-length': Buffer.byteLength(payload) } : {}),
+      },
+    }, (res) => {
+      let text = '';
+      res.setEncoding('utf8');
+      res.on('data', (chunk) => { text += chunk; });
+      res.on('end', () => {
+        let parsed = null;
+        try { parsed = JSON.parse(text); } catch { parsed = null; }
+        resolve({ status: res.statusCode, body: parsed });
+      });
+      res.on('error', reject);
+    });
+    req.on('error', reject);
+    req.end(payload ?? undefined);
   });
-  return { status: response.status, body: await response.json().catch(() => null) };
 }
 
 async function send(programId = HOUSING) {
