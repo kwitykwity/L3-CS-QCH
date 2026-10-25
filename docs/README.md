@@ -28,6 +28,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 | [troubleshooting.md](troubleshooting.md) | Start-up problems, error codes, test problems, what is logged |
 | [operations.md](operations.md) | Monitoring expectations, verification procedures, recovery concepts, known dependencies |
 | [security-regression.md](security-regression.md) | What the security tests prove for every route, what they found, and what to re-run once the production architecture is confirmed (Task F) |
+| [verification-evidence.md](verification-evidence.md) | Evidence that the MVP journeys work together, failures found and fixed, and what waits on the QCH environment (Task G) |
 | [ai-interpretation-options.md](ai-interpretation-options.md) | Research only: three ways an open-ended "Find a Program" box could work, compared for pending decision 7 |
 
 ## Deployment and handoff
@@ -39,6 +40,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 | [handoff-checklist.md](handoff-checklist.md) | Every handoff deliverable, where it lives, and what it waits on |
 | [dependencies.md](dependencies.md) | Direct dependencies and how to list every license |
 | [regression-coverage.md](regression-coverage.md) | Accessibility and end-to-end regression coverage, and the manual keyboard checklist |
+| [screen-reader-check.md](screen-reader-check.md) | VoiceOver script and record sheet: labels, required fields, errors, announcements, dialogs, focus |
 
 Elsewhere in the repository:
 
