@@ -27,6 +27,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 | [admin-guide.md](admin-guide.md) | Program Management and organization tasks for administrators |
 | [troubleshooting.md](troubleshooting.md) | Start-up problems, error codes, test problems, what is logged |
 | [operations.md](operations.md) | Monitoring expectations, verification procedures, recovery concepts, known dependencies |
+| [verification-evidence.md](verification-evidence.md) | Evidence that the MVP journeys work together, failures found and fixed, and what waits on the QCH environment (Task G) |
 | [ai-interpretation-options.md](ai-interpretation-options.md) | Research only: three ways an open-ended "Find a Program" box could work, compared for pending decision 7 |
 
 ## Deployment and handoff
