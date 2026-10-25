@@ -120,6 +120,7 @@ const ROUTES = [
   // Guided Program Matching (card 10, #16)
   { method: 'get', path: '/api/gpme/need-categories' },
   { method: 'post', path: '/api/gpme/match', body: () => ({ needCategoryIds: [1] }) },
+  { method: 'post', path: '/api/gpme/interpret', body: () => ({ text: 'needs a job' }) },
 
   // Program maintenance (card 14, PRs #21, #22, #24, #25)
   ...programRoutes(),
@@ -356,6 +357,8 @@ describe('authorization boundaries (capability + resource + scope, PRD 3.3-3.9)'
       await request(app).post('/api/gpme/match').send({ needCategoryIds: [1], participantZip: M.name }),
       await request(app).post('/api/gpme/match').send({ needCategoryIds: [1], notes: M.notes }),
       await request(app).post('/api/gpme/match').set('Content-Type', 'application/json').send(`{"participantZip":"${M.name}"`),
+      await request(app).post('/api/gpme/interpret').send({ text: `${M.name} ${M.notes}` }),
+      await request(app).post('/api/gpme/interpret').send({ text: 'job', participantName: M.name }),
     ];
     for (const res of responses) {
       assert.equal(res.headers['cache-control'], 'no-store');

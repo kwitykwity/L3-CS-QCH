@@ -3,6 +3,18 @@
 //   GET  /api/gpme/need-categories
 //        200 { needCategories: [{ needCategoryId, name }] }
 //
+//   POST /api/gpme/interpret   (Task D: interpretation layer)
+//        body: { text: "<short description, up to 400 characters>" }
+//        200 { status: "INTERPRETED", interpreterVersion,
+//              needs: [{ needCategoryId, name, matchedTerms,
+//                        currentProgramCount | null }],
+//              ageRange: { min, max } | null, participantZip | null,
+//              notes: [code] }
+//        503 { status: "UNABLE_TO_INTERPRET" }
+//        PROPOSES criteria only. It does not match, store, or log the
+//        text, and calls no external service. The worker reviews and
+//        corrects the proposal, then confirms it into POST /match.
+//
 //   POST /api/gpme/match
 //        body: { needCategoryIds: [<id>, ...], ageRange?: { min, max },
 //                participantZip?: "<5 digits>" }
@@ -25,13 +37,14 @@
 import express from 'express';
 import { AffiliationError } from '../affiliation/errors.js';
 import { GpmeError, gpmeErrors } from './errors.js';
-import { createGpmeService } from './gpmeService.js';
+import { createGpmeService, INTERPRET_STATUS } from './gpmeService.js';
 import { MATCH_STATUS } from './matchPrograms.js';
 import { MAX_BODY_BYTES } from './validateMatchRequest.js';
+import { MAX_INTERPRET_BODY_BYTES } from './interpretation/validateInterpretRequest.js';
 
-export function createGpmeRouter({ store, resolveIdentity }) {
+export function createGpmeRouter({ store, resolveIdentity, interpreter }) {
   const router = express.Router();
-  const service = store ? createGpmeService({ store }) : null;
+  const service = store ? createGpmeService({ store, ...(interpreter ? { interpreter } : {}) }) : null;
 
   // Protected responses must not be cached (PRD 5.5).
   router.use((req, res, next) => {
@@ -54,13 +67,20 @@ export function createGpmeRouter({ store, resolveIdentity }) {
     next();
   });
 
-  router.use(express.json({ limit: MAX_BODY_BYTES }));
+  // Each route sets its own body limit (PRD 10.7).
+  const matchBody = express.json({ limit: MAX_BODY_BYTES });
+  const interpretBody = express.json({ limit: MAX_INTERPRET_BODY_BYTES });
 
   router.get('/need-categories', async (req, res) => {
     res.json({ needCategories: await service.listNeedCategories(req.userId) });
   });
 
-  router.post('/match', async (req, res) => {
+  router.post('/interpret', interpretBody, async (req, res) => {
+    const result = await service.interpret(req.userId, req.body);
+    res.status(result.status === INTERPRET_STATUS.UNABLE_TO_INTERPRET ? 503 : 200).json(result);
+  });
+
+  router.post('/match', matchBody, async (req, res) => {
     const result = await service.match(req.userId, req.body);
     res.status(result.status === MATCH_STATUS.UNABLE_TO_MATCH ? 503 : 200).json(result);
   });

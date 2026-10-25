@@ -37,7 +37,7 @@ function notFound(req, res) {
   res.status(404).json({ error: 'Not Found' });
 }
 
-export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false, nodeEnv, now } = {}) {
+export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false, nodeEnv, now, gpmeInterpreter } = {}) {
   const app = express();
 
   // Don't advertise the framework or its version.
@@ -65,7 +65,7 @@ export function createApp({ affiliationStore, referralStore, resolveIdentity, al
 
   app.use(
     '/api/gpme',
-    createGpmeRouter({ store: affiliationStore, resolveIdentity }),
+    createGpmeRouter({ store: affiliationStore, resolveIdentity, interpreter: gpmeInterpreter }),
   );
 
   app.use(

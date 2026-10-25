@@ -22,8 +22,9 @@ import { interpretCheckResponse, interpretSubmitResponse, sendingState } from '.
 import { interpretAffiliationSave } from './affiliation.js';
 import { SIZES, loadSize, saveSize } from './textSize.js';
 import {
-  GUIDED_MESSAGES, firstGuidedError, interpretCategoriesResponse, interpretMatchResponse, notCheckedNote,
-  toMatchRequest, validateGuidedForm,
+  DESCRIBE_MESSAGES, GUIDED_FIELD_MESSAGES, GUIDED_MESSAGES, firstGuidedError, interpretCategoriesResponse,
+  interpretInterpretResponse, interpretMatchResponse, notCheckedNote, toMatchRequest, validateDescription,
+  validateGuidedForm,
 } from './guided.js';
 
 const $ = (id) => document.getElementById(id);
@@ -371,7 +372,7 @@ function readGuided() {
 
 function hasGuidedAnswers() {
   const v = readGuided();
-  return v.needCategoryIds.length > 0 || Boolean(v.ageMin.trim() || v.ageMax.trim() || v.matchZip.trim());
+  return $('describe').value.trim().length > 0 || v.needCategoryIds.length > 0 || Boolean(v.ageMin.trim() || v.ageMax.trim() || v.matchZip.trim());
 }
 
 function setGuidedErrors(errors) {
@@ -386,6 +387,62 @@ function focusGuidedField(field) {
   if (field === 'needs') (document.querySelector('input[name="need"]') ?? $('guided-heading')).focus();
   else if (field === 'ageRange') $('ageMin').focus();
   else if (field === 'matchZip') $('matchZip').focus();
+}
+
+// Describe-the-need step (Task D). The text only proposes answers; the worker
+// checks and corrects them, and Find Programs matches on the confirmed answers.
+function hideUnderstood() {
+  $('understood').hidden = true;
+  $('understood-list').replaceChildren();
+  $('understood-notes').replaceChildren();
+}
+
+function fillList(listId, lines) {
+  $(listId).replaceChildren(...lines.map((line) => {
+    const li = document.createElement('li');
+    li.textContent = line;
+    return li;
+  }));
+}
+
+async function describeNeed() {
+  const text = $('describe').value;
+  const problem = validateDescription(text);
+  setFieldError('describe', 'describe-error', problem);
+  if (problem) {
+    $('describe').focus();
+    return;
+  }
+  const button = $('describe-go');
+  button.disabled = true;
+  button.textContent = DESCRIBE_MESSAGES.WORKING;
+  button.setAttribute('aria-busy', 'true');
+  hideUnderstood();
+  const result = interpretInterpretResponse(await api.interpretDescription(text));
+  button.disabled = false;
+  button.textContent = 'Fill in the answers below';
+  button.removeAttribute('aria-busy');
+
+  if (result.state === 'PROPOSED') {
+    for (const box of document.querySelectorAll('input[name="need"]')) {
+      box.checked = result.needCategoryIds.includes(Number(box.value));
+    }
+    $('ageMin').value = result.ageMin;
+    $('ageMax').value = result.ageMax;
+    $('matchZip').value = result.matchZip;
+    guidedAnswersChanged();
+    $('understood-message').textContent = result.message;
+    fillList('understood-list', result.understood);
+    fillList('understood-notes', [...result.warnings, ...result.notes,
+      ...(result.needsStillRequired ? [GUIDED_FIELD_MESSAGES.needs] : [])]);
+  } else {
+    $('understood-message').textContent = result.message;
+    fillList('understood-notes', result.notes ?? []);
+  }
+  const tone = result.state === 'PROPOSED' || result.state === 'NOTHING_UNDERSTOOD' ? 'info' : 'error';
+  $('understood').className = `status status--${tone}`;
+  $('understood').hidden = false;
+  $('understood').focus();
 }
 
 function hideResults() {
@@ -635,6 +692,8 @@ function setSendButton({ enabled, sending = false }) {
 // Clears the guided answers and results (participant information).
 function clearGuided() {
   $('guided-form').reset();
+  hideUnderstood();
+  setFieldError(null, 'describe-error', null);
   setGuidedErrors({});
   hideResults();
   hideMatchMessage();
@@ -869,6 +928,7 @@ function init() {
   $('guided-form').addEventListener('submit', findPrograms);
   $('guided-form').addEventListener('keydown', blockImplicitSubmit);
   for (const id of GUIDED_INPUTS) $(id).addEventListener('input', guidedAnswersChanged);
+  $('describe-go').addEventListener('click', describeNeed);
   $('match-retry').addEventListener('click', retryMatching);
   $('match-edit').addEventListener('click', () => focusGuidedField('needs'));
   $('match-direct').addEventListener('click', () => choosePath('DIRECT'));

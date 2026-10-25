@@ -22,6 +22,9 @@ import { errors as affiliationErrors } from '../affiliation/errors.js';
 import { gpmeErrors } from './errors.js';
 import { GPME_RULE_VERSION, MATCH_STATUS, matchPrograms } from './matchPrograms.js';
 import { validateMatchRequest } from './validateMatchRequest.js';
+import { createRuleBasedInterpreter } from './interpretation/ruleBasedInterpreter.js';
+import { validateInterpretRequest } from './interpretation/validateInterpretRequest.js';
+import { readMatchingFacts } from './programFacts.js';
 
 function compareText(a, b) {
   if (a < b) return -1;
@@ -29,7 +32,18 @@ function compareText(a, b) {
   return 0;
 }
 
-export function createGpmeService({ store, ruleVersion = GPME_RULE_VERSION, logFailure = defaultLogFailure } = {}) {
+export const INTERPRET_STATUS = Object.freeze({
+  INTERPRETED: 'INTERPRETED',
+  UNABLE_TO_INTERPRET: 'UNABLE_TO_INTERPRET',
+});
+
+// `interpreter` is the replaceable interpretation layer (Task D); see
+// src/gpme/interpretation/ruleBasedInterpreter.js for its contract. It only
+// proposes criteria; GPME matching below never depends on which one ran.
+export function createGpmeService({
+  store, ruleVersion = GPME_RULE_VERSION, logFailure = defaultLogFailure,
+  interpreter = createRuleBasedInterpreter(),
+} = {}) {
   if (!store) throw new Error('createGpmeService requires a store');
 
   async function requireActiveUser(userId) {
@@ -52,6 +66,64 @@ export function createGpmeService({ store, ruleVersion = GPME_RULE_VERSION, logF
         .filter((c) => c.lifecycleStatus === 'ACTIVE')
         .map((c) => ({ needCategoryId: c.needCategoryId, name: c.name }))
         .sort((a, b) => compareText(a.name, b.name) || a.needCategoryId - b.needCategoryId);
+    },
+
+    // Turns the worker's short description into PROPOSED matching criteria
+    // for the worker to review, correct, and confirm before matching (Task D).
+    // It never matches, stores, logs, or returns the text, and never calls
+    // an external service. Each proposed need also reports how many Programs
+    // currently offer it, read from current Program Management data, so the
+    // worker sees up front when no current Program lists a need.
+    async interpret(userId, body) {
+      await requireActiveUser(userId);
+
+      const checked = validateInterpretRequest(body);
+      if (checked.unexpectedField) throw gpmeErrors.unexpectedField();
+      if (!checked.ok) throw gpmeErrors.invalidRequest(checked.fields);
+
+      let needCategories;
+      let proposal;
+      try {
+        needCategories = await store.listNeedCategories();
+        proposal = await interpreter.interpret({ text: checked.value.text, needCategories });
+      } catch (err) {
+        logFailure(err);
+        return { status: INTERPRET_STATUS.UNABLE_TO_INTERPRET };
+      }
+
+      // Current Program Management data. If it cannot be read, interpretation
+      // still works; the counts are simply left out (null), never guessed.
+      let offeredCounts = null;
+      try {
+        offeredCounts = new Map();
+        for (const { program } of await store.listMatchablePrograms()) {
+          for (const id of readMatchingFacts(program).needCategoryIds) {
+            offeredCounts.set(id, (offeredCounts.get(id) ?? 0) + 1);
+          }
+        }
+      } catch (err) {
+        logFailure(err);
+        offeredCounts = null;
+      }
+
+      const names = new Map(needCategories.map((c) => [c.needCategoryId, c.name]));
+      const needs = proposal.needCategoryIds
+        .filter((id) => names.has(id))
+        .map((id) => ({
+          needCategoryId: id,
+          name: names.get(id),
+          matchedTerms: [...(proposal.reasons?.get(id) ?? [])],
+          currentProgramCount: offeredCounts ? (offeredCounts.get(id) ?? 0) : null,
+        }));
+
+      return {
+        status: INTERPRET_STATUS.INTERPRETED,
+        interpreterVersion: interpreter.version,
+        needs,
+        ageRange: proposal.ageRange ?? null,
+        participantZip: proposal.participantZip ?? null,
+        notes: [...(proposal.notes ?? [])],
+      };
     },
 
     async match(userId, body) {

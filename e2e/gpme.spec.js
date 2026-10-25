@@ -659,3 +659,73 @@ test.describe('keyboard and accessibility of the guided journey (PRD 14.2, 14.3,
     await page.locator('.text-size__btn[data-size="M"]').click();
   });
 });
+
+// Describe-the-need step (Task D): the description only PROPOSES answers;
+// the worker corrects them; matching uses the confirmed answers alone.
+test.describe('describe what the participant needs', () => {
+  test('proposes answers, lets the worker correct them, then matches on the confirmed answers only', async ({ page }) => {
+    await openGuided(page);
+    const matchPosts = recordMatchPosts(page);
+    const interpretPosts = [];
+    page.on('request', (request) => {
+      if (request.method() === 'POST' && request.url().endsWith('/api/gpme/interpret')) interpretPosts.push(request.postDataJSON());
+    });
+
+    await page.locator('#describe').fill('A 25 year old who wants to finish school and find a job');
+    await page.locator('#describe-go').click();
+
+    await expect(page.locator('#understood')).toBeVisible();
+    await expect(page.locator('#understood-list')).toContainText('Need: Education (sample)');
+    await expect(page.locator('#understood-list')).toContainText('Need: Employment (sample)');
+    await expect(page.locator('#understood-list')).toContainText('Age: 25');
+    await expect(need(page, 'Education (sample)')).toBeChecked();
+    await expect(need(page, 'Employment (sample)')).toBeChecked();
+    await expect(page.locator('#ageMin')).toHaveValue('25');
+    // Nothing is matched until the worker chooses Find Programs.
+    expect(matchPosts).toHaveLength(0);
+    await expect(page.locator('#match-results')).toBeHidden();
+
+    // The worker corrects the proposal: the age becomes a range.
+    await page.locator('#ageMin').fill('19');
+    await page.locator('#ageMax').fill('30');
+    await findPrograms(page);
+
+    await expect(page.locator('#match-results')).toBeVisible();
+    await expect(page.locator('#plausible-list')).toContainText(EVENING);
+    expect(interpretPosts).toEqual([{ text: 'A 25 year old who wants to finish school and find a job' }]);
+    // The match request carries only the three approved criteria, never the text.
+    expect(matchPosts).toEqual([{ needCategoryIds: [2, 3], ageRange: { min: 19, max: 30 } }]);
+    // The worker still has to choose a Program: nothing was selected or sent.
+    await expect(page.locator('#step-details')).toBeHidden();
+  });
+
+  test('says so when nothing is understood, and leaves the answers to the worker', async ({ page }) => {
+    await openGuided(page);
+    await page.locator('#describe').fill('please help');
+    await page.locator('#describe-go').click();
+    await expect(page.locator('#understood-message')).toContainText('Nothing was filled in');
+    await expect(page.locator('input[name="need"]:checked')).toHaveCount(0);
+    await expect(page.locator('#match-direct, #path-direct')).not.toHaveCount(0);
+  });
+
+  test('a technical failure keeps the text and keeps the manual answers available', async ({ page }) => {
+    await openGuided(page);
+    await page.route('**/api/gpme/interpret', (route) => route.fulfill({
+      status: 503, contentType: 'application/json', body: JSON.stringify({ status: 'UNABLE_TO_INTERPRET' }),
+    }));
+    await page.locator('#describe').fill('needs a job');
+    await page.locator('#describe-go').click();
+    await expect(page.locator('#understood-message')).toContainText('technical problem');
+    await expect(page.locator('#describe')).toHaveValue('needs a job');
+    await need(page, 'Employment (sample)').check();
+    await expect(need(page, 'Employment (sample)')).toBeChecked();
+  });
+
+  test('the describe step has no accessibility violations', async ({ page }) => {
+    await openGuided(page);
+    await page.locator('#describe').fill('A 25 year old who needs a job');
+    await page.locator('#describe-go').click();
+    await expect(page.locator('#understood')).toBeVisible();
+    await expectNoAxeViolations(page);
+  });
+});
