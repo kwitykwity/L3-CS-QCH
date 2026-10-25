@@ -31,8 +31,10 @@ stops it afterwards. To use a Chromium that is already installed, set
 | `test/regression/journeys.test.js` | Whole workflows through the integrated app over HTTP, switching between staff members |
 | `test/regression/accessibility.test.js` | Every page in `public/`: language, title, headings, labels, ids, required fields, status announcements, text size, link colors, and color contrast in both themes |
 | `e2e/directReferral.spec.js` | In Chromium: the New Referral entry screen (no path preselected; Direct Referral chosen by keyboard), Direct Referral completed by keyboard only, visible focus on every stop, Shift+Tab order, Enter safety, undo/redo, S/M/L/XL, phone width at XL, and an axe WCAG 2.2 AA scan of the entry screen and every Direct Referral state in light and dark themes |
+| `e2e/gpme.spec.js` | In Chromium, against the synthetic backend: matching with explained plausible / possible results, choosing a Program, submission as a GPME-assisted referral (body carries only the approved matching inputs), no plausible match vs technical failure, answers preserved, Try again, Direct Referral fallback (after a failure and with matching fully down), recovery after `GPME_UNAVAILABLE`, `GPME_RESULT_CHANGED` and a lost confirmation, keyboard-only journey, nothing sensitive in URL / storage / console, axe on every guided state in light and dark, XL at phone width. The "not checked" wording (PRD 8.10) is tested by patching `notCheckedForNeedCount` into the real match response (with results, and with no plausible match), because the synthetic seed has no Program without need categories; plus a negative case with the seed as it is. **Coverage limitation:** one known, pre-existing product defect is recorded as `test.fixme`, so it is not covered: the entry screen scrolls sideways at XL on a 375px phone (also fails with PR #32's CSS). Follow-up issue: https://github.com/kwitykwity/L3-CS-QCH/issues/46 |
 | `e2e/programManagement.spec.js`, `e2e/fieldValues.spec.js`, `e2e/organization.spec.js`, `e2e/matchingManagement.spec.js` | Card 14 (#32): each Program Management screen's main path in Chromium, with stale-page and lost-connection recovery and axe in both themes |
 | `e2e/programManagementJourneys.spec.js` | Card 52: the Program Management journeys the card 14 specs leave out, one block per area (fields, options, reuse, replacement, retirement, Departments, Program creation, Program moves): missing and duplicate input with focus on the problem, cancelled confirmations, stale pages, lost connections, what may be reused, replaced or retired, discontinued Departments as targets, referral history across a move, keyboard-only creation, XL at phone width on every screen, axe on error states |
+| `e2e/receiving.spec.js` | Task A: the receiving screens (received list, referral detail). The list shows only Programs I receive for, with Response, Decision and Service outcome kept separate, and stage filters. Accept, record and correct an outcome by keyboard (Accepted never reads as served). Not appropriate needs a reason, has no outcome, and becomes outcome-ready only after a correction to Accepted. A recorded outcome blocks a change to Not appropriate. Stale page, someone responding first, a lost connection, a save that commits but whose answer is lost, and Cancel: nothing is merged or sent twice, and an unknown outcome is described as "may have been saved", never "not saved". For each of the four changes, if the reload after a confirmed save fails, every action stays locked and the success message stays until an explicit reload succeeds. A referral I only sent is read-only, and the server refuses a direct request. An unknown ID reveals nothing. axe in both themes; XL at phone width |
 | `e2e/screenReader.spec.js` | What a screen reader is given on New Referral (Direct and guided matching) and Program Management: landmarks and headings, control names and groups, required and invalid state, hints and errors as descriptions, toggle state, dialog names and descriptions, focus moves, and every live-region announcement in order |
 
 The journeys use the in-memory store. PRD 17.2 asks for the same journeys
@@ -45,29 +47,27 @@ against Azure SQL; that waits on the Azure SQL store.
 | Area | Automated | Manual (checklist below) |
 | --- | --- | --- |
 | Direct Referral E2E (#8, #19; entry screen from #27) | Journeys 1, 4, 5, 6; `e2e/directReferral.spec.js` | Run A in a second browser |
-| Receiving lifecycle: queue and response (#10, #11) | Journeys 1, 2, 3, 6 (API; no screen yet) | None until a screen exists |
+| Receiving lifecycle: queue and response (#10, #11) | Journeys 1, 2, 3, 6 (API); screens (Task A): `e2e/receiving.spec.js` | Run D in a second browser |
 | Program maintenance 14A: Program information and lifecycle (#21) | Journey 7: authorized edit, refusals for other roles, stale-version refusal, discontinue / reactivate, effect on new referral choices, preserved referral history, audit evidence (API). Screens (#32): `e2e/programManagement.spec.js` | Keyboard and Narrator checks recorded on #32 |
 | Keyboard workflows and focus | `e2e/` (Chromium, scripted keyboard) | Runs A and B in a second browser |
-| Labels, required fields, errors | `accessibility.test.js` (every page, including the guided-matching markup); axe in `e2e/`; `e2e/screenReader.spec.js` | VoiceOver run: [screen-reader-check.md](screen-reader-check.md) |
+| Labels, required fields, errors | `accessibility.test.js` (every page, including the guided-matching markup); axe in `e2e/`; `e2e/screenReader.spec.js` | VoiceOver + Safari run on New Referral and Program Management: [screen-reader-check.md](screen-reader-check.md); Narrator checks recorded on #32 |
 | Text sizing S/M/L/XL | `accessibility.test.js`; `e2e/` (computed sizes, kept work, reload) | Run C step 2 (browser zoom) |
 | Contrast (text 4.5:1, controls and focus 3:1) | `accessibility.test.js` both themes; axe in `e2e/` both themes | None |
+| P0 reporting: Total Referrals (#18), Timing Metrics (#26), Referral Activity (#30) | `test/regression/reportingJourney.test.js` over the known-answer world in `reportingFixture.js` (nine referrals built through the real API): every period type, organization / Program / Department scope with Department history, Zero vs No Data vs Pending vs Unknown vs error, partial periods, future and pre-2000 dates (API). On screen (Task M): `e2e/reportingKnownAnswers.spec.js` opens the Reporting Center over the SAME world and checks every period type, Program scope, Department scope with history, the Program and Department tables, Zero / No data / Pending / N/A, the partial-period note, future-date refusal, and no numbers for an inactive or signed-out person. `KNOWN_SCOPES` and `KNOWN_BREAKDOWNS` are shared by both | None |
 
 ### Merged on `main`: coverage still to add here (next slice of this card)
 
 | Area | Merged in | What this suite still needs | Covered elsewhere today |
 | --- | --- | --- | --- |
-| GPME E2E: guided matching and GPME-assisted referral | #16, #27 | An HTTP journey (match, choose, GPME_ASSISTED referral, evaluation saved) and `e2e/gpme.spec.js` (Run B automated, axe on results / no match / failure) | `test/gpme*.test.js` per card; the card 11 browser check in #27 |
-| Receiving lifecycle: outcome and corrections | #14 | A journey through record outcome, correct outcome, correct response, stale version, audit | `test/serviceOutcome.test.js` per card |
+| GPME E2E: guided matching and GPME-assisted referral | #16, #27 | Browser journey is covered by `e2e/gpme.spec.js` (below). Still needed: an HTTP journey (match, choose, GPME_ASSISTED referral, evaluation saved) in `test/regression/` | `test/gpme*.test.js` per card; `e2e/gpme.spec.js` |
+| Receiving lifecycle: outcome and corrections | #14 | An HTTP journey through record outcome, correct outcome, correct response, stale version, audit; multi-user browser journeys (card 51) | `test/serviceOutcome.test.js` per card; screens (Task A): `e2e/receiving.spec.js` |
 | Program maintenance 14B: configurable fields and values | #22, #24 | An HTTP journey | `test/programFields*.test.js` per card; in the browser (#32, card 52): `e2e/fieldValues.spec.js`, `e2e/programManagementJourneys.spec.js` (fields, options, reuse, replacement, retirement) |
 | Program maintenance 14C: create / move Programs, Department lifecycle | #25 | An HTTP journey | `test/programOrganization.test.js` per card; in the browser (#32, card 52): `e2e/organization.spec.js`, `e2e/programManagementJourneys.spec.js` (Departments, creation, moves, referral history after a move) |
-| P0 reporting: Total Referrals | #18 | A journey that reports on referrals created by the other journeys | `test/totalReferrals.test.js` known answers |
 
 ### Not merged yet (dependencies)
 
 | Area | Pull request | Then |
 | --- | --- | --- |
-| P0 reporting: Time to First Response, Time to Recorded Service | #26 | Add to the reporting journey |
-| P0 reporting: referral activity report (breadth) | #30 (replaces #29) | Add to the reporting journey |
 | Any journey against Azure SQL (PRD 17.2) | No Azure SQL store yet | Run these journeys against it |
 
 ## Fixed in this pass
@@ -164,3 +164,22 @@ date, browser, tester and any failure in the pull request.
 2. Reload: the chosen size is kept. Browser zoom to 200% still works with
    no sideways scrolling at a phone-sized window.
 3. Repeat steps 1 and 2 with the computer in dark mode.
+
+### Run D: receiving a referral (Task A)
+
+On `npm run dev:synthetic`, make a Direct Referral to Housing Help Desk
+(sample), then open Received referrals.
+
+1. Open the referral from the list with Enter. Response, Decision and
+   Service outcome show as three separate steps.
+2. Choose Accept with Space; Tab to "Send response"; Enter; confirm. The
+   outcome still reads "Not recorded", with the note that accepted is not
+   served.
+3. Record an outcome, then correct it. Each result is read out from the
+   status box.
+4. On another referral, choose Not appropriate and send with no reason:
+   the error is text with an icon, and focus moves to Reason.
+5. Open the same referral in two tabs. Change the outcome in one, then
+   save in the other: "Review before you continue" appears with what is
+   saved now, the save buttons are locked, and "Load the latest
+   information" unlocks them.

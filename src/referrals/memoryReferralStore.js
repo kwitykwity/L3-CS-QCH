@@ -69,6 +69,22 @@
 //                      before, after, correlationId })
 //       Written in the same transaction as the change it records. The store
 //       adds occurredAt (UTC) itself; callers never supply the timestamp.
+//       Refused (AuditRuleError, transaction rolls back) unless the event
+//       passes auditRules.js: the dbo.audit_events constraints (entity
+//       type and action from the CHECK lists, an integer entity ID, an
+//       existing actor (FK), a correlation ID of at most 64 characters,
+//       before/after JSON that ISJSON accepts) plus two stricter app rules
+//       (positive entity ID, JSON object). This mirrors the schema; it does
+//       not prove what Azure SQL accepts.
+//
+// Notifications (Task E): `notificationStore` is the notification delivery
+//   store (contract in src/notifications/memoryDeliveryStore.js) over this
+//   store's COMMITTED referrals. The recipient is the receiving Program's
+//   notification email, seeded as `programNotificationEmails`
+//   ({ programId: address }). It is kept apart from Program rows on
+//   purpose, so no Program read can return it (PRD 11.3). In Azure SQL
+//   this is programs.notification_email, read only by the join in
+//   getRecipientForReferral.
 //
 // Reporting (card 9): countReferrals({ from, to, programId?, departmentId? }) -> number
 //   (see its comment below for the exact SQL).
@@ -228,7 +244,9 @@
 // Columns map to dbo.referrals, dbo.programs, dbo.audit_events and the
 // field tables in db/migrations/001_core_schema.sql (PR #4).
 
+import { createMemoryDeliveryStore } from '../notifications/memoryDeliveryStore.js';
 import { createMemoryStore } from '../affiliation/memoryStore.js';
+import { checkAuditEvent } from './auditRules.js';
 import { DuplicateSubmissionError } from './errors.js';
 import { stageOf } from './stage.js';
 
@@ -697,6 +715,11 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
           failNextAudit = false;
           throw new Error('simulated audit failure');
         }
+        // The dbo.audit_events constraints plus the app's stricter rules
+        // (auditRules.js). A refusal throws, so the whole transaction rolls
+        // back, as a refused INSERT would in SQL.
+        const actor = await base.getUser(event?.actorUserId);
+        checkAuditEvent(event, { userExists: () => actor !== null });
         // The store sets the authoritative timestamp (PRD 9.6, 9.7); in SQL
         // this is audit_events.occurred_at DEFAULT SYSUTCDATETIME().
         staged.audit.push({ ...structuredClone(event), occurredAt: now().toISOString() });
@@ -759,6 +782,22 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     }
   }
 
+  // Recipients stay out of Program rows (see "Notifications" above).
+  const notificationEmails = new Map(Object.entries(seed.programNotificationEmails ?? {})
+    .map(([programId, address]) => [Number(programId), address]));
+  const notificationStore = createMemoryDeliveryStore({}, {
+    now,
+    source: {
+      async referralExists(referralId) {
+        return referrals.some((r) => r.referralId === referralId);
+      },
+      async getRecipientForReferral(referralId) {
+        const referral = referrals.find((r) => r.referralId === referralId);
+        return referral ? notificationEmails.get(referral.receivingProgramId) ?? null : null;
+      },
+    },
+  });
+
   const grants = (seed.grants ?? []).map((g) => ({ revokedAt: null, ...g }));
   const reasons = (seed.notAppropriateReasons ?? []).map((r) => ({ requiresExplanation: false, lifecycleStatus: 'ACTIVE', ...r }));
   const activeGrants = (userId) =>
@@ -786,6 +825,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     ...base,
     withTransaction,
     getReferralBySubmissionId,
+    notificationStore,
 
     async getGpmeEvaluation(evaluationId) {
       const found = gpmeEvaluations.find((e) => e.evaluationId === evaluationId);

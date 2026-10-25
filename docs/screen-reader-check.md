@@ -171,5 +171,13 @@ so it cannot come back unnoticed.
   the browser's own validity. They read correctly in this run (C2), but
   should get the same `aria-invalid="false"` treatment as New Referral if
   "invalid data" is heard on them before any input.
-- **Windows:** NVDA or Narrator with Edge has not been run. Add a second
-  record if QCH staff use Windows screen readers.
+- **Windows:** Christina ran Windows Narrator with Chrome and Edge on
+  selected Program Management workflows (recorded on #32). NVDA, and
+  Narrator on New Referral, have not been run. Add a second record if
+  QCH staff use Windows screen readers.
+- **Screens that reached `main` after this run** were not part of it:
+  the receiving screens (Task A, #37), the Reporting Center (#41) and the
+  current Program information work (Task C, #44). The receiving and
+  Reporting pages' `<main>` cannot take focus yet, so the Safari skip-link
+  problem fixed here (A3) may apply to them; worth the same one-line fix
+  and a short listening pass.

@@ -7,7 +7,23 @@ export const DEV_USER_ID = 1;
 const NO_AGE_LIMIT = { ageLimitState: 'NO_RESTRICTION', ageMin: null, ageMax: null };
 const NO_AREA_LIMIT = { serviceAreaState: 'NO_RESTRICTION', serviceAreaZips: [] };
 
-export function syntheticSeed({ programManagement = false, organizationManagement = false } = {}) {
+// The receiving-side capabilities (PRD 3.6), each granted on its own.
+export const RECEIVING_CAPABILITIES = Object.freeze([
+  'VIEW_RECEIVED_REFERRAL', 'RESPOND_TO_REFERRAL', 'RECORD_OUTCOME', 'CORRECT_OUTCOME', 'UPDATE_RECEIVED_REFERRAL',
+]);
+// The sample Program the developer receives referrals for (receiving: true).
+export const DEV_RECEIVING_PROGRAM_ID = 4;
+
+// The initial Not Appropriate reasons from db/migrations/002_reference_data.sql.
+export const NOT_APPROPRIATE_REASONS = Object.freeze([
+  { reasonId: 1, code: 'PROGRAM_CRITERIA_NOT_MET', label: 'Program criteria not met', displayOrder: 1 },
+  { reasonId: 2, code: 'PROGRAM_UNAVAILABLE', label: 'Program currently unavailable', displayOrder: 2 },
+  { reasonId: 3, code: 'NOT_APPROPRIATE_FOR_NEED', label: 'Program not appropriate for identified need', displayOrder: 3 },
+  { reasonId: 4, code: 'UNABLE_TO_PROCEED', label: 'Unable to proceed with referral', displayOrder: 4 },
+  { reasonId: 5, code: 'OTHER', label: 'Other', displayOrder: 5 },
+]);
+
+export function syntheticSeed({ programManagement = false, organizationManagement = false, receiving = false } = {}) {
   return {
     departments: [
       { departmentId: 1, name: 'Youth Services (sample)', lifecycleStatus: 'ACTIVE' },
@@ -41,6 +57,17 @@ export function syntheticSeed({ programManagement = false, organizationManagemen
       { programId: 7, departmentId: 3, name: 'Retired Sample Program', site: 'Site D', lifecycleStatus: 'DISCONTINUED',
         needCategoryIds: [5], ...NO_AGE_LIMIT, ...NO_AREA_LIMIT },
     ],
+    // Where each sample Program's new-referral notification goes (Task E).
+    // Invented addresses on the reserved example.org domain; the dev server
+    // only puts them in the simulated outbox, never in a real email.
+    // Program 5 has none on purpose, to show the NO_RECIPIENT failure.
+    programNotificationEmails: {
+      1: 'playgroup.sample@example.org',
+      2: 'homework-club.sample@example.org',
+      3: 'evening-classes.sample@example.org',
+      4: 'housing-help.sample@example.org',
+      6: 'wellness-center.sample@example.org',
+    },
     // No affiliation yet, so the first-use affiliation step is visible.
     users: [{ userId: DEV_USER_ID, isActive: true }],
     // Explicit synthetic permissions for the local management UI.
@@ -61,6 +88,16 @@ export function syntheticSeed({ programManagement = false, organizationManagemen
         departmentId: null,
         grantSource: 'IN_APP',
       }] : []),
+      // Receiving side for one sample Program (Task A screens).
+      ...(receiving ? RECEIVING_CAPABILITIES.map((permission) => ({
+        userId: DEV_USER_ID,
+        permission,
+        scopeType: 'PROGRAM',
+        programId: DEV_RECEIVING_PROGRAM_ID,
+        departmentId: null,
+        grantSource: 'IN_APP',
+      })) : []),
     ],
+    ...(receiving ? { notAppropriateReasons: NOT_APPROPRIATE_REASONS.map((r) => ({ ...r })) } : {}),
   };
 }
