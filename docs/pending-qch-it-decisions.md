@@ -82,7 +82,7 @@ secrets, the mailbox, the database connection) are listed separately in
 | --- | --- |
 | Decision | Whether any AI or language-processing service may be used, where it would run (for example inside QCH's own Microsoft tenant), and what data may be sent to it. |
 | Why it matters | Earlier guidance was no outside AI services for referral data, and Guided Program Matching is rules-based (`src/gpme/matchPrograms.js`, rule version `gpme-v1`). At the Oct 23 midpoint check-in, QCH program staff asked for open-ended, AI-assisted matching. Any change to matching has to be reconciled with the Final Technical PRD first, and must keep participant data inside the approved boundary. |
-| Until then | Rules-based matching only. Trello Task I researches options without code. |
+| Until then | Rules-based matching only. The options are compared, without code, in [ai-interpretation-options.md](ai-interpretation-options.md) (Trello Task I). |
 | Status | Open |
 
 ### 8. Retention and audit policy
