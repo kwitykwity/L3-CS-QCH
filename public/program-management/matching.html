@@ -1,0 +1,80 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Program matching information - QCH Connect</title>
+  <link rel="stylesheet" href="/referral/referral.css" />
+  <script type="module" src="matching.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <a class="brand" href="/">QCH Connect</a>
+    <nav aria-label="Main navigation"><a href="/program-management/">Program Management</a></nav>
+    <div class="text-size" role="group" aria-labelledby="text-size-label">
+      <span id="text-size-label" class="text-size__label">Text size</span>
+      <button type="button" data-size="S" aria-pressed="false">S</button>
+      <button type="button" data-size="M" aria-pressed="true">M</button>
+      <button type="button" data-size="L" aria-pressed="false">L</button>
+      <button type="button" data-size="XL" aria-pressed="false">XL</button>
+    </div>
+  </header>
+    <main id="main" class="page">
+    <h1>Program matching information</h1>
+    <p id="matching-program-name"></p>
+    <p>Maintain the Program facts used to suggest possible matches. Information not on file is different from confirmed no restriction.</p>
+    <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p>
+    <div id="matching-status" class="status status--info" role="status" aria-live="polite" tabindex="-1">
+      <span class="status__text">Loading matching information...</span>
+    </div>
+    <button type="button" id="reload-matching" class="btn btn--secondary">Reload saved information</button>
+
+    <section id="matching-conflict" class="panel" aria-labelledby="matching-conflict-heading" hidden>
+      <h2 id="matching-conflict-heading">Saved information changed</h2>
+      <p>Your entered edits remain in the form. Review the latest saved facts below.</p>
+      <dl id="matching-current"></dl>
+      <button type="button" id="review-matching" class="btn btn--secondary">I reviewed the latest facts; keep my edits</button>
+    </section>
+
+    <form id="matching-form" novalidate>
+      <fieldset id="matching-controls" class="plain" disabled>
+        <legend>Matching facts</legend>
+        <fieldset id="matching-categories" class="plain">
+          <legend>Service categories</legend>
+          <p>No selection means categories are not on file. Select only categories this Program offers.</p>
+          <div id="matching-category-options"></div>
+        </fieldset>
+
+        <div class="field">
+          <label for="age-limit-state">Age rule <span aria-hidden="true">*</span></label>
+          <select id="age-limit-state" required aria-required="true"></select>
+        </div>
+        <div id="age-bounds">
+          <div class="field">
+            <label for="matching-age-min">Minimum participant age</label>
+            <input id="matching-age-min" type="number" min="0" max="255" step="1" aria-describedby="age-range-hint" />
+          </div>
+          <div class="field">
+            <label for="matching-age-max">Maximum participant age</label>
+            <input id="matching-age-max" type="number" min="0" max="255" step="1" aria-describedby="age-range-hint" />
+          </div>
+          <p id="age-range-hint">When a limit is on file, enter at least one bound. Ages must be whole numbers, with minimum no greater than maximum.</p>
+        </div>
+
+        <div class="field">
+          <label for="service-area-state">Service-area rule <span aria-hidden="true">*</span></label>
+          <select id="service-area-state" required aria-required="true"></select>
+        </div>
+        <div id="matching-zip-group" class="field">
+          <label for="matching-zips">Service-area ZIP codes</label>
+          <textarea id="matching-zips" rows="3" aria-describedby="matching-zip-hint"></textarea>
+          <p id="matching-zip-hint">When a ZIP limit is on file, enter five-digit ZIP codes separated by spaces, commas, or new lines. These are service-area ZIPs, not the site's address.</p>
+        </div>
+        <p>Choosing a state other than “Limit on file” clears the corresponding saved age bounds or ZIP list when you save.</p>
+        <button type="submit" id="save-matching" class="btn btn--primary">Save matching information</button>
+      </fieldset>
+    </form>
+  </main>
+</body>
+</html>

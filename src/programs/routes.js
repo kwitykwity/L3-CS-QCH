@@ -95,6 +95,12 @@ export function createProgramRouter({ store, resolveIdentity, allowDemoGrants = 
     return programId;
   }
 
+  // Authorized discovery for the management chooser; includes discontinued
+  // Programs and never exposes notification routing or permission records.
+  router.get('/programs', async (req, res) => {
+    res.json(await service.listManagedPrograms(req.userId));
+  });
+
   router.get('/programs/:programId', async (req, res) => {
     res.json(await service.getProgram(req.userId, programIdOf(req)));
   });
@@ -117,7 +123,20 @@ export function createProgramRouter({ store, resolveIdentity, allowDemoGrants = 
     }));
   });
 
+  router.get('/programs/:programId/matching-facts', async (req, res) => {
+    res.json(await service.getMatchingFacts(req.userId, programIdOf(req)));
+  });
+  router.put('/programs/:programId/matching-facts', async (req, res) => {
+    res.json(await service.updateMatchingFacts(req.userId, programIdOf(req), req.body, {
+      correlationId: req.correlationId,
+    }));
+  });
+
   // ----- Configurable fields (14B) -----
+  router.get('/programs/:programId/available-fields', async (req, res) => {
+    res.json(await fields.listAvailableFields(req.userId, programIdOf(req)));
+  });
+
   const idParam = (req, name, notFound) => {
     const id = toId(req.params[name]);
     if (id === null) throw notFound();
@@ -166,6 +185,10 @@ export function createProgramRouter({ store, resolveIdentity, allowDemoGrants = 
   }
 
   // ----- Organization changes (14C) -----
+  router.get('/organization-programs', async (req, res) => {
+    res.json(await org.listOrganizationPrograms(req.userId));
+  });
+
   const departmentIdOf = (req) => idParam(req, 'departmentId', programErrors.departmentNotFound);
   router.get('/departments', async (req, res) => {
     res.json(await org.listDepartments(req.userId));

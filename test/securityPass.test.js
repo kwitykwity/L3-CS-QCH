@@ -129,6 +129,11 @@ function programRoutes() {
   const P = '/api/program-management';
   const v = () => ({ version: 'v1' });
   const routes = [
+    { method: 'get', path: `${P}/programs` },
+    { method: 'get', path: `${P}/programs/:programId/matching-facts` },
+    { method: 'put', path: `${P}/programs/:programId/matching-facts` },
+    { method: 'get', path: `${P}/programs/:programId/available-fields` },
+    { method: 'get', path: `${P}/organization-programs` },
     { method: 'get', path: `${P}/programs/:programId` },
     { method: 'patch', path: `${P}/programs/:programId`, body: () => ({ version: 'v1', site: 'Synthetic Site' }) },
     { method: 'post', path: `${P}/programs/:programId/discontinue`, body: v },

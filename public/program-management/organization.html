@@ -1,0 +1,36 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Organization management - QCH Connect</title>
+  <link rel="stylesheet" href="/referral/referral.css" />
+  <script type="module" src="organization.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <a class="brand" href="/">QCH Connect</a>
+    <nav aria-label="Main navigation"><a href="/program-management/">Program Management</a></nav>
+    <div class="text-size" role="group" aria-labelledby="text-size-label">
+      <span id="text-size-label" class="text-size__label">Text size</span>
+      <button type="button" data-size="S" aria-pressed="false">S</button>
+      <button type="button" data-size="M" aria-pressed="true">M</button>
+      <button type="button" data-size="L" aria-pressed="false">L</button>
+      <button type="button" data-size="XL" aria-pressed="false">XL</button>
+    </div>
+  </header>
+    <main id="main" class="page">
+    <h1>Organization management</h1>
+    <p>Manage Departments using organization permissions.</p>
+    <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p>
+    <div id="org-status" class="status status--info" role="status" aria-live="polite" tabindex="-1">
+      <span class="status__text">Loading Departments...</span>
+    </div>
+    <button type="button" id="reload-organization" class="btn btn--secondary">Reload saved organization</button>
+        <p><a href="organization-programs.html">Create and move Programs</a></p>
+    <div id="department-create"></div>
+    <div id="department-list"></div>
+  </main>
+</body>
+</html>
