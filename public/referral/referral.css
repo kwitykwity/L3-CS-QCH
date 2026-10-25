@@ -265,3 +265,161 @@ dialog::backdrop { background: rgb(0 0 0 / 0.4); }
 .step p { margin: 0.25rem 0; }
 .need { white-space: pre-wrap; overflow-wrap: anywhere; }
 #referral-heading { overflow-wrap: anywhere; }
+
+/* Program fields layout only. Preserve shared themes and text sizing. */
+body.program-fields-page .page {
+  max-width: 76rem;
+}
+
+body.program-fields-page #program-name {
+  margin-block: 0.5rem 1.25rem;
+}
+
+body.program-fields-page #field-status {
+  margin-bottom: 1rem;
+}
+
+body.program-fields-page #reload-fields {
+  margin-bottom: 1.25rem;
+}
+
+body.program-fields-page #create-field-panel > .btn {
+  display: inline-flex;
+  margin-bottom: 1rem;
+}
+
+body.program-fields-page #field-list {
+  display: grid;
+  gap: 1.25rem;
+}
+
+body.program-fields-page #field-list > .panel {
+  min-width: 0;
+  margin-bottom: 0;
+}
+
+body.program-fields-page #field-list > .panel > form {
+  margin-top: 1.25rem;
+}
+
+body.program-fields-page #field-list > .panel > form + form {
+  border-top: 0.0625rem solid var(--border);
+  padding-top: 1.25rem;
+}
+
+body.program-fields-page #field-list legend {
+  margin-bottom: 0.75rem;
+}
+
+body.program-fields-page #field-list fieldset > p {
+  margin-block: 0.5rem 1rem;
+}
+
+body.program-fields-page #field-list label {
+  margin-top: 0.75rem;
+}
+
+body.program-fields-page #field-list input[type="number"],
+body.program-fields-page #create-field-controls input[type="number"] {
+  max-width: 8rem;
+  min-height: 2.75rem;
+  padding: 0.5rem 0.625rem;
+  border: 0.0625rem solid var(--control-border);
+  border-radius: 0.375rem;
+  background: var(--card);
+  color: var(--text);
+  font: inherit;
+}
+
+body.program-fields-page .page .actions {
+  gap: 0.75rem;
+  margin-top: 1rem;
+}
+
+body.program-fields-page .page .btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  max-width: 100%;
+  min-height: 2.75rem;
+  line-height: 1.4;
+  white-space: normal;
+  overflow-wrap: anywhere;
+  vertical-align: top;
+}
+
+body.program-fields-page #field-list form > .btn,
+body.program-fields-page #field-list fieldset > .btn {
+  margin-top: 0.75rem;
+}
+
+body.program-fields-page #field-list input,
+body.program-fields-page #field-list select,
+body.program-fields-page #field-list textarea {
+  max-width: 100%;
+}
+
+@media (min-width: 60rem) {
+  body.program-fields-page #create-field-controls {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    column-gap: 1.5rem;
+    align-items: start;
+  }
+
+  body.program-fields-page #create-field-controls > legend,
+  body.program-fields-page #new-options-group {
+    grid-column: 1 / -1;
+  }
+
+  body.program-fields-page #create-field-controls > button {
+    justify-self: start;
+  }
+}
+
+/* Aligned Program settings */
+body.program-fields-page .field-required-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 0.625rem;
+  margin-block: 0.5rem 1rem;
+}
+
+body.program-fields-page #field-list .field-required-row > label {
+  margin: 0;
+}
+
+body.program-fields-page .field-required-row > input {
+  flex: 0 0 auto;
+  margin: 0.2rem 0 0;
+  width: 1.25rem;
+  height: 1.25rem;
+}
+
+body.program-fields-page .field-settings-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: flex-end;
+  gap: 0.75rem;
+}
+
+body.program-fields-page .field-order-group {
+  display: grid;
+  gap: 0.375rem;
+  min-width: 0;
+}
+
+body.program-fields-page #field-list .field-order-group > label {
+  margin: 0;
+}
+
+body.program-fields-page .field-settings-actions > .btn {
+  margin: 0;
+}
+
+body.program-fields-page #field-list .panel,
+body.program-fields-page #field-list p,
+body.program-fields-page #field-list label,
+body.program-fields-page #field-list legend {
+  overflow-wrap: anywhere;
+}

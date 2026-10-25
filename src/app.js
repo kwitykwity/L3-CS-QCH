@@ -30,6 +30,11 @@ const publicDir = path.join(
 //   including no nodeEnv, throws at start-up (PRD 16.1, 17.4).
 // - nodeEnv: the validated NODE_ENV from loadConfig().
 // - now: optional clock for reporting ("data as of"); tests inject it.
+// - notifier: optional notification service
+//   (src/notifications/notificationService.js). When given, a new-referral
+//   notification starts after each referral commits (Task E). Without one,
+//   no notification is sent. Production has none yet: it needs the
+//   production store and the Microsoft Graph sender (see the README).
 //
 // Fixed 404. Nothing from the request is repeated in the response.
 function notFound(req, res) {
@@ -37,7 +42,7 @@ function notFound(req, res) {
   res.status(404).json({ error: 'Not Found' });
 }
 
-export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false, nodeEnv, now } = {}) {
+export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false, nodeEnv, now, notifier = null } = {}) {
   const app = express();
 
   // Don't advertise the framework or its version.
@@ -51,7 +56,7 @@ export function createApp({ affiliationStore, referralStore, resolveIdentity, al
 
   app.use(
     '/api/referrals',
-    createReferralRouter({ store: referralStore, resolveIdentity, allowDemoGrants, nodeEnv }),
+    createReferralRouter({ store: referralStore, resolveIdentity, allowDemoGrants, nodeEnv, notifier }),
   );
 
   app.use('/api/reports', createReportingRouter({ store: referralStore, resolveIdentity, now }));
