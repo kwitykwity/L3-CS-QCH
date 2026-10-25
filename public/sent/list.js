@@ -57,6 +57,16 @@ function explain(result) {
   return 'Your referrals could not be loaded. Try again.';
 }
 
+// Removes every referral an earlier load showed. Used when access is lost
+// (401 or 403), so no participant name or link stays on screen (review on #49).
+function clearList() {
+  $('referral-list').replaceChildren();
+  shown = 0;
+  nextCursor = null;
+  $('results-count').textContent = '';
+  for (const id of ['results', 'filters', 'load-more']) $(id).hidden = true;
+}
+
 function controls() {
   $('show').disabled = busy;
   $('load-more').disabled = busy;
@@ -74,8 +84,11 @@ async function load({ append = false, first = false } = {}) {
 
   const body = result.body;
   if (result.status !== 200 || !Array.isArray(body?.referrals)) {
+    const accessLost = result.status === 401 || result.status === 403;
+    if (accessLost) clearList();
+    // Focus goes to the message, since the control just used may be gone.
     showStatus(explain(result), 'error');
-    $('retry').hidden = !first;
+    $('retry').hidden = !(first || accessLost);
     return;
   }
   $('retry').hidden = true;

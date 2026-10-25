@@ -25,8 +25,23 @@ const SOURCE_LABELS = { DIRECT: 'Direct Referral', GPME_ASSISTED: 'Guided matchi
 
 setupTextSize();
 
-function hide() {
-  for (const id of ['info', 'progress', 'reload']) $(id).hidden = true;
+// Removes everything an earlier load showed: the participant's name in the
+// heading and title, the three steps, what was sent, and the link to the
+// receiving screen. Used whenever access is lost or the referral is not
+// available, so nothing stays on screen that the server no longer allows
+// (review on #49).
+function clearReferral({ keepReload = false } = {}) {
+  $('referral-heading').textContent = 'Referral status';
+  document.title = 'Referral status · QCH Connect';
+  for (const id of ['response-value', 'decision-value', 'reason-value', 'explanation-value', 'outcome-value', 'outcome-note']) {
+    $(id).textContent = '';
+  }
+  for (const id of ['awaiting-note', 'reason-value', 'explanation-value', 'outcome-note', 'receiver-link', 'progress', 'info']) {
+    $(id).hidden = true;
+  }
+  $('receiver-href').setAttribute('href', '#');
+  $('info-list').replaceChildren();
+  $('reload').hidden = !keepReload;
 }
 
 function render(referral, access) {
@@ -82,7 +97,7 @@ function render(referral, access) {
 
 async function load() {
   if (!Number.isSafeInteger(referralId) || referralId <= 0) {
-    hide();
+    clearReferral();
     showStatus(NOT_AVAILABLE, 'error');
     return false;
   }
@@ -94,11 +109,18 @@ async function load() {
     return true;
   }
   if (result.status === 404) {
-    hide();
+    clearReferral();
     showStatus(NOT_AVAILABLE, 'error');
   } else if (result.status === 401) {
+    // Reload stays, so the person can try again after signing in.
+    clearReferral({ keepReload: true });
     showStatus('Sign in again to see this referral.', 'error');
+  } else if (result.status === 403) {
+    clearReferral({ keepReload: true });
+    showStatus('You do not have access to this referral right now. Ask an administrator if you think this is wrong.', 'error');
   } else {
+    // A network or server failure says nothing about access, so what was
+    // already shown stays, with a message that it could not be refreshed.
     $('reload').hidden = false;
     showStatus('The referral could not be loaded. Check your connection and try again.', 'error');
   }

@@ -148,6 +148,72 @@ test.describe('Referrals I sent', () => {
     await expect(page.locator('#info-list')).toContainText('Housing Help Desk (sample)');
   });
 
+  // Review on #49: losing access after a good load must not leave the
+  // earlier referral on screen. The refresh is answered with 401 or 403
+  // (page.route), the way an expired sign-in or a deactivated account
+  // would answer it.
+  for (const [code, message] of [
+    [401, 'Sign in again to see this referral.'],
+    [403, 'You do not have access to this referral right now. Ask an administrator if you think this is wrong.'],
+  ]) {
+    test(`status page: a ${code} on reload removes the participant, the steps and the receiving link`, async ({ page, request }) => {
+      const sent = await sendByApi(page, request, HOUSING);
+      await page.goto(`/sent/referral.html?id=${sent.id}`);
+      await expect(status(page)).toHaveText('Referral loaded.');
+      await expect(page.locator('#referral-heading')).toContainText(sent.name);
+      await expect(page.locator('#receiver-link')).toBeVisible();
+
+      await page.route(`**/api/referrals/${sent.id}`, (route) => route.fulfill({ status: code, json: { code: code === 401 ? 'UNAUTHENTICATED' : 'FORBIDDEN' } }));
+      await page.getByRole('button', { name: 'Reload this referral' }).click();
+
+      await expect(status(page)).toHaveText(message);
+      await expect(page.locator('#status')).toBeFocused();
+      await expect(page.locator('#referral-heading')).toHaveText('Referral status');
+      await expect(page).toHaveTitle('Referral status · QCH Connect');
+      for (const text of [sent.name, CONTACT, 'Synthetic need', 'Synthetic note']) {
+        await expect(page.locator('main')).not.toContainText(text);
+      }
+      for (const id of ['progress', 'info', 'receiver-link']) await expect(page.locator(`#${id}`)).toBeHidden();
+      await expect(page.locator('#info-list > *')).toHaveCount(0);
+      await expect(page.locator('a[href*="/receiving/referral.html"]')).toHaveCount(0);
+
+      // Access comes back: Reload shows the referral again.
+      await page.unroute(`**/api/referrals/${sent.id}`);
+      await page.getByRole('button', { name: 'Reload this referral' }).click();
+      await expect(status(page)).toHaveText('Referral reloaded.');
+      await expect(page.locator('#referral-heading')).toContainText(sent.name);
+      await expect(page.locator('#receiver-link')).toBeVisible();
+    });
+
+    test(`list: a ${code} on refresh removes every earlier referral row`, async ({ page, request }) => {
+      const sent = await sendByApi(page, request, HOUSING);
+      await page.goto('/sent/');
+      await expect(status(page)).toHaveText(/Your referrals loaded\./);
+      await expect(page.locator('.queue-item').filter({ hasText: sent.name })).toHaveCount(1);
+
+      const sentList = /\/api\/referrals\/sent(\?|$)/;
+      await page.route(sentList, (route) => route.fulfill({ status: code, json: { code: code === 401 ? 'UNAUTHENTICATED' : 'FORBIDDEN' } }));
+      await page.getByRole('button', { name: 'Show referrals' }).click();
+
+      await expect(status(page)).toHaveText(code === 401
+        ? 'Sign in again to see the referrals you sent.'
+        : 'Your account cannot see referrals right now. Ask an administrator.');
+      await expect(page.locator('#status')).toBeFocused();
+      await expect(page.locator('.queue-item')).toHaveCount(0);
+      await expect(page.locator('main')).not.toContainText(sent.name);
+      await expect(page.locator('#results')).toBeHidden();
+      await expect(page.locator('#filters')).toBeHidden();
+      await expect(page.locator('#load-more')).toBeHidden();
+      await expect(page.locator('a[href*="referral.html"]')).toHaveCount(0);
+
+      // Access comes back: "Try loading again" brings the list back.
+      await page.unroute(sentList);
+      await page.getByRole('button', { name: 'Try loading again' }).click();
+      await expect(status(page)).toHaveText(/Your referrals loaded\./);
+      await expect(page.locator('.queue-item').filter({ hasText: sent.name })).toHaveCount(1);
+    });
+  }
+
   test('an unknown or malformed ID reveals nothing', async ({ page }) => {
     for (const id of ['987654', 'abc', '0', '-1']) {
       await page.goto(`/sent/referral.html?id=${id}`);
