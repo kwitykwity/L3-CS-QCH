@@ -6,6 +6,14 @@ deployment, verification. Every blank marked **PROVIDED BY QCH IT** waits on
 the items in [qch-it-requirements.md](qch-it-requirements.md). No resource
 names or deployment tools are guessed here.
 
+**Open decisions change parts of this page.** Where production data lives
+(SharePoint Lists or a relational database such as the Azure SQL design)
+and where the server is hosted are not decided; see
+[pending-qch-it-decisions.md](pending-qch-it-decisions.md). Steps that name
+App Service, Azure SQL or `sqlcmd` describe the earlier plan and apply only
+if QCH IT chooses it. No production store exists yet: `npm start` today
+serves the pages and `/health`, and every `/api` route answers 401.
+
 ## Environments
 
 Production and development or demo are kept apart (PRD 18.1, 16.4).
@@ -71,8 +79,10 @@ Configuration table.
 
 ## 3. Apply database migrations
 
-Migrations are applied on purpose, before the new app version starts. The app
-never changes the production schema on its own (PRD 9.8, 18.3).
+**Applies if a relational store such as the Azure SQL design is chosen**
+(pending decision 1). Whatever store is chosen, the same rule holds: its
+structure is changed on purpose, before the new app version starts, never
+by the app on its own (PRD 9.8, 18.3).
 
 - Follow [`db/README.md`](../db/README.md) for run order, the required
   `sqlcmd -I -b` flags, and what to do if a run fails partway. The current

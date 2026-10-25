@@ -9,8 +9,11 @@ The database schema, migrations, and synthetic development seed live in
 Changes to them go through their own reviewed pull requests, separate from
 application code.
 
-Production Azure SQL is owned by QCH and is provided and configured through
-QCH IT. Database connection details, credentials, and secrets must never be
+Where production data lives is still open with QCH IT: SharePoint Lists or
+a relational database such as this Azure SQL design (see
+[`docs/pending-qch-it-decisions.md`](docs/pending-qch-it-decisions.md)).
+Today the app runs on in-memory stores with synthetic data. Whatever is
+chosen is owned by QCH and provided and configured through QCH IT. Database connection details, credentials, and secrets must never be
 committed to this repository. Locally they belong in the gitignored `.env`
 file; in production they come from Azure Key Vault (PRD 15.2).
 
@@ -251,9 +254,8 @@ follow the GPME Decision Proposal the team approved on Oct 18:
   them as "not on file".
 - Neither GPME route accepts query parameters. Any query string gets a fixed
   `400 UNEXPECTED_FIELD` that does not echo the parameter.
-- **Write-path requirement (open, for Program maintenance and the Azure SQL
-  store):** matching facts are validated when a Program is edited
-  (`updateProgramMatchingFacts`). The Azure SQL store must change the state
+- **Write-path requirement (open, for the production store):** matching facts are validated when a Program is edited
+  (`updateProgramMatchingFacts`). A relational production store must change the state
   columns and `program_service_area_zips` rows in one transaction after that
   validation, because the database cannot CHECK the state/ZIP rule across
   tables. Read-time fail-safe handling does not replace this.
@@ -283,7 +285,7 @@ The database side (state columns, `program_service_area_zips`) is migration
   written. If the audit write fails, the change rolls back.
 - **Not editable here:** name, Department, notification email (routing), and
   lifecycle status (only via discontinue/reactivate). GPME matching facts
-  are edited in a follow-up once PR #16 merges.
+  are edited through their own route in Program Management (merged in #32).
 - **Lifecycle (PRD 4.4):** a discontinued Program drops out of new referral
   choices; past referrals keep it. Reactivating needs an active Department.
   A discontinue waits for any referral already being created against it.
@@ -383,6 +385,8 @@ signed-in user, aggregate only). It returns a summary plus breakdowns by
 Program and by Department: made, received, accepted, not appropriate,
 awaiting response, resulted in service, and the rates from PRD 12.4.
 
+`GET /api/reports/departments` lists every Department (ID, name and status only, including Departments with no referrals and ones no longer active) so the Reporting Center can scope a report to any of them. Same sign-in rule as the other reports. It takes no query parameters.
+
 - **One consistent result (PRD 12.7):** every number comes from one store
   read (`aggregateReferrals`), so the total and the breakdowns always agree.
 - **Rates** show `CALCULATED`, `PENDING` (nothing decided yet, but some
@@ -398,14 +402,25 @@ awaiting response, resulted in service, and the rates from PRD 12.4.
 
 ## Deployment and handoff
 
-[`docs/`](docs/README.md) holds the production deployment runbook, the list
-of everything QCH IT needs to provide, the handoff checklist, and dependency
-licenses (PRD 18, 19). `npm run licenses` lists every installed package's
-license.
+[`docs/`](docs/README.md) holds the handoff documentation (PRD 18, 19):
+the open QCH IT decisions, architecture, data dictionary, admin guide,
+troubleshooting, operations, the deployment runbook, everything QCH IT needs
+to provide, the handoff checklist, and dependency licenses.
+`npm run licenses` lists every installed package's license.
 
-## Scope of this scaffold
+## What is built and what is not
 
-Deliberately **not** built here: database code, schema, or migrations; Azure
-resource provisioning; referrals; matching; reporting; Entra sign-in; roles
-and permissions. Notifications exist as a standalone module, not yet wired in
-(see Notifications above). Any data used for demos must be synthetic.
+Built and tested on in-memory stores with synthetic data: Direct
+Referrals, receiving (the received list and referral screens: respond,
+record and correct outcomes, correct decisions; merged in #37), Guided
+Program Matching, Program Management
+(Programs, matching facts, fields, values, Departments), the report APIs
+(Total Referrals, Timing Metrics, Referral activity), permission checks by
+grant, and the audit trail. The schema design and migrations are in `db/`.
+
+**Not built yet:** a production data store, Entra sign-in, screens to give
+or remove permissions, the Microsoft Graph sender (notifications run on a
+simulated outbox in development),
+reporting screens, and any Azure resources. Some of these wait on QCH IT
+decisions; [`docs/pending-qch-it-decisions.md`](docs/pending-qch-it-decisions.md)
+says which. Any data used for demos must be synthetic.
