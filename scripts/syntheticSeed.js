@@ -57,6 +57,17 @@ export function syntheticSeed({ programManagement = false, organizationManagemen
       { programId: 7, departmentId: 3, name: 'Retired Sample Program', site: 'Site D', lifecycleStatus: 'DISCONTINUED',
         needCategoryIds: [5], ...NO_AGE_LIMIT, ...NO_AREA_LIMIT },
     ],
+    // Where each sample Program's new-referral notification goes (Task E).
+    // Invented addresses on the reserved example.org domain; the dev server
+    // only puts them in the simulated outbox, never in a real email.
+    // Program 5 has none on purpose, to show the NO_RECIPIENT failure.
+    programNotificationEmails: {
+      1: 'playgroup.sample@example.org',
+      2: 'homework-club.sample@example.org',
+      3: 'evening-classes.sample@example.org',
+      4: 'housing-help.sample@example.org',
+      6: 'wellness-center.sample@example.org',
+    },
     // No affiliation yet, so the first-use affiliation step is visible.
     users: [{ userId: DEV_USER_ID, isActive: true }],
     // Explicit synthetic permissions for the local management UI.

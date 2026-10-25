@@ -8,6 +8,12 @@ anything about QCH's production environment; see the last section.
 
 ## What was run
 
+The original run below is kept as historical evidence. The integrated
+revision (this branch merged with current `main`) was run again; see
+[Integrated revision](#integrated-revision) at the end.
+
+### Original run (`3fbba07`, historical)
+
 | | |
 | --- | --- |
 | Build | `main` at `e6106bd` (after #41, Reporting Center UI), plus this branch |
@@ -16,14 +22,14 @@ anything about QCH's production environment; see the last section.
 | Browser | Chromium (Playwright) with axe-core, WCAG 2.2 AA tags |
 | Date | October 25, 2026 |
 
-### Before any change (test first)
+#### Before any change (test first)
 
 | Suite | Result |
 | --- | --- |
 | `npm test` (Node, including `test/regression/`) | 1,283 passed, 0 failed |
 | `npm run test:e2e` (Chromium) | 88 passed, 0 failed |
 
-### After this branch (retest)
+#### After this branch (retest)
 
 | Suite | Result |
 | --- | --- |
@@ -56,18 +62,18 @@ Every item on the card, and where it is verified:
 | Card item | Evidence |
 | --- | --- |
 | Direct Referral | `e2e/directReferral.spec.js` (9), `test/regression/journeys.test.js` |
-| Find a Program / GPME | `e2e/mvpJourney.spec.js` (above); `test/gpme*.test.js`. A dedicated GPME browser spec is open in #33 |
+| Find a Program / GPME | `e2e/mvpJourney.spec.js` (above); `test/gpme*.test.js`; the dedicated GPME browser spec `e2e/gpme.spec.js` (merged in #33) |
 | Receiving queue and access | `e2e/receiving.spec.js` (19); multi-person access in #38 (open) |
 | Referral response, service outcome, corrections | `e2e/receiving.spec.js`; `e2e/mvpJourney.spec.js`; `test/serviceOutcome.test.js` |
-| Program Management | `e2e/programManagement*.spec.js`, `fieldValues`, `organization`, `matchingManagement` (59); `e2e/mvpJourney.spec.js` step 1 |
-| Reporting | `e2e/reportingDepartments.spec.js`; `e2e/mvpJourney.spec.js` steps 4 and the Reporting Center checks below; `test/regression/reportingJourney.test.js` |
-| Notification behavior | Not on `main` yet. #42 (Task E) wires it in with its own tests |
+| Program Management | `e2e/programManagement*.spec.js`, `fieldValues`, `organization`, `matchingManagement` (59); `e2e/mvpJourney.spec.js` step 1; current Program information for matching, `e2e/currentProgramInformation.spec.js` (Task C, merged in #44) |
+| Reporting | `e2e/reportingDepartments.spec.js`; `e2e/mvpJourney.spec.js` steps 4 and the Reporting Center checks below; `test/regression/reportingJourney.test.js`; the same known answers on screen, `e2e/reportingKnownAnswers.spec.js` (Task M, merged in #50) |
+| Notification behavior | Merged in #42 (Task E): each committed referral queues one new-referral notification, sent through the simulated outbox and retried on a timer; `test/notificationWiring.test.js`. A real email waits on the Graph sender (below) |
 | Keyboard-only operation, logical and visible focus | Every e2e spec; Reporting Center by keyboard alone with error recovery (new) |
 | Persistent labels, required fields | `test/regression/accessibility.test.js` (every page); axe in e2e |
 | Validation and error recovery | Per-page specs; Reporting "choose a Program" error moves focus and leaves the report unchanged (new) |
 | S/M/L/XL text sizes | Per-page specs; Reporting Center S to XL, kept after reload (new) |
 | Narrow-screen behavior | Receiving and referral pages at XL, phone width; Reporting Center at XL, 390 px (new; it failed, see below) |
-| Privacy protections | `test/securityPass.test.js`; Task F (#47, open) |
+| Privacy protections | `test/securityPass.test.js`; Task F (merged in #47): `test/regression/securityRegression.test.js`, see [security-regression.md](security-regression.md) |
 | Screen reader, where practical | Manual: Christina, Chrome and Edge with Windows Narrator (selected Program Management workflows); Jimmy, VoiceOver and Safari (#45, open) |
 | Beyond Chromium | Manual: Lebert, Safari on macOS, October 24, 2026, Runs A to D of the keyboard checklist in [regression-coverage.md](regression-coverage.md): all passed |
 
@@ -90,10 +96,10 @@ focus to the Program box. The test now checks both behaviors.
 | --- | --- |
 | The same journeys against the production store (persistence, locking, constraints) | Where data lives (pending decision 1) |
 | Real sign-in in the journeys instead of the synthetic identity | Entra (pending decision 5) |
-| A real new-referral email at the end of step 2 | #42, then the Graph sender and mailbox permission (pending decision 6) |
+| A real new-referral email at the end of step 2 | The Graph sender and mailbox permission (pending decision 6). The wiring is merged (#42) and uses the simulated outbox until then |
 | The supported-browser list and its runs | QCH's agreement on the browser matrix |
 | Running in QCH's hosting (HTTPS, headers, monitoring) | Hosting (pending decision 2) |
 
 See [pending-qch-it-decisions.md](pending-qch-it-decisions.md) and
-`docs/security-regression.md` (Task F, #47) for what must be re-run once
-these are decided.
+[security-regression.md](security-regression.md) (Task F, merged in #47)
+for what must be re-run once these are decided.

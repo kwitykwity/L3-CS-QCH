@@ -110,8 +110,31 @@ npm run test:e2e
 ## Notifications (card 15)
 
 `src/notifications/` sends the "new referral" email to the receiving Program
-(PRD 11.2 to 11.6). It is built and tested on its own and is **not wired in
-yet**: no route, server start-up, or referral code calls it.
+(PRD 11.2 to 11.6).
+
+**Wired into referral creation (Task E).** After a referral commits, the
+referral service starts `notifyReferralCommitted()` for it and does not wait:
+the browser gets its answer at once, and nothing the notification does can
+change, delay or undo the referral. A retry of the same Submission ID starts
+it again, which is safe (one delivery per referral, never a second email) and
+fills the gap if the first request stopped between the commit and the
+notification. `createApp({ notifier })` turns this on; without a notifier
+nothing is sent.
+
+- **`npm run dev:synthetic`** uses the simulated outbox (no email is sent)
+  and runs `retryPendingDeliveries()` every 60 seconds
+  (`src/notifications/retryTimer.js`: one run at a time, never throws).
+  Sample Programs have invented `example.org` recipients; Program 5 has none,
+  to show the `NO_RECIPIENT` failure. Each delivery logs one
+  `[notification]` line with IDs and the outcome only.
+- **`npm start` (production)** has no notifier yet. It needs the production
+  store and the Microsoft Graph sender (see Remaining tasks).
+- In the in-memory store, recipients are seeded as
+  `programNotificationEmails` and kept apart from Program rows, so no
+  Program read can return them. `store.notificationStore` is the delivery
+  store over the referral store's committed referrals.
+- Tests: `test/notificationWiring.test.js` (through the HTTP route) and
+  `test/notifications.test.js` (the module on its own).
 
 How it behaves:
 
@@ -174,17 +197,25 @@ An `INTERRUPTED` row means the last attempt's outcome is unknown: the email
 may or may not have gone out. The message is generic, so a duplicate only
 tells the Program twice.
 
-Remaining tasks, not done here:
+Remaining tasks, all waiting on QCH IT decisions (not assumed here):
 
-- Call `notifyReferralCommitted()` from the Direct Referral transaction.
-  Referrals exist now; this wiring is still to do.
-- The Microsoft Graph sender, once QCH IT provides the shared mailbox and app
-  registration (`NOTIFICATION_MAILBOX` and the `AZURE_*` values). It will use
-  `categoryForHttpStatus()` to classify failures.
-- The production store, meeting the contract documented in
-  `memoryDeliveryStore.js`.
-- A timer that runs `retryPendingDeliveries()` in the hosted app.
-- Azure Monitor / Application Insights alerts on final failures (PRD 11.6).
+- **The Microsoft Graph sender.** QCH IT has created the shared mailbox. Still
+  to confirm: the Entra app registration, the Graph permission and how the
+  app may send as that mailbox (Send As, application permission and any
+  access policy), and the production configuration values
+  (`NOTIFICATION_MAILBOX`, `AZURE_*`). The sender must meet the contract in
+  `simulatedOutbox.js` and use `categoryForHttpStatus()` for failures.
+- **The production store**, meeting the delivery contract in
+  `memoryDeliveryStore.js`, plus each Program's notification email
+  (`programs.notification_email` in the current SQL design). Where data
+  lives is not decided yet.
+- **Production wiring**: `src/server.js` creates the notifier and starts
+  `startNotificationRetries()` once the sender and store exist, and stops
+  the timer on shutdown.
+- **Who sets each Program's notification email.** No screen or route sets
+  it yet.
+- **Monitoring**: alerts on final failures (`warn` lines, PRD 11.6) in the
+  monitoring service QCH IT chooses.
 
 ## Endpoints
 
@@ -388,7 +419,8 @@ Program Matching, Program Management
 grant, and the audit trail. The schema design and migrations are in `db/`.
 
 **Not built yet:** a production data store, Entra sign-in, screens to give
-or remove permissions, notification wiring and the Microsoft Graph sender,
+or remove permissions, the Microsoft Graph sender (notifications run on a
+simulated outbox in development),
 reporting screens, and any Azure resources. Some of these wait on QCH IT
 decisions; [`docs/pending-qch-it-decisions.md`](docs/pending-qch-it-decisions.md)
 says which. Any data used for demos must be synthetic.

@@ -40,7 +40,7 @@ Requirements: Node.js 24.15.0 for development (pinned in `.nvmrc` and
 | `src/gpme/` | Guided Program Matching: input validation, the matching rules (`matchPrograms.js`, rule version `gpme-v1`), and Program facts |
 | `src/programs/` | Program Management: Program information and lifecycle, matching facts, configurable fields and options, Departments, creating and moving Programs |
 | `src/reporting/` | Aggregate reports: Total Referrals, Timing Metrics, Referral activity |
-| `src/notifications/` | New-referral email delivery with retries. Built and tested, **not yet called** by referral creation; only a simulated outbox exists |
+| `src/notifications/` | New-referral email delivery with retries, started after each referral commits (Task E) and a retry timer. Only a simulated outbox exists; production has no notifier yet |
 | `src/authorization/` | Capability, resource and scope checks shared by every service |
 | `public/` | The pages: start page, `referral/` (New Referral), `receiving/` (received referrals), `program-management/`, and their scripts and one shared stylesheet |
 | `db/` | The current SQL schema design (migrations 001 to 003), a synthetic dev seed, and audit checks. Not used by the running app yet |
