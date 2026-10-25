@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Replace a field - QCH Connect</title>
+  <link rel="stylesheet" href="/referral/referral.css" />
+  <script type="module" src="fieldReplacement.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <a class="brand" href="/">QCH Connect</a>
+    <nav aria-label="Main navigation"><a href="/program-management/">Program Management</a></nav>
+    <div class="text-size" role="group" aria-labelledby="text-size-label">
+      <span id="text-size-label" class="text-size__label">Text size</span>
+      <button type="button" data-size="S" aria-pressed="false">S</button>
+      <button type="button" data-size="M" aria-pressed="true">M</button>
+      <button type="button" data-size="L" aria-pressed="false">L</button>
+      <button type="button" data-size="XL" aria-pressed="false">XL</button>
+    </div>
+  </header>
+    <main id="main" class="page">
+    <h1>Replace a field</h1>
+    <p id="old-field-name"></p>
+    <p>Use replacement when the meaning changes. The old field is discontinued for every Program using it. Its saved values remain with the old field and are not copied.</p>
+    <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p>
+    <div id="replacement-status" class="status status--info" role="status" aria-live="polite" tabindex="-1">
+      <span class="status__text">Loading field...</span>
+    </div>
+    <button type="button" id="reload-replacement" class="btn btn--secondary">Reload saved definition</button>
+    <form id="replacement-form" novalidate>
+      <fieldset id="replacement-controls" class="plain" disabled>
+        <legend>New meaning</legend>
+        <div class="field">
+          <label for="replacement-label">New field label <span aria-hidden="true">*</span></label>
+          <input id="replacement-label" type="text" maxlength="200" required aria-required="true" />
+        </div>
+        <div class="field">
+          <label for="replacement-type">New field type <span aria-hidden="true">*</span></label>
+          <select id="replacement-type" required aria-required="true">
+            <option value="TEXT">Text</option>
+            <option value="NUMBER">Number</option>
+            <option value="DATE">Date</option>
+            <option value="BOOLEAN">Yes or no</option>
+            <option value="SINGLE_SELECT">Choose one option</option>
+            <option value="MULTI_SELECT">Choose several options</option>
+          </select>
+        </div>
+        <div id="replacement-options-group" class="field" hidden>
+          <label for="replacement-options">Options, one per line</label>
+          <textarea id="replacement-options" rows="4"></textarea>
+          <p>Provide 1 to 50 distinct options, each no more than 200 characters.</p>
+        </div>
+        <button type="submit" class="btn btn--primary">Replace field</button>
+      </fieldset>
+    </form>
+    <p><a id="back-to-fields" href="fields.html">Return to Program fields</a></p>
+  </main>
+</body>
+</html>

@@ -95,6 +95,32 @@ export function createOrganizationService({ store, allowDemoGrants = false }) {
 
   // ----- Departments ------------------------------------------------------
 
+  // Organization discovery supports moves without granting Program-edit access.
+  // The response excludes notification routing and permission records.
+  async function listOrganizationPrograms(userId) {
+    return store.withTransaction(async (tx) => {
+      await authorizeOrg(tx, userId);
+      const programs = [];
+      for (const department of await tx.listDepartments()) {
+        for (const program of await tx.listDepartmentPrograms(department.departmentId)) {
+          programs.push({
+            programId: program.programId,
+            name: program.name,
+            site: program.site ?? null,
+            departmentId: department.departmentId,
+            departmentName: department.name,
+            lifecycleStatus: program.lifecycleStatus,
+            version: program.version,
+          });
+        }
+      }
+      programs.sort((a, b) => a.name.localeCompare(b.name)
+        || (a.site ?? '').localeCompare(b.site ?? '')
+        || a.programId - b.programId);
+      return { programs };
+    });
+  }
+
   async function listDepartments(userId) {
     return store.withTransaction(async (tx) => {
       await authorizeOrg(tx, userId);
@@ -256,6 +282,7 @@ export function createOrganizationService({ store, allowDemoGrants = false }) {
   }
 
   return {
+    listOrganizationPrograms,
     listDepartments,
     createDepartment,
     renameDepartment,

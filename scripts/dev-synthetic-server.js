@@ -31,7 +31,7 @@ if (config.nodeEnv !== 'development') {
   process.exit(1);
 }
 
-const store = createMemoryReferralStore(syntheticSeed());
+const store = createMemoryReferralStore(syntheticSeed({ programManagement: true, organizationManagement: true, receiving: true }));
 const app = createApp({
   affiliationStore: store,
   referralStore: store,

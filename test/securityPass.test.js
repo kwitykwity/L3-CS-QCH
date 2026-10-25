@@ -116,6 +116,8 @@ const ROUTES = [
   { method: 'get', path: '/api/reports/timing-metrics' }, // card 13, #26
   // Referral activity (card 12, #30): aggregate only
   { method: 'get', path: '/api/reports/referral-activity' },
+  // Reportable Departments for the report filter: IDs, names, status only
+  { method: 'get', path: '/api/reports/departments' },
 
   // Guided Program Matching (card 10, #16)
   { method: 'get', path: '/api/gpme/need-categories' },
@@ -129,6 +131,11 @@ function programRoutes() {
   const P = '/api/program-management';
   const v = () => ({ version: 'v1' });
   const routes = [
+    { method: 'get', path: `${P}/programs` },
+    { method: 'get', path: `${P}/programs/:programId/matching-facts` },
+    { method: 'put', path: `${P}/programs/:programId/matching-facts` },
+    { method: 'get', path: `${P}/programs/:programId/available-fields` },
+    { method: 'get', path: `${P}/organization-programs` },
     { method: 'get', path: `${P}/programs/:programId` },
     { method: 'patch', path: `${P}/programs/:programId`, body: () => ({ version: 'v1', site: 'Synthetic Site' }) },
     { method: 'post', path: `${P}/programs/:programId/discontinue`, body: v },
