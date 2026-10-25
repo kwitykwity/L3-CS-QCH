@@ -19,6 +19,12 @@
 // 2000-01-01, is a 400 on `date`.
 // 200 { metric, period, scope, summary, programs, departments, partial, asOf }
 //
+// GET /api/reports/departments  (no query parameters)
+//   200 { departments: [{ departmentId, name, lifecycleStatus }] }
+//   Every Department, whatever its status and even with no referrals, so a
+//   report can be scoped to it and Department history stays selectable.
+//   IDs, names and status only: no counts, Programs, routing or referral data.
+//
 // Any signed-in user may view aggregate reporting (PRD 3.5, 3.6). Identity
 // comes only from resolveIdentity(req); without it every route answers 401.
 // Query parameters are allowlisted; anything else -> 400 (PRD 10.3).
@@ -93,6 +99,14 @@ export function createReportingRouter({ store, resolveIdentity, now }) {
 
   router.get('/referral-activity', async (req, res) => {
     res.json(await activity.getReferralActivity(readQuery(req.query)));
+  });
+
+  router.get('/departments', async (req, res) => {
+    if (Object.keys(req.query).length > 0) throw referralErrors.unexpectedField();
+    const departments = await store.withTransaction(async (tx) => (await tx.listDepartments())
+      .map((d) => ({ departmentId: d.departmentId, name: d.name, lifecycleStatus: d.lifecycleStatus })));
+    departments.sort((a, b) => String(a.name).localeCompare(String(b.name)) || a.departmentId - b.departmentId);
+    res.json({ departments });
   });
 
   router.use((err, req, res, next) => {

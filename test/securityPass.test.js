@@ -116,6 +116,8 @@ const ROUTES = [
   { method: 'get', path: '/api/reports/timing-metrics' }, // card 13, #26
   // Referral activity (card 12, #30): aggregate only
   { method: 'get', path: '/api/reports/referral-activity' },
+  // Reportable Departments for the report filter: IDs, names, status only
+  { method: 'get', path: '/api/reports/departments' },
 
   // Guided Program Matching (card 10, #16)
   { method: 'get', path: '/api/gpme/need-categories' },

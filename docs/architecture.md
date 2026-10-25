@@ -112,7 +112,7 @@ details are in the README sections and the header comment of each
 | Guided matching | `GET /api/gpme/need-categories`, `POST /api/gpme/match` |
 | Referrals | `POST /api/referrals`, `GET /api/referrals/submissions/:submissionId`, `GET /api/referrals/received`, `GET /api/referrals/sent`, `GET /api/referrals/:referralId`, `GET /api/referrals/not-appropriate-reasons` |
 | Response, outcome, corrections | `POST /api/referrals/:id/response`, `POST .../outcome`, `POST .../outcome/correction`, `POST .../response/correction` |
-| Reports | `GET /api/reports/total-referrals`, `GET /api/reports/timing-metrics`, `GET /api/reports/referral-activity` |
+| Reports | `GET /api/reports/total-referrals`, `GET /api/reports/timing-metrics`, `GET /api/reports/referral-activity`, `GET /api/reports/departments` |
 | Program Management | Under `/api/program-management`: Programs (list, read, update, discontinue, reactivate, matching facts), fields (list, available, create, apply, settings, values, rename, replace, discontinue, reactivate, retire), options, Departments, creating and moving Programs |
 
 ## Screens

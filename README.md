@@ -354,6 +354,8 @@ signed-in user, aggregate only). It returns a summary plus breakdowns by
 Program and by Department: made, received, accepted, not appropriate,
 awaiting response, resulted in service, and the rates from PRD 12.4.
 
+`GET /api/reports/departments` lists every Department (ID, name and status only, including Departments with no referrals and ones no longer active) so the Reporting Center can scope a report to any of them. Same sign-in rule as the other reports. It takes no query parameters.
+
 - **One consistent result (PRD 12.7):** every number comes from one store
   read (`aggregateReferrals`), so the total and the breakdowns always agree.
 - **Rates** show `CALCULATED`, `PENDING` (nothing decided yet, but some
