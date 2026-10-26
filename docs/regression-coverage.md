@@ -5,12 +5,15 @@ waits on other work. Final Technical PRD 14 (accessibility and
 interaction), 17.2 (critical end-to-end tests), 17.3 (authorization) and
 17.7 (accessibility interaction tests).
 
-**Status: first slice, against `main` at `bdfeab3` (October 21, 2026).**
-Covered: Direct Referral, the receiving queue and response, and Program
-maintenance slice 14A. The tables below separate workflows that are
-**merged but not yet covered here** from **dependencies that are not
-merged yet**. The same rule as the security suite applies: a merged
-workflow is not done until it has a journey here.
+**Status: second slice, against `main` at `00d0759` (October 25, 2026).**
+First slice (`bdfeab3`, October 21): Direct Referral, the receiving queue
+and response, and Program maintenance slice 14A. This slice adds HTTP
+journeys for GPME-assisted referral, outcome and corrections, Program
+fields and values (14B) and organization changes (14C), so every area the
+first slice listed as "still to add" now has one. The tables below
+separate covered workflows from **dependencies that are not merged yet**.
+The same rule as the security suite applies: a merged workflow is not
+done until it has a journey here.
 
 ## How to run
 
@@ -28,7 +31,8 @@ stops it afterwards. To use a Chromium that is already installed, set
 
 | File | What it checks |
 | --- | --- |
-| `test/regression/journeys.test.js` | Whole workflows through the integrated app over HTTP, switching between staff members |
+| `test/regression/journeys.test.js` | Whole workflows through the integrated app over HTTP, switching between staff members (Journeys 1 to 7) |
+| `test/regression/workflowJourneys.test.js` | Journeys 8 to 11, same style: GPME-assisted referral, outcome and corrections, Program fields and values (14B), organization changes (14C) |
 | `test/regression/accessibility.test.js` | Every page in `public/`: language, title, headings, labels, ids, required fields, status announcements, text size, link colors, and color contrast in both themes |
 | `e2e/directReferral.spec.js` | In Chromium: the New Referral entry screen (no path preselected; Direct Referral chosen by keyboard), Direct Referral completed by keyboard only, visible focus on every stop, Shift+Tab order, Enter safety, undo/redo, S/M/L/XL, phone width at XL, and an axe WCAG 2.2 AA scan of the entry screen and every Direct Referral state in light and dark themes |
 | `e2e/gpme.spec.js` | In Chromium, against the synthetic backend: matching with explained plausible / possible results, choosing a Program, submission as a GPME-assisted referral (body carries only the approved matching inputs), no plausible match vs technical failure, answers preserved, Try again, Direct Referral fallback (after a failure and with matching fully down), recovery after `GPME_UNAVAILABLE`, `GPME_RESULT_CHANGED` and a lost confirmation, keyboard-only journey, nothing sensitive in URL / storage / console, axe on every guided state in light and dark, XL at phone width. The "not checked" wording (PRD 8.10) is tested by patching `notCheckedForNeedCount` into the real match response (with results, and with no plausible match), because the synthetic seed has no Program without need categories; plus a negative case with the seed as it is. **Coverage limitation:** one known, pre-existing product defect is recorded as `test.fixme`, so it is not covered: the entry screen scrolls sideways at XL on a 375px phone (also fails with PR #32's CSS). Follow-up issue: https://github.com/kwitykwity/L3-CS-QCH/issues/46 |
@@ -56,16 +60,16 @@ against Azure SQL; that waits on the Azure SQL store.
 | Labels, required fields, errors | `accessibility.test.js` (every page, including the guided-matching markup); axe in `e2e/`; `e2e/screenReader.spec.js` | VoiceOver + Safari run on New Referral and Program Management: [screen-reader-check.md](screen-reader-check.md); Narrator checks recorded on #32 |
 | Text sizing S/M/L/XL | `accessibility.test.js`; `e2e/` (computed sizes, kept work, reload) | Run C step 2 (browser zoom) |
 | Contrast (text 4.5:1, controls and focus 3:1) | `accessibility.test.js` both themes; axe in `e2e/` both themes | None |
+| GPME E2E: guided matching and GPME-assisted referral (#16, #27) | Journey 8 (API): need categories, match with explained plausible / possible results, send as GPME_ASSISTED with its saved evaluation (what was shown, what was chosen), answers stored nowhere, resend gives one referral, received and accepted like any referral; a Program whose matching facts changed after the search (changed through Program Management) is refused and the worker re-searches; matching down is never "no match", and the same Program goes as a Direct Referral. Browser: `e2e/gpme.spec.js`; one referral across every feature: `e2e/mvpJourney.spec.js` | None |
+| Receiving lifecycle: outcome and corrections (#14) | Journey 9 (API): Not Appropriate with an explanation, outcome refused, decision corrected to Accepted, outcome recorded, outcome corrected, across four staff with separate capabilities; refusals by role (403 / 404 / 401) change nothing; stale screens refused with the current state; Not Appropriate blocked while an outcome is recorded; first service time never rewritten; the sender sees the result read-only; full audit history with the prior explanation kept; no participant data in confirmations or errors. Browser: `e2e/receiving.spec.js`, `e2e/receivingLifecycle.spec.js` | Run D in a second browser |
+| Program maintenance 14B: configurable fields and values (#22, #24) | Journey 10 (API): create a required choice field and set it, reuse it in a second Program as optional, a Director of one Program sets only its value and cannot change the shared definition, rename keeps identity and values, stale rename refused, a discontinued option stays selected where it was but cannot be newly picked, a meaning change replaces the field for both Programs (old value kept as history, no new values, no reactivation), current Program information shows only the replacement; audit by actor. Browser: `e2e/fieldValues.spec.js`, `e2e/programManagementJourneys.spec.js` | None |
+| Program maintenance 14C: create / move Programs, Department lifecycle (#25) | Journey 11 (API): only ORG-scope MANAGE_ORGANIZATION may change the organization; new Department (unique name) and Program, offered for new referrals, no implied management; referrals to it; Department discontinue refused while it has an active Program; move (stale move refused); earlier referrals keep the Department they were made under; discontinue, no create or move into it, stale rename refused, reactivate; audit with before and after; no routing details returned. Browser: `e2e/organization.spec.js`, `e2e/programManagementJourneys.spec.js` | None |
 | P0 reporting: Total Referrals (#18), Timing Metrics (#26), Referral Activity (#30) | `test/regression/reportingJourney.test.js` over the known-answer world in `reportingFixture.js` (nine referrals built through the real API): every period type, organization / Program / Department scope with Department history, Zero vs No Data vs Pending vs Unknown vs error, partial periods, future and pre-2000 dates (API). On screen (Task M): `e2e/reportingKnownAnswers.spec.js` opens the Reporting Center over the SAME world and checks every period type, Program scope, Department scope with history, the Program and Department tables, Zero / No data / Pending / N/A, the partial-period note, future-date refusal, and no numbers for an inactive or signed-out person. `KNOWN_SCOPES` and `KNOWN_BREAKDOWNS` are shared by both | None |
 
-### Merged on `main`: coverage still to add here (next slice of this card)
+### Merged on `main`: coverage still to add here
 
-| Area | Merged in | What this suite still needs | Covered elsewhere today |
-| --- | --- | --- | --- |
-| GPME E2E: guided matching and GPME-assisted referral | #16, #27 | Browser journey is covered by `e2e/gpme.spec.js` (below). Still needed: an HTTP journey (match, choose, GPME_ASSISTED referral, evaluation saved) in `test/regression/` | `test/gpme*.test.js` per card; `e2e/gpme.spec.js` |
-| Receiving lifecycle: outcome and corrections | #14 | Multi-user browser journeys are covered by `e2e/receivingLifecycle.spec.js` (card 51). Still needed: an HTTP journey through record outcome, correct outcome, correct response, stale version, audit in `test/regression/` | `test/serviceOutcome.test.js` per card; screens (Task A): `e2e/receiving.spec.js`; card 51: `e2e/receivingLifecycle.spec.js` |
-| Program maintenance 14B: configurable fields and values | #22, #24 | An HTTP journey | `test/programFields*.test.js` per card; in the browser (#32, card 52): `e2e/fieldValues.spec.js`, `e2e/programManagementJourneys.spec.js` (fields, options, reuse, replacement, retirement) |
-| Program maintenance 14C: create / move Programs, Department lifecycle | #25 | An HTTP journey | `test/programOrganization.test.js` per card; in the browser (#32, card 52): `e2e/organization.spec.js`, `e2e/programManagementJourneys.spec.js` (Departments, creation, moves, referral history after a move) |
+None for the areas this card tracks. New merged workflows get a row here
+until they have a journey.
 
 ### Not merged yet (dependencies)
 
