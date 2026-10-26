@@ -81,7 +81,7 @@ here instead of being treated as already covered.
 | | |
 | --- | --- |
 | PRD | 2.1 (Guided path), 8.1, 8.2 (approved criteria), 5.3 (matching inputs), 5.4 (sensitive free text) |
-| Evidence | Oct 23: program staff asked for a text box where staff describe the need in their own words, instead of only picking from lists. Oct 26: Kyle answered "Yes, definitely!" to open-ended Program search |
+| Evidence | Oct 23: program staff asked for a text box where staff describe the need in their own words, instead of only picking from lists. Oct 26: asked whether staff should be able to describe participant needs in their own words and receive matching Program suggestions, Kyle answered "Yes, definitely!" |
 | Impact | A new worker input on the Find a Program screen. The free text is a fourth thing the app receives, so the PRD has to say what may be done with it (see R3) |
 | Today | `main` matches on need categories, an age range and a ZIP only (`src/gpme/matchPrograms.js`, `public/referral/guided.js`). PR #43 (Task D, branch `task-d`) adds the text box and a rules-based interpreter in the application |
 | Status | **CONFIRMED** (the requirement). How it fits PRD 8.2 is R3 |
@@ -262,7 +262,7 @@ here instead of being treated as already covered.
 | | |
 | --- | --- |
 | PRD | 8.1, 21 (automatic Family Support rerouting is a non-goal) |
-| Evidence | Oct 23: program staff wanted guidance toward Family Support in some situations, without sending everyone there. Oct 26: confirmed Family Support is not an automatic fallback |
+| Evidence | Oct 23: program staff wanted guidance toward Family Support in some situations, without sending everyone there. Oct 26: the reply says Family Support would not be an automatic fallback. In the plain-text copy this line sits after Kyle's "Yes, that sounds good", so it may be the team's own wording from the question rather than Kyle's; check the original email's colors. Either way it matches PRD 21 |
 | Impact | Confirms the current behavior |
 | Today | Matching never adds a Program that did not pass on need |
 | Status | **CONFIRMED** |
