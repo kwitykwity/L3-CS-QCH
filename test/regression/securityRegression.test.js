@@ -283,6 +283,7 @@ const SELF_SERVICE = [
   { method: 'post', path: '/api/referrals', why: 'creates a referral from the caller\'s own affiliation; CREATE_REFERRAL needs app access only (PRD 3.6)' },
   { method: 'put', path: '/api/me/affiliation', why: 'sets the caller\'s own affiliation; the user comes only from sign-in (PRD 3.2, 3.9)' },
   { method: 'post', path: '/api/gpme/match', why: 'read-only matching; stores nothing (PRD 8.2)' },
+  { method: 'post', path: '/api/gpme/interpret', why: 'proposes criteria from the worker\'s description; stores, logs and returns no text (Task D, PRD 5.3, 5.4)' },
 ];
 
 // Resource reads: allowed people get 200; everyone else 403 or 404.
