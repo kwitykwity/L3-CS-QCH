@@ -8,11 +8,10 @@
 // that the rules still hold together when the workflows run end to end.
 //
 // Covered here: Direct Referral, receiving queue, response, and Program
-// maintenance slice 14A (#21). GPME-assisted referral (#16, #27), outcome
-// and corrections (#14), Program fields and organization changes (14B,
-// 14C: #22, #24, #25) and P0 reporting (#18, #26) get journeys here as
-// they merge or as the next slice of this card; see
-// docs/regression-coverage.md.
+// maintenance slice 14A (#21). GPME-assisted referral, outcome and
+// corrections, and Program fields and organization changes (14B, 14C) are
+// Journeys 8 to 11 in workflowJourneys.test.js; P0 reporting is
+// reportingJourney.test.js. See docs/regression-coverage.md.
 //
 // The data store is the in-memory store. Running the same journeys
 // against Azure SQL (PRD 17.2) waits on the Azure SQL store.
