@@ -12,10 +12,9 @@ descriptions or memory.
 
 ## How to read this page
 
-- **PRD**: the section the item touches. The PRD text is not in this
-  repository. Section numbers are taken from how the code and docs already
-  cite the PRD, and should be checked against the PRD itself during the
-  revision.
+- **PRD**: the section the item touches, checked against the team's copy
+  of the Oct 14 Final Technical PRD on Oct 26, 2026. The PRD itself is not
+  in this repository.
 - **Evidence**: what QCH or QCH IT said, when, and where it was received.
 - **Today**: what `main` does now, with the files that show it. Passing
   tests and merged code are implementation evidence only. They do not
@@ -39,6 +38,11 @@ descriptions or memory.
 | QCH IT infrastructure guidance | Oct 22, 2026 | Team copy, not in this repository. The open items it raised are tracked in [pending-qch-it-decisions.md](pending-qch-it-decisions.md) |
 | Midpoint check-in with QCH program staff | Oct 23, 2026 | Team transcript copy, not in this repository. Requests summarized in [ai-interpretation-options.md](ai-interpretation-options.md) and [task-c-program-information.md](task-c-program-information.md) |
 | Kyle Butler (QCH), reply to "QCH Connect: Midpoint Follow-Up and Remaining Questions" | Oct 26, 2026 | Email to the team. Kyle answered the non-technical questions and invited Joelle Tirado (QCH) to add to them |
+
+PRD 22 closed the business-clarification phase "unless genuinely new or
+conflicting business evidence emerges". The Oct 22, Oct 23 and Oct 26
+items below are that kind of evidence, which is why they are reconciled
+here instead of being treated as already covered.
 
 ## Summary
 
@@ -76,7 +80,7 @@ descriptions or memory.
 
 | | |
 | --- | --- |
-| PRD | 8.1, 8.2 (matching inputs), 5.3 and 5.4 (minimal participant information) |
+| PRD | 2.1 (Guided path), 8.1, 8.2 (approved criteria), 5.3 (matching inputs), 5.4 (sensitive free text) |
 | Evidence | Oct 23: program staff asked for a text box where staff describe the need in their own words, instead of only picking from lists. Oct 26: Kyle answered "Yes, definitely!" to open-ended Program search |
 | Impact | A new worker input on the Find a Program screen. The free text is a fourth thing the app receives, so the PRD has to say what may be done with it (see R3) |
 | Today | `main` matches on need categories, an age range and a ZIP only (`src/gpme/matchPrograms.js`, `public/referral/guided.js`). PR #43 (Task D, branch `task-d`) adds the text box and a rules-based interpreter in the application |
@@ -100,9 +104,10 @@ descriptions or memory.
 
 | | |
 | --- | --- |
-| PRD | 8.2, 5.3, 5.4 |
-| Evidence | No QCH evidence. This is a reading of the PRD, written on the Task D branch in `docs/gpme-description-step-prd-8-2.md` (status there: proposed, not approved) |
-| Impact | The PRD revision must say whether 8.2 limits what the app may **collect** from a worker, or only what **matching** may use. It must also say whether a free-text box is acceptable under the minimal-information rule, since a worker can type anything into it |
+| PRD | 8.2, 5.3, 5.4, 21 |
+| Evidence | No QCH evidence on this point. The Task D branch has a proposed reading in `docs/gpme-description-step-prd-8-2.md` (status there: proposed, not approved), written without the PRD text |
+| What the PRD says | 8.2 limits what **matching** may use: only explicitly approved structured criteria, never hidden factors such as free-text Notes or Referral Context. 5.3 lets temporary matching inputs stay in memory during the workflow but not be persisted. 5.4 names Referral Context and Notes as sensitive free text. 21 makes external generative-AI services processing referral data a non-goal |
+| Impact | The PRD text supports the PR #43 design: free text is read only to propose structured criteria, the worker confirms them, and matching uses only the confirmed criteria. The revision still needs to say two things the PRD does not: that the describe-the-need text is handled like the 5.4 sensitive free text (never logged, stored or sent), and that the interpreter runs inside the application |
 | Today | On PR #43, the text is never sent to matching, never saved with the referral, and never logged or returned |
 | Status | **TEAM PRODUCT DECISION**, not yet recorded. Decide before PR #43 merges, then write it into the Oct 30 revision |
 | Affected | PR #43; Trello Task Q's special handling for PR #43 |
@@ -124,7 +129,7 @@ descriptions or memory.
 
 | | |
 | --- | --- |
-| PRD | 1.4 (data stays in QCH-approved Microsoft infrastructure), 15 |
+| PRD | 1.4 (data stays in the QCH-approved Microsoft environment unless QCH IT approves otherwise in writing), 21 (external generative-AI services processing referral data is a non-goal) |
 | Evidence | Earlier guidance: no outside AI services for referral data. Oct 23: program staff asked for AI-assisted matching. Oct 26: Kyle confirmed open-ended search (R1) but answered non-technical questions only, so this is not settled |
 | Impact | Decides whether the interpreter can ever be anything other than rules inside the app. Options are compared in [ai-interpretation-options.md](ai-interpretation-options.md) |
 | Today | Rules only. No AI service, no API key, no outside calls |
@@ -148,9 +153,9 @@ descriptions or memory.
 
 | | |
 | --- | --- |
-| PRD | 4.1, 4.2 (Program information), 8.2 (matching inputs), 9.9 (multi-valued attributes) |
+| PRD | 4.2 (common searchable or matchable attributes), 8.2 (approved structured criteria), 8.7 and 8.9 (rule versions and regression tests), 20.3 (scope) |
 | Evidence | Oct 26: Kyle asked to add language of service (for example English, Spanish or Chinese), and said Programs should be able to select more than one language |
-| Impact | New. A structured, multi-valued Program attribute. If staff filter or match by language, it is a new matching input, which changes the three inputs PRD 8.2 allows. A flexible text field would not work for matching, because matching must not read meaning from editable labels or free text ([task-c-program-information.md](task-c-program-information.md)) |
+| Impact | New. A structured, multi-valued common Program attribute. PRD 8.2 does not fix the number of matching inputs; it allows "explicitly approved structured criteria supported by Program information". Need, age range and ZIP are the team's `gpme-v1` rule set (Oct 18), not a PRD limit. Kyle's answer approves language as a factor, so using it in matching needs a new rule version (8.7) and regression tests before activation (8.9), not a change to 8.2. A flexible text field would not work for matching, because matching must not read meaning from editable labels or free text ([task-c-program-information.md](task-c-program-information.md)). It passes the 20.3 test: it helps a worker make an appropriate internal referral |
 | Today | Not built. No language field in the schema, Program Management or matching |
 | Status | **CONFIRMED** (the requirement). The team still needs to decide whether language filters results or is only shown |
 | Affected | `db/migrations/` (new table), `src/programs/`, `src/gpme/`, `public/referral/` |
@@ -160,7 +165,7 @@ descriptions or memory.
 
 | | |
 | --- | --- |
-| PRD | 4.1, 8.3, 8.6 |
+| PRD | 4.1 (support genuine Program differences, not one universal Open/Closed plus Next Start Date structure), 4.2, 8.6 |
 | Evidence | Oct 26: Kyle said Programs with limited availability or wait lists should still appear with their status clearly shown, and no situation should exclude a Program QCH still has |
 | Impact | Availability is information to show, never a filter. Find a Program results need to show it |
 | Today | Matching never removes a Program for availability, because it does not read availability. Program staff can store availability and wait-list information as flexible fields (Task C; examples in `scripts/syntheticProgramInformation.js`). The Find a Program results show name, Department, site and explanations only (`public/referral/app.js`) |
@@ -172,7 +177,7 @@ descriptions or memory.
 
 | | |
 | --- | --- |
-| PRD | 21 (non-goals, as cited on the Task D branch) |
+| PRD | 21 (enrollment management is a non-goal) |
 | Evidence | Oct 26: the team's question stated it meant Program availability information, not a participant waitlist system, and Kyle's answers did not ask for one |
 | Impact | None. Confirms scope |
 | Today | No participant waitlist records exist ([task-c-program-information.md](task-c-program-information.md)) |
@@ -186,9 +191,9 @@ descriptions or memory.
 | --- | --- |
 | PRD | 4.3, 4.4 (lifecycle) |
 | Evidence | Oct 26: Kyle said QCH should be able to delete or add Programs as it gains or loses contracts, and any Program QCH still has should appear |
-| Impact | The PRD uses discontinue and retire, not hard delete, so referral history stays intact. The revision should say that "delete" is met by discontinue or retire |
+| Impact | PRD 4.4 uses discontinue and retire, not hard delete: discontinued items leave new operational choices while history and reporting stay intact. The revision should say that "delete" is met by discontinue or retire |
 | Today | Programs are created, discontinued, reactivated and retired in Program Management. Discontinued Programs leave new referral choices; existing referrals keep them |
-| Status | **CONFIRMED** (the need). Worth confirming with QCH that discontinue or retire meets "delete" |
+| Status | **CONFIRMED** (the need). That discontinue or retire meets "delete" is the team's reading of 4.4; under PRD 22 it is not worth a new question to QCH on its own |
 | Affected | `src/programs/programService.js`, `public/program-management/` |
 | Approver | Kyle Butler (QCH), Oct 26, 2026 |
 
@@ -246,7 +251,7 @@ descriptions or memory.
 | --- | --- |
 | PRD | 8.5, 8.8 |
 | Evidence | Oct 26: asked whether no suitable match should show a "No match found" message and let staff revise their search or use Direct Referral, Kyle said "Yes, that sounds good" |
-| Impact | Confirms the current behavior |
+| Impact | Confirms the current behavior. "No plausible match identified" is the PRD 8.5 wording; Kyle's answer does not ask to change it |
 | Today | The screen says no plausible match was identified, that this does not mean QCH has no appropriate Program, and offers changing the answers or Direct Referral (`public/referral/guided.js`). A technical failure is a separate message |
 | Status | **CONFIRMED** |
 | Affected | None |
@@ -256,7 +261,7 @@ descriptions or memory.
 
 | | |
 | --- | --- |
-| PRD | 8.1 |
+| PRD | 8.1, 21 (automatic Family Support rerouting is a non-goal) |
 | Evidence | Oct 23: program staff wanted guidance toward Family Support in some situations, without sending everyone there. Oct 26: confirmed Family Support is not an automatic fallback |
 | Impact | Confirms the current behavior |
 | Today | Matching never adds a Program that did not pass on need |
@@ -298,8 +303,8 @@ answered in Kyle's Oct 26 email.
 
 | | |
 | --- | --- |
-| PRD | 1.4, 9 |
-| Evidence | Raised after the PRD: Task U lists it among the Oct 22 QCH IT guidance items, and SharePoint Lists is now an option alongside the Azure SQL design the PRD was written around. Check the wording against the Oct 22 email |
+| PRD | 1.3, 1.4 (Azure SQL Database marked CLIENT CONFIRMED / QCH IT), 9 |
+| Evidence | Raised after the PRD: Task U lists it among the Oct 22 QCH IT guidance items, and SharePoint Lists is now an option. This **conflicts** with a PRD item marked client-confirmed, so the revision has to change 1.3 and 1.4 or keep them once QCH IT decides. Check the wording against the Oct 22 email |
 | Impact | Decides how the store, migrations, backups and reports are built. The app depends on transactions, row versions and uniqueness rules |
 | Today | In-memory stores with synthetic data. The SQL in `db/migrations/` is the team's design, not a confirmed store |
 | Status | **OPEN QCH DECISION** (pending decision 1) |
@@ -310,8 +315,8 @@ answered in Kyle's Oct 26 email.
 
 | | |
 | --- | --- |
-| PRD | 1.4, 3.7, 6.4 |
-| Evidence | Task U lists it among the Oct 22 QCH IT guidance items. The earlier plan named Azure App Service. Check the wording against the Oct 22 email |
+| PRD | 1.4 (Azure App Service marked CLIENT CONFIRMED / QCH IT), 3.7, 6.4 |
+| Evidence | Task U lists it among the Oct 22 QCH IT guidance items, which reopened a PRD item marked client-confirmed. Check the wording against the Oct 22 email |
 | Impact | The app is a server application and cannot run as static pages |
 | Today | `npm start` runs on any Node host; Node 24.15.0 pinned for development |
 | Status | **OPEN QCH DECISION** (pending decision 2) |
@@ -322,7 +327,7 @@ answered in Kyle's Oct 26 email.
 
 | | |
 | --- | --- |
-| PRD | 3.6 |
+| PRD | 3.3, 3.6, 9.12 (direct data changes are not the normal production path) |
 | Evidence | Follows from R19 |
 | Impact | If staff can open the lists directly, the app's permission and audit rules can be bypassed |
 | Today | No SharePoint code |
@@ -334,8 +339,8 @@ answered in Kyle's Oct 26 email.
 
 | | |
 | --- | --- |
-| PRD | 3.1, 3.2, 3.4 |
-| Evidence | Requested from QCH IT; no configuration received |
+| PRD | 3.1, 3.2, 22 (Entra group names and access configuration: open implementation dependency) |
+| Evidence | Requested from QCH IT; no configuration received. The policy is settled in the PRD: Entra grants app access, and action permissions live in QCH Connect |
 | Impact | Staff sign-in, MFA, and which Entra group grants access to the app |
 | Today | No Entra sign-in. Production passes no identity, so every `/api` route answers 401 |
 | Status | **OPEN QCH DECISION** (pending decision 5) |
@@ -346,7 +351,7 @@ answered in Kyle's Oct 26 email.
 
 | | |
 | --- | --- |
-| PRD | 11.1 to 11.6 |
+| PRD | 11.1 (Graph and a QCH shared mailbox, CLIENT CONFIRMED / QCH IT), 22 (mailbox configuration: open implementation dependency) |
 | Evidence | QCH IT has created the shared mailbox. Sending permission and configuration are still pending |
 | Impact | Production sends no referral emails until this is set up |
 | Today | Notifications run against a simulated outbox that refuses to start outside development and test |
@@ -370,8 +375,8 @@ answered in Kyle's Oct 26 email.
 
 | | |
 | --- | --- |
-| PRD | 6.5, 9.6, 9.11, 22 |
-| Evidence | No answer received |
+| PRD | 6.5, 9.6, 9.11, 22 (retention and purge: open QCH policy dependency) |
+| Evidence | No answer received. Already open in the PRD |
 | Impact | Decides what reports and referral lists show over time |
 | Today | Nothing is archived or deleted. Referrals cannot be hard-deleted |
 | Status | **OPEN QCH DECISION** (pending decisions 4 and 8) |
