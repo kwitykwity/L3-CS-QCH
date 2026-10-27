@@ -35,6 +35,9 @@ const publicDir = path.join(
 //   notification starts after each referral commits (Task E). Without one,
 //   no notification is sent. Production has none yet: it needs the
 //   production store and the Microsoft Graph sender (see the README).
+// - gpmeInterpreter: optional replacement for the describe-the-need
+//   interpreter (Task D). Without one, the rule-based interpreter is used.
+//   It is independent of the notifier.
 //
 // Fixed 404. Nothing from the request is repeated in the response.
 function notFound(req, res) {
@@ -42,7 +45,7 @@ function notFound(req, res) {
   res.status(404).json({ error: 'Not Found' });
 }
 
-export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false, nodeEnv, now, notifier = null } = {}) {
+export function createApp({ affiliationStore, referralStore, resolveIdentity, allowDemoGrants = false, nodeEnv, now, notifier = null, gpmeInterpreter } = {}) {
   const app = express();
 
   // Don't advertise the framework or its version.
@@ -70,7 +73,7 @@ export function createApp({ affiliationStore, referralStore, resolveIdentity, al
 
   app.use(
     '/api/gpme',
-    createGpmeRouter({ store: affiliationStore, resolveIdentity }),
+    createGpmeRouter({ store: affiliationStore, resolveIdentity, interpreter: gpmeInterpreter }),
   );
 
   app.use(

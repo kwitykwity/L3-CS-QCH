@@ -142,3 +142,31 @@ dark themes; see [regression-coverage.md](regression-coverage.md).
 
 What the tests cannot show yet: anything about the production store, Entra
 sign-in, Microsoft Graph, or QCH's hosting.
+
+## PR 59: interpretation contract alignment
+
+Rob's review clarification, supplied by Christina, confirms that the
+three-state interpretation contract was already settled. This change aligns
+the implementation with that contract; it does not introduce a new product
+decision.
+
+- HTTP 200 `INTERPRETED`: interpretation succeeded and produced at least one
+  usable approved concept: a need category, age information, or ZIP.
+- HTTP 200 `NOTHING_RECOGNIZED`: interpretation succeeded but produced no
+  usable approved concepts. Advisory notes alone do not count as concepts.
+- HTTP 503 `UNABLE_TO_INTERPRET`: interpretation failed, including invalid
+  output from a replaceable interpreter.
+
+Successful responses retain the existing proposal fields: `interpreterVersion`,
+`needs`, `ageRange`, `participantZip`, and `notes`. Nothing recognized is shown
+as nothing understood, with manual answers and Direct Referral available.
+It is not a GPME no-match result: matching has not evaluated employee-confirmed
+criteria at that point. A recognized age or ZIP without a need remains
+reviewable, but the employee must select a need before matching.
+
+The age clarification supersedes the earlier proposed `min < max` restriction.
+Exact ages and ranges are accepted. An exact age of 17 remains
+`{ min: 17, max: 17 }`, displayed as "Age: 17"; it is not broadened into a
+guessed range. Employees review and may correct the interpreted information
+before choosing Find Programs. Program eligibility and existing matching
+overlap behavior are unchanged.

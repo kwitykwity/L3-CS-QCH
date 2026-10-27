@@ -40,6 +40,99 @@ export const GUIDED_MESSAGES = Object.freeze({
   SUGGESTION_NOTE: 'These are suggestions to help you choose. They are not an eligibility decision. You choose the Program, and the receiving Program decides.',
 });
 
+// Describe-the-need step (Task D). The description only PROPOSES answers
+// for the worker to check; matching still runs on the confirmed need
+// categories, age range, and ZIP alone (PRD 8.2). The text is held in memory
+// for this screen only, sent in a POST body to /api/gpme/interpret, and never
+// saved, logged, or sent with the referral.
+export const DESCRIBE_MESSAGES = Object.freeze({
+  EMPTY: 'Type a short description first, or choose the answers below yourself.',
+  TOO_LONG: 'Keep the description to 500 characters or fewer.',
+  WORKING: 'Reading the description ...',
+  NOTHING_UNDERSTOOD:
+    'The description did not point to any need category, age, or ZIP. Nothing was filled in. '
+    + 'Choose the answers below yourself, or use Direct Referral.',
+  UNABLE:
+    'Could not read the description right now. This is a technical problem. Your text is still here. '
+    + 'Try again, or choose the answers below yourself.',
+  NOT_SIGNED_IN: 'Your sign-in is not active. Your text is still here. Sign in again, then try again.',
+  CHECK_PROMPT:
+    'This is what the application understood. It may be wrong or incomplete. '
+    + 'Check the answers below, change anything that is off, then choose Find Programs.',
+  NO_CURRENT_PROGRAM:
+    'No current Program lists this need, so matching is unlikely to find one. Direct Referral is still available.',
+  NOTES: Object.freeze({
+    MULTIPLE_AGES: "More than one age was mentioned, so no age range was filled in. Enter the participant's age range yourself.",
+    MULTIPLE_ZIPS: "More than one ZIP code was mentioned, so none was filled in. Enter the participant's ZIP code yourself.",
+    INVALID_AGE: 'An age in the description could not be used, so it was left out.',
+    NOT_REQUESTED: 'A service in the description was said not to be wanted, so it was not filled in. Check the needs below.',
+  }),
+});
+
+export const MAX_DESCRIPTION_CHARS = 500;
+
+export function validateDescription(text) {
+  const value = typeof text === 'string' ? text : '';
+  if (value.trim().length === 0) return DESCRIBE_MESSAGES.EMPTY;
+  if (value.length > MAX_DESCRIPTION_CHARS) return DESCRIBE_MESSAGES.TOO_LONG;
+  return null;
+}
+
+// response: { networkError: true } or { status, body } from POST /api/gpme/interpret.
+// Returns { state: 'PROPOSED' | 'NOTHING_UNDERSTOOD' | 'UNABLE' | 'NOT_SIGNED_IN' | 'INVALID', ... }.
+// PROPOSED carries what to fill in (needCategoryIds, ageMin, ageMax, matchZip)
+// and the lines the page shows under "What the application understood".
+export function interpretInterpretResponse(response) {
+  if (!response || response.networkError) return { state: 'UNABLE', message: DESCRIBE_MESSAGES.UNABLE };
+  const { status, body } = response;
+  if (status === 401 || status === 403) return { state: 'NOT_SIGNED_IN', message: DESCRIBE_MESSAGES.NOT_SIGNED_IN };
+  if (status === 400) return { state: 'INVALID', message: DESCRIBE_MESSAGES.EMPTY };
+
+  const wellFormed = status === 200
+    && ['INTERPRETED', 'NOTHING_RECOGNIZED'].includes(body?.status)
+    && Array.isArray(body.needs)
+    && body.needs.every((n) => Number.isSafeInteger(n?.needCategoryId) && typeof n.name === 'string')
+    && Array.isArray(body.notes);
+  if (!wellFormed) return { state: 'UNABLE', message: DESCRIBE_MESSAGES.UNABLE };
+
+  const age = body.ageRange && Number.isSafeInteger(body.ageRange.min) && Number.isSafeInteger(body.ageRange.max)
+    ? body.ageRange : null;
+  const zip = typeof body.participantZip === 'string' && /^\d{5}$/.test(body.participantZip) ? body.participantZip : null;
+  const notes = body.notes.map((code) => DESCRIBE_MESSAGES.NOTES[code]).filter(Boolean);
+
+  const understood = [];
+  const warnings = [];
+  for (const need of body.needs) {
+    understood.push(`Need: ${need.name}`);
+    if (need.currentProgramCount === 0) warnings.push(`${need.name}: ${DESCRIBE_MESSAGES.NO_CURRENT_PROGRAM}`);
+  }
+  if (age) understood.push(age.min === age.max ? `Age: ${age.min}` : `Age range: ${age.min} to ${age.max}`);
+  if (zip) understood.push(`ZIP code: ${zip}`);
+
+  const hasConcepts = body.needs.length > 0 || Boolean(age) || Boolean(zip);
+  // Successful interpretation and successful-but-empty are distinct API outcomes.
+  // Contradictory responses are technical failures, never matching results.
+  if ((body.status === 'INTERPRETED') !== hasConcepts) {
+    return { state: 'UNABLE', message: DESCRIBE_MESSAGES.UNABLE };
+  }
+  if (body.status === 'NOTHING_RECOGNIZED') {
+    return { state: 'NOTHING_UNDERSTOOD', message: DESCRIBE_MESSAGES.NOTHING_UNDERSTOOD, notes };
+  }
+  return {
+    state: 'PROPOSED',
+    message: DESCRIBE_MESSAGES.CHECK_PROMPT,
+    needCategoryIds: body.needs.map((n) => n.needCategoryId),
+    ageMin: age ? String(age.min) : '',
+    ageMax: age ? String(age.max) : '',
+    matchZip: zip ?? '',
+    understood,
+    warnings,
+    notes,
+    // No need recognized: matching needs one, so the page asks for it.
+    needsStillRequired: body.needs.length === 0,
+  };
+}
+
 export const GUIDED_FIELD_MESSAGES = Object.freeze({
   needs: 'Choose at least one need.',
   ageRange: {

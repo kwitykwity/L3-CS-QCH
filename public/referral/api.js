@@ -12,6 +12,8 @@
 //   POST /api/gpme/match  { needCategoryIds, ageRange?, participantZip? }
 //                                              -> RESULTS | NO_PLAUSIBLE_MATCH,
 //                                                 503 UNABLE_TO_MATCH
+//   POST /api/gpme/interpret  { text }         -> INTERPRETED or NOTHING_RECOGNIZED,
+//                                                 503 UNABLE_TO_INTERPRET
 //   A GPME-assisted referral adds `gpme` (the same matching answers) to the
 //   POST /api/referrals body.
 //
@@ -60,6 +62,9 @@ export const api = Object.freeze({
   listNeedCategories: () => call('GET', '/api/gpme/need-categories'),
   // Matching answers describe a participant, so they go in a POST body,
   // never in the URL (PRD 5.5).
+  // The description reads the participant's situation, so it is a POST body
+  // too, and is never stored or sent with the referral.
+  interpretDescription: (text) => call('POST', '/api/gpme/interpret', { text }),
   matchPrograms: (answers) => call('POST', '/api/gpme/match', answers),
   checkSubmission: (submissionId) =>
     call('GET', `/api/referrals/submissions/${encodeURIComponent(submissionId)}`),

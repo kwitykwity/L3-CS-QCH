@@ -82,6 +82,29 @@
         <div id="guided" class="path-panel" hidden>
           <h3 id="guided-heading" tabindex="-1">Guided matching</h3>
           <form id="guided-form" novalidate>
+            <!-- Describe the need (Task D). Proposes answers for the fields
+                 below; the worker checks and corrects them. The text is
+                 held in memory only and is not saved or sent with the referral. -->
+            <div class="field" id="describe-field">
+              <label for="describe">Describe what the participant needs (optional)</label>
+              <p id="describe-hint" class="muted">For example: &ldquo;17 year old who needs help finding a job, ZIP 11101.&rdquo;
+                Do not enter a name or contact details here. The application suggests answers below for you to check. It is not saved. Up to 500 characters.</p>
+              <textarea id="describe" rows="3" maxlength="500" autocomplete="off"
+                aria-describedby="describe-hint describe-error"></textarea>
+              <p id="describe-error" class="field__error" hidden></p>
+              <div class="actions">
+                <button type="button" id="describe-go" class="btn btn--secondary">Fill in the answers below</button>
+              </div>
+              <div id="understood" class="status status--info" role="status" aria-live="polite" tabindex="-1" hidden>
+                <span class="status__badge" aria-hidden="true"></span>
+                <div class="status__text">
+                  <p id="understood-message"></p>
+                  <ul id="understood-list"></ul>
+                  <ul id="understood-notes"></ul>
+                </div>
+              </div>
+            </div>
+
             <fieldset class="field" id="needs" aria-describedby="needs-hint needs-error">
               <legend>What does the participant need? <span class="req" aria-hidden="true">*</span></legend>
               <p id="needs-hint" class="muted">Choose all that apply.</p>
