@@ -466,8 +466,10 @@ describe('GPME explanations and edges', () => {
 
   test('results return minimum-necessary Program fields only', async () => {
     const result = await serviceFor().match(100, T2_INPUT);
+    // serviceLanguages: language of service for staff (Task W, Kyle Oct 26).
+    // Added after matching; it is not a matching input or explanation.
     assert.deepEqual(Object.keys(result.plausible[0]).sort(),
-      ['departmentId', 'departmentName', 'explanations', 'name', 'programId', 'site']);
+      ['departmentId', 'departmentName', 'explanations', 'name', 'programId', 'serviceLanguages', 'site']);
     assert.deepEqual(Object.keys(result).sort(),
       ['notCheckedForNeedCount', 'plausible', 'possible', 'ruleVersion', 'status']);
   });

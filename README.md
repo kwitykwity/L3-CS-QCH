@@ -254,6 +254,13 @@ follow the GPME Decision Proposal the team approved on Oct 18:
   them as "not on file".
 - Neither GPME route accepts query parameters. Any query string gets a fixed
   `400 UNEXPECTED_FIELD` that does not echo the parameter.
+- **Language of service (Task W)** is not a matching criterion. After
+  matching, each result gets `serviceLanguages`: `{ status: "ON_FILE",
+  names: [...] }` or `{ status: "NOT_ON_FILE", names: [] }` (never "English
+  only"). If the language list cannot be read, results come back without it
+  rather than failing. Program Management keeps a Program's `languageIds`
+  with its matching facts; a save that leaves `languageIds` out keeps the
+  saved languages. Schema: `db/migrations/004_language_of_service.sql`.
 - **Write-path requirement (open, for the production store):** matching facts are validated when a Program is edited
   (`updateProgramMatchingFacts`). A relational production store must change the state
   columns and `program_service_area_zips` rows in one transaction after that

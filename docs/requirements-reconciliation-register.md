@@ -54,7 +54,7 @@ here instead of being treated as already covered.
 | R4 | Everyday age words ("teen", "older adult") mapped to age ranges | TEAM PRODUCT DECISION (not yet recorded) | No. In PR #43 |
 | R5 | Approved AI or language-processing boundary | OPEN QCH DECISION | Rules only, no AI |
 | R6 | Need is the most important matching factor | CONFIRMED | Yes |
-| R7 | Language of service, more than one per Program | CONFIRMED | No |
+| R7 | Language of service, more than one per Program | CONFIRMED | Yes, shown only (Task W); not used in matching |
 | R8 | Programs that are full or have a wait list still appear, with status shown | CONFIRMED | Partly. Never removed; status not shown in Find a Program |
 | R9 | No participant waitlist-management system | CONFIRMED | Yes. None built |
 | R10 | QCH adds and removes Programs as contracts change | CONFIRMED | Yes, through discontinue and retire |
@@ -156,9 +156,9 @@ here instead of being treated as already covered.
 | PRD | 4.2 (common searchable or matchable attributes), 8.2 (approved structured criteria), 8.7 and 8.9 (rule versions and regression tests), 20.3 (scope) |
 | Evidence | Oct 26: Kyle asked to add language of service (for example English, Spanish or Chinese), and said Programs should be able to select more than one language |
 | Impact | New. A structured, multi-valued common Program attribute. PRD 8.2 does not fix the number of matching inputs; it allows "explicitly approved structured criteria supported by Program information". Need, age range and ZIP are the team's `gpme-v1` rule set (Oct 18), not a PRD limit. Kyle's answer approves language as a factor, so using it in matching needs a new rule version (8.7) and regression tests before activation (8.9), not a change to 8.2. A flexible text field would not work for matching, because matching must not read meaning from editable labels or free text ([task-c-program-information.md](task-c-program-information.md)). It passes the 20.3 test: it helps a worker make an appropriate internal referral |
-| Today | Not built. No language field in the schema, Program Management or matching |
-| Status | **CONFIRMED** (the requirement). The team still needs to decide whether language filters results or is only shown |
-| Affected | `db/migrations/` (new table), `src/programs/`, `src/gpme/`, `public/referral/` |
+| Today | Built in Task W as information for staff: migration 004 adds `service_languages` and `program_service_languages`; Program Management keeps a Program's languages with its matching facts; Find a Program shows them on each result. None on file stays "not on file". Matching does not read them, so a language never hides a Program (Trello Task W's direction) |
+| Status | **CONFIRMED** (the requirement). Shown only for now, per Trello Task W. Whether a later rule version filters or ranks by language is still open; it would need a new rule version and its own tests. Which languages QCH lists, and whether "Chinese" means Mandarin, Cantonese or both, is an **OPEN QCH DECISION** |
+| Affected | `db/migrations/004_language_of_service.sql`, `src/programs/`, `src/gpme/gpmeService.js`, `public/referral/`, `public/program-management/matching.*` |
 | Approver | Kyle Butler (QCH), Oct 26, 2026 |
 
 ### R8. Full or wait-listed Programs still appear, with status shown
