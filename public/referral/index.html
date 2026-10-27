@@ -21,14 +21,14 @@
       </div>
     </header>
 
-    <main id="main" class="page">
+    <main id="main" class="page" tabindex="-1">
       <h1>New Referral</h1>
       <p class="lead">Find a QCH Program with guided matching, or go straight to a Program you already know with Direct Referral. Both send the same kind of referral.</p>
 
       <!-- Status: announced to screen readers; tone is shown with an icon and a word, never color alone -->
       <div id="status" class="status" role="status" aria-live="polite" tabindex="-1" hidden>
         <span class="status__badge" aria-hidden="true"></span>
-        <span class="status__text"></span>
+        <span id="status-text" class="status__text"></span>
       </div>
       <div class="status-actions">
         <button type="button" id="check-again" class="btn btn--secondary" hidden>Check whether it was received</button>
@@ -48,7 +48,7 @@
           <p id="affiliation-prompt" class="muted"></p>
           <div class="field">
             <label for="affiliation-select">Your Program <span class="req" aria-hidden="true">*</span></label>
-            <select id="affiliation-select" required aria-required="true" aria-describedby="affiliation-error">
+            <select id="affiliation-select" required aria-required="true" aria-invalid="false" aria-describedby="affiliation-error">
               <option value="">Choose your Program</option>
             </select>
             <p id="affiliation-error" class="field__error" hidden></p>
@@ -143,7 +143,7 @@
                Announced; shown with an icon and a word, never color alone. -->
           <div id="match-message" class="status" role="status" aria-live="polite" tabindex="-1" hidden>
             <span class="status__badge" aria-hidden="true"></span>
-            <span class="status__text"></span>
+            <span id="match-message-text" class="status__text"></span>
           </div>
           <div class="status-actions">
             <button type="button" id="match-retry" class="btn btn--primary" hidden>Try again</button>
@@ -215,7 +215,7 @@
             <div class="field">
               <label for="participantName">Participant name <span class="req" aria-hidden="true">*</span></label>
               <input id="participantName" name="participantName" type="text" autocomplete="off" maxlength="200"
-                required aria-required="true" aria-describedby="participantName-error" />
+                required aria-required="true" aria-invalid="false" aria-describedby="participantName-error" />
               <p id="participantName-error" class="field__error" hidden></p>
             </div>
 
@@ -228,14 +228,14 @@
             <div class="field" id="contactValue-field" hidden>
               <label for="contactValue"><span id="contactValue-label">Phone number</span> <span class="req" aria-hidden="true">*</span></label>
               <input id="contactValue" name="contactValue" type="tel" autocomplete="off" maxlength="320"
-                aria-required="true" aria-describedby="contactValue-error" />
+                aria-required="true" aria-invalid="false" aria-describedby="contactValue-error" />
               <p id="contactValue-error" class="field__error" hidden></p>
             </div>
 
             <div class="field">
               <label for="referralContext">What do they need? <span class="req" aria-hidden="true">*</span></label>
               <textarea id="referralContext" name="referralContext" rows="4" maxlength="4000"
-                required aria-required="true" aria-describedby="referralContext-hint referralContext-error"></textarea>
+                required aria-required="true" aria-invalid="false" aria-describedby="referralContext-hint referralContext-error"></textarea>
               <p id="referralContext-hint" class="muted">Visible to you and to staff authorized for the receiving Program.</p>
               <p id="referralContext-error" class="field__error" hidden></p>
             </div>

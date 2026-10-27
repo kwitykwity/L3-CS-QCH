@@ -26,6 +26,8 @@ import { createRuleBasedInterpreter } from './interpretation/ruleBasedInterprete
 import { validateInterpretRequest } from './interpretation/validateInterpretRequest.js';
 import { validateInterpretation, validateInterpreterVersion } from './interpretation/validateInterpretation.js';
 import { readMatchingFacts } from './programFacts.js';
+import { readCurrentProgramInformation } from '../programs/currentProgramInformation.js';
+import { matchingFactsOf } from '../programs/validateMatchingChange.js';
 
 function compareText(a, b) {
   if (a < b) return -1;
@@ -134,6 +136,29 @@ export function createGpmeService({
         participantZip: proposal.participantZip,
         notes: proposal.notes,
       };
+    },
+
+    // Internal Task C interface; no HTTP route exposes these fields.
+    // Requires the transactional store contract used by Program Management.
+    // This information is descriptive: gpme-v1 does not interpret it.
+    async listCurrentProgramInformation(userId) {
+      await requireActiveUser(userId);
+      return store.withTransaction(async (tx) => {
+        const candidates = await tx.listMatchablePrograms();
+        const information = [];
+        for (const { program, department } of candidates) {
+          if (program.lifecycleStatus !== 'ACTIVE'
+              || department.lifecycleStatus !== 'ACTIVE') continue;
+          information.push({
+            ...(await readCurrentProgramInformation(tx, program)),
+            name: program.name,
+            departmentId: department.departmentId,
+            departmentName: department.name,
+            matchingFacts: matchingFactsOf(program),
+          });
+        }
+        return information.sort((a, b) => a.programId - b.programId);
+      });
     },
 
     async match(userId, body) {

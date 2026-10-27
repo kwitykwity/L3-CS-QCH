@@ -122,8 +122,9 @@ details are in the README sections and the header comment of each
 | `/` | Start page with links and a backend status | Temporary; to be replaced by navigation (PRD 13.5) |
 | `/referral/` | Choose a Program (guided matching or Direct Referral) and send a referral | Built |
 | `/program-management/` | Program information and lifecycle, matching facts, fields and options, field reuse and replacement, Departments, creating and moving Programs | Built |
+| `/sent/` | Referrals I sent: the creator's own referrals and each one's Response, Decision and Service outcome, read-only | Built (Trello Task L) |
 | `/receiving/` | Received referrals, respond, record and correct outcomes | Built (Trello Task A, merged in #37 as e3fd11e) |
-| Reports | | Not built (Trello Task B) |
+| `/reporting/` | Reporting Center: aggregate counts, rates and timing by period and scope | Built (Trello Task B, merged in #41) |
 | Permission administration | | Not built |
 
 Every page supports keyboard-only use, S/M/L/XL text sizes and light and

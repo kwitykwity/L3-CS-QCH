@@ -6,11 +6,11 @@
 // with a controlled clock. Then Program 12 moves from Department 2 to
 // Department 1, so Department history can be checked.
 //
-// KNOWN_ANSWERS holds the expected numbers, worked out by hand from the
-// table below (the arithmetic is written next to each one). The API
-// journey (reportingJourney.test.js) checks them now; the browser
-// journeys will check the SAME numbers on screen once the Reporting UI
-// exists, so the two can never disagree about what is right.
+// KNOWN_ANSWERS, KNOWN_SCOPES and KNOWN_BREAKDOWNS hold the expected
+// numbers, worked out by hand from the table below (the arithmetic is
+// written next to each one). The API journey (reportingJourney.test.js)
+// and the browser journey (e2e/reportingKnownAnswers.spec.js) both check
+// these SAME answers, so the two can never disagree about what is right.
 //
 // Reporting zone America/New_York. "Today" for every report:
 // AS_OF = Sat Oct 24, 2026, 12:00 EDT.
@@ -334,5 +334,64 @@ export const KNOWN_ANSWERS = Object.freeze({
     },
     timeToFirstResponse: timing(0, 0, null, null),
     timeToRecordedService: timing(0, 0, null, null),
+  },
+});
+
+// Program and Department scope for FY2027 so far (PRD 12.4, 12.7).
+// Checked through the API (reportingJourney.test.js) and on screen
+// (e2e/reportingKnownAnswers.spec.js), so the two read the same numbers.
+export const KNOWN_SCOPES = Object.freeze({
+  // Program scope counts referrals made OR received by the Program, each once.
+  // Made by P12: A3 A4 A7. Received by P12: A1 A2 A8 A9. Union = 7.
+  P12_YEAR: {
+    query: { period: 'YEARLY', date: '2026-10-24', programId: String(IDS.P12) },
+    scope: { type: 'PROGRAM', programId: IDS.P12 },
+    total: 7,
+    made: 3,
+    received: 4,
+    acceptanceRate: rate(3, 3, 100),
+    resultedInServiceRate: rate(1, 2, 50),
+    // First (h): A1 2, A2 4, A3 1, A4 24, A7 1, A9 3 -> sorted 1 1 2 3 4 24,
+    // median (2 + 3) / 2 = 2.5, average 35 / 6; awaiting A8.
+    timeToFirstResponse: timing(6, 1, 35 / 6, 2.5),
+    // Reached Resulted: A1 72, A7 24 -> median 48, average 48; pending A4, A9.
+    timeToRecordedService: timing(2, 2, 48, 48),
+  },
+  // Department scope uses the Department at creation, so moving P12 on
+  // Oct 23 changes no past count.
+  // D1 (P10, P11): every referral except A4 (P12 -> P13) = 8, not 9.
+  D1_YEAR: {
+    query: { period: 'YEARLY', date: '2026-10-24', departmentId: String(IDS.D1) },
+    scope: { type: 'DEPARTMENT', departmentId: IDS.D1 },
+    total: 8,
+  },
+  // D2 (P12, P13 at creation): every referral except A5 (P10 -> P11) = 8.
+  // If the CURRENT Department were used, D2 would be only A4, A6 = 2.
+  D2_YEAR: {
+    query: { period: 'YEARLY', date: '2026-10-24', departmentId: String(IDS.D2) },
+    scope: { type: 'DEPARTMENT', departmentId: IDS.D2 },
+    total: 8,
+  },
+});
+
+// The Program and Department breakdown tables for KNOWN_ANSWERS.YEAR
+// (organization-wide). Sent counts belong to the sender; every other count
+// and both rates belong to the receiver.
+export const KNOWN_BREAKDOWNS = Object.freeze({
+  programs: {
+    // P10 made A1 A2 A5 A6 A8 A9; received A7 (accepted, resulted).
+    [IDS.P10]: { name: 'Synthetic Family Center', made: 6, received: 1, accepted: 1, notAppropriate: 0, awaitingResponse: 0, resultedInService: 1, acceptanceRate: rate(1, 1, 100), resultedInServiceRate: rate(1, 1, 100) },
+    // P11 received A3 (not appropriate) and A5 (awaiting): 0%, and no outcome possible.
+    [IDS.P11]: { name: 'Synthetic Youth Jobs', made: 0, received: 2, accepted: 0, notAppropriate: 1, awaitingResponse: 1, resultedInService: 0, acceptanceRate: rate(0, 1, 0), resultedInServiceRate: noData() },
+    // P12 made A3 A4 A7; received A1 (resulted) A2 (did not) A8 (awaiting) A9 (accepted, no outcome).
+    [IDS.P12]: { name: 'Synthetic Adult Education', made: 3, received: 4, accepted: 3, notAppropriate: 0, awaitingResponse: 1, resultedInService: 1, acceptanceRate: rate(3, 3, 100), resultedInServiceRate: rate(1, 2, 50) },
+    // P13 received A4 (no outcome yet) and A6 (Did Not, after correction).
+    [IDS.P13]: { name: 'Synthetic Housing Desk', made: 0, received: 2, accepted: 2, notAppropriate: 0, awaitingResponse: 0, resultedInService: 0, acceptanceRate: rate(2, 2, 100), resultedInServiceRate: rate(0, 1, 0) },
+  },
+  departments: {
+    // D1 made 6 (by P10); received 3 (A3, A5 by P11; A7 by P10).
+    [IDS.D1]: { name: 'Synthetic Family Services', made: 6, received: 3, accepted: 1, notAppropriate: 1, awaitingResponse: 1, resultedInService: 1, acceptanceRate: rate(1, 2, 50), resultedInServiceRate: rate(1, 1, 100) },
+    // D2 made 3 (by P12, its Department at the time); received 6.
+    [IDS.D2]: { name: 'Synthetic Adult Services', made: 3, received: 6, accepted: 5, notAppropriate: 0, awaitingResponse: 1, resultedInService: 1, acceptanceRate: rate(5, 5, 100), resultedInServiceRate: rate(1, 3, 33.33) },
   },
 });
