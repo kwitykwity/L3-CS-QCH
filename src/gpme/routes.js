@@ -4,7 +4,7 @@
 //        200 { needCategories: [{ needCategoryId, name }] }
 //
 //   POST /api/gpme/interpret   (Task D: interpretation layer)
-//        body: { text: "<short description, up to 400 characters>" }
+//        body: { text: "<short description, up to 500 characters>" }
 //        200 { status: "INTERPRETED", interpreterVersion,
 //              needs: [{ needCategoryId, name, matchedTerms,
 //                        currentProgramCount | null }],

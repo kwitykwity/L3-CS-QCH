@@ -47,7 +47,7 @@ export const GUIDED_MESSAGES = Object.freeze({
 // saved, logged, or sent with the referral.
 export const DESCRIBE_MESSAGES = Object.freeze({
   EMPTY: 'Type a short description first, or choose the answers below yourself.',
-  TOO_LONG: 'Keep the description to 400 characters or fewer.',
+  TOO_LONG: 'Keep the description to 500 characters or fewer.',
   WORKING: 'Reading the description ...',
   NOTHING_UNDERSTOOD:
     'The description did not point to any need category, age, or ZIP. Nothing was filled in. '
@@ -65,10 +65,11 @@ export const DESCRIBE_MESSAGES = Object.freeze({
     MULTIPLE_AGES: "More than one age was mentioned, so no age range was filled in. Enter the participant's age range yourself.",
     MULTIPLE_ZIPS: "More than one ZIP code was mentioned, so none was filled in. Enter the participant's ZIP code yourself.",
     INVALID_AGE: 'An age in the description could not be used, so it was left out.',
+    NOT_REQUESTED: 'A service in the description was said not to be wanted, so it was not filled in. Check the needs below.',
   }),
 });
 
-export const MAX_DESCRIPTION_CHARS = 400;
+export const MAX_DESCRIPTION_CHARS = 500;
 
 export function validateDescription(text) {
   const value = typeof text === 'string' ? text : '';

@@ -24,6 +24,7 @@ import { GPME_RULE_VERSION, MATCH_STATUS, matchPrograms } from './matchPrograms.
 import { validateMatchRequest } from './validateMatchRequest.js';
 import { createRuleBasedInterpreter } from './interpretation/ruleBasedInterpreter.js';
 import { validateInterpretRequest } from './interpretation/validateInterpretRequest.js';
+import { validateInterpretation, validateInterpreterVersion } from './interpretation/validateInterpretation.js';
 import { readMatchingFacts } from './programFacts.js';
 
 function compareText(a, b) {
@@ -85,7 +86,17 @@ export function createGpmeService({
       let proposal;
       try {
         needCategories = await store.listNeedCategories();
-        proposal = await interpreter.interpret({ text: checked.value.text, needCategories });
+        const raw = await interpreter.interpret({ text: checked.value.text, needCategories });
+        // The interpreter is replaceable, so its whole output is untrusted:
+        // only active category ids and the approved structured values pass.
+        const active = new Set(
+          needCategories.filter((c) => c.lifecycleStatus === 'ACTIVE').map((c) => c.needCategoryId),
+        );
+        const verdict = validateInterpretation(raw, active);
+        if (!verdict.ok || !validateInterpreterVersion(interpreter.version)) {
+          throw new Error('interpreter output not accepted');
+        }
+        proposal = verdict.value;
       } catch (err) {
         logFailure(err);
         return { status: INTERPRET_STATUS.UNABLE_TO_INTERPRET };
@@ -108,11 +119,10 @@ export function createGpmeService({
 
       const names = new Map(needCategories.map((c) => [c.needCategoryId, c.name]));
       const needs = proposal.needCategoryIds
-        .filter((id) => names.has(id))
         .map((id) => ({
           needCategoryId: id,
           name: names.get(id),
-          matchedTerms: [...(proposal.reasons?.get(id) ?? [])],
+          matchedTerms: [...(proposal.reasons.get(id) ?? [])],
           currentProgramCount: offeredCounts ? (offeredCounts.get(id) ?? 0) : null,
         }));
 
@@ -120,9 +130,9 @@ export function createGpmeService({
         status: INTERPRET_STATUS.INTERPRETED,
         interpreterVersion: interpreter.version,
         needs,
-        ageRange: proposal.ageRange ?? null,
-        participantZip: proposal.participantZip ?? null,
-        notes: [...(proposal.notes ?? [])],
+        ageRange: proposal.ageRange,
+        participantZip: proposal.participantZip,
+        notes: proposal.notes,
       };
     },
 

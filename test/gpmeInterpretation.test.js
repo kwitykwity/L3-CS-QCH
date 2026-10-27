@@ -10,9 +10,10 @@ import { createApp } from '../src/app.js';
 import { createMemoryReferralStore } from '../src/referrals/memoryReferralStore.js';
 import { createRuleBasedInterpreter } from '../src/gpme/interpretation/ruleBasedInterpreter.js';
 import { createGpmeService } from '../src/gpme/gpmeService.js';
+import { MAX_DESCRIPTION_CHARS as MAX_SERVER_DESCRIPTION_CHARS } from '../src/gpme/interpretation/validateInterpretRequest.js';
 import { syntheticSeed, DEV_USER_ID } from '../scripts/syntheticSeed.js';
 import {
-  DESCRIBE_MESSAGES, interpretInterpretResponse, toMatchRequest, validateDescription,
+  DESCRIBE_MESSAGES, MAX_DESCRIPTION_CHARS, interpretInterpretResponse, toMatchRequest, validateDescription,
 } from '../public/referral/guided.js';
 
 const CATEGORIES = [
@@ -43,10 +44,36 @@ describe('rule-based interpreter', () => {
     assert.deepEqual(read('retired category').needCategoryIds, []);
   });
 
-  test('a renamed or new category is recognized with no code change', () => {
+  test('a new category with no attached wording is recognized by its current name words', () => {
     const live = [{ needCategoryId: 9, name: 'Immigration legal help', lifecycleStatus: 'ACTIVE' }];
-    const out = createRuleBasedInterpreter().interpret({ text: 'needs a lawyer for a visa', needCategories: live });
+    const out = createRuleBasedInterpreter().interpret({ text: 'needs immigration advice', needCategories: live });
     assert.deepEqual(out.needCategoryIds, [9]);
+  });
+
+  test('attached wording follows the category id, so renaming a category changes nothing', () => {
+    const as = (name) => [{ needCategoryId: 3, name, lifecycleStatus: 'ACTIVE' }];
+    const texts = ['looking for a job', 'is unemployed and needs a resume', 'needs housing', 'wants to work'];
+    for (const text of texts) {
+      const before = createRuleBasedInterpreter().interpret({ text, needCategories: as('Employment (sample)') });
+      for (const name of ['Jobs and careers', 'Housing support', 'Zebra services']) {
+        const after = createRuleBasedInterpreter().interpret({ text, needCategories: as(name) });
+        assert.deepEqual(after.needCategoryIds, before.needCategoryIds, `${text} / ${name}`);
+      }
+    }
+  });
+
+  test('a name that contains another group\'s word gains no wording from it', () => {
+    const out = createRuleBasedInterpreter().interpret({
+      text: 'needs a tutor for school', needCategories: [{ needCategoryId: 3, name: 'Employment and school help', lifecycleStatus: 'ACTIVE' }],
+    });
+    assert.deepEqual(out.needCategoryIds, []);
+  });
+
+  test('the attachments are replaceable by category id', () => {
+    const live = [{ needCategoryId: 77, name: 'Anything', lifecycleStatus: 'ACTIVE' }];
+    const out = createRuleBasedInterpreter({ attachments: { 77: ['bus pass'] } })
+      .interpret({ text: 'needs a bus pass', needCategories: live });
+    assert.deepEqual(out.needCategoryIds, [77]);
   });
 
   test('reads an exact age or a range only next to age wording', () => {
@@ -58,9 +85,27 @@ describe('rule-based interpreter', () => {
     assert.equal(read('needs 5 bags of groceries').ageRange, null);
   });
 
-  test('everyday wording gives a starting range for the worker to check', () => {
-    assert.deepEqual(read('a teenager who needs school help').ageRange, { min: 13, max: 19 });
-    assert.deepEqual(read('an elderly neighbor').ageRange, { min: 60, max: 120 });
+  test('no age range is assumed from everyday wording', () => {
+    for (const text of ['a teenager who needs school help', 'an elderly neighbor', 'teens and seniors', 'an older adult']) {
+      assert.equal(read(text).ageRange, null, text);
+    }
+    // The need is still recognized; only the age is left to the worker.
+    assert.deepEqual(read('an elderly neighbor').needCategoryIds, [5]);
+  });
+
+  test('"ages 6 and 9" is two ages, not a range', () => {
+    for (const text of ['ages 6 and 9', 'children ages 6 and 9', 'kids aged 6 and 9', 'a 6 and 9 year old', 'ages 6, 9 and 12', 'ages 6 or 9']) {
+      const out = read(text);
+      assert.equal(out.ageRange, null, text);
+      assert.deepEqual(out.notes, ['MULTIPLE_AGES'], text);
+    }
+  });
+
+  test('an explicit range is still read', () => {
+    assert.deepEqual(read('between 6 and 9 years old').ageRange, { min: 6, max: 9 });
+    assert.deepEqual(read('between ages 6 and 9').ageRange, { min: 6, max: 9 });
+    assert.deepEqual(read('ages 6 to 9').ageRange, { min: 6, max: 9 });
+    assert.deepEqual(read('ages 6-9').ageRange, { min: 6, max: 9 });
   });
 
   test('two different ages are ambiguous: none is proposed', () => {
@@ -75,11 +120,59 @@ describe('rule-based interpreter', () => {
     assert.deepEqual(out.notes, ['INVALID_AGE']);
   });
 
-  test('reads one ZIP; several are ambiguous', () => {
-    assert.equal(read('lives in 11101').participantZip, '11101');
-    const two = read('lives in 11101 or 11373');
-    assert.equal(two.participantZip, null);
-    assert.deepEqual(two.notes, ['MULTIPLE_ZIPS']);
+  test('reads one ZIP next to ZIP wording; several are ambiguous', () => {
+    for (const text of ['ZIP 11101', 'zip code 11101', 'Zip code: 11101', 'her zipcode is 11101', 'postal code 11101']) {
+      assert.equal(read(text).participantZip, '11101', text);
+    }
+    for (const text of ['zip 11101 or 11373', 'zip codes 11101 and 11373', 'zip 11101, 11373']) {
+      const two = read(text);
+      assert.equal(two.participantZip, null, text);
+      assert.deepEqual(two.notes, ['MULTIPLE_ZIPS'], text);
+    }
+  });
+
+  test('an unrelated five-digit number is not a ZIP', () => {
+    for (const text of [
+      'lives in 11101', 'lives at 12345 Main Street', 'owes 12345 dollars', 'case number 54321 needs a job',
+      'call 555 12345', 'badge 11101', 'zip 111012', 'zip 11101-1234 area',
+    ]) {
+      assert.equal(read(text).participantZip, null, text);
+    }
+    // A ZIP next to wording is found even with other numbers around.
+    assert.equal(read('case 54321, zip 11101').participantZip, '11101');
+  });
+
+  test('a service the participant refused or did not ask for is not proposed', () => {
+    for (const text of [
+      "doesn't need housing", 'does not need any help with housing', 'not interested in housing', 'declined housing help',
+      'refused the shelter', 'no longer needs housing', 'does not want housing services',
+    ]) {
+      const out = read(text);
+      assert.deepEqual(out.needCategoryIds, [], text);
+      assert.deepEqual(out.notes, ['NOT_REQUESTED'], text);
+    }
+  });
+
+  test('a refusal only removes what it refers to', () => {
+    assert.deepEqual(read("doesn't need housing but needs a job").needCategoryIds, [3]);
+    assert.deepEqual(read("doesn't need housing, needs a job").needCategoryIds, [3]);
+    assert.deepEqual(read('does not need housing and needs a job').needCategoryIds, [3]);
+    assert.deepEqual(read('needs a job. Not interested in housing.').needCategoryIds, [3]);
+    assert.deepEqual(read('needs housing and does not need a job').needCategoryIds, [4]);
+    // Mentioned both ways: it was requested, so it is kept.
+    assert.deepEqual(read("needs housing. She doesn't need housing help right now").needCategoryIds, [4]);
+    // The refused service never becomes a matched term.
+    assert.equal(read("doesn't need housing but needs a job").reasons.has(4), false);
+  });
+
+  test('wording that is not a refusal by the participant is left alone', () => {
+    assert.deepEqual(read('was refused housing by a landlord').needCategoryIds, [4]);
+    assert.deepEqual(read('she is without housing').needCategoryIds, [4]);
+    assert.deepEqual(read('needs housing').notes, []);
+  });
+
+  test('the version changes with the rules', () => {
+    assert.equal(createRuleBasedInterpreter().version, 'interpret-rules-v2');
   });
 
   test('same text and categories give the same proposal', () => {
@@ -116,7 +209,7 @@ describe('POST /api/gpme/interpret', () => {
     assert.equal(res.status, 200);
     assert.equal(res.headers['cache-control'], 'no-store');
     assert.equal(res.body.status, 'INTERPRETED');
-    assert.equal(res.body.interpreterVersion, 'interpret-rules-v1');
+    assert.equal(res.body.interpreterVersion, 'interpret-rules-v2');
     assert.deepEqual(res.body.ageRange, { min: 20, max: 20 });
     assert.equal(res.body.participantZip, '11101');
     assert.equal(res.body.needs.length, 1);
@@ -148,7 +241,7 @@ describe('POST /api/gpme/interpret', () => {
 
   test('rejects anything but a bounded text field', async () => {
     const { app } = setup();
-    for (const body of [{}, { text: '' }, { text: '   ' }, { text: 5 }, { text: 'x'.repeat(401) }]) {
+    for (const body of [{}, { text: '' }, { text: '   ' }, { text: 5 }, { text: 'x'.repeat(501) }]) {
       const res = await request(app).post('/api/gpme/interpret').send(body);
       assert.equal(res.status, 400, JSON.stringify(body).slice(0, 40));
       assert.equal(res.body.code, 'INVALID_REQUEST');
@@ -157,6 +250,23 @@ describe('POST /api/gpme/interpret', () => {
     assert.equal(extra.status, 400);
     assert.equal(extra.body.code, 'UNEXPECTED_FIELD');
     assert.ok(!JSON.stringify(extra.body).includes('participantName'));
+  });
+
+  test('the limit is 500 characters on the server and in the page, and agrees', async () => {
+    const { app } = setup();
+    const ok = await request(app).post('/api/gpme/interpret').send({ text: `needs a job ${'x'.repeat(488)}` });
+    assert.equal(ok.status, 200);
+    const over = await request(app).post('/api/gpme/interpret').send({ text: `needs a job ${'x'.repeat(489)}` });
+    assert.equal(over.status, 400);
+    assert.deepEqual(over.body.fields, ['text']);
+    // 500 characters that each need a six-byte JSON escape still fit the body limit.
+    const heavy = await request(app).post('/api/gpme/interpret').send({ text: `a${'\u0001'.repeat(499)}` });
+    assert.notEqual(heavy.status, 413);
+    assert.equal(heavy.status, 200);
+    const html = readFileSync(new URL('../public/referral/index.html', import.meta.url), 'utf8');
+    assert.match(html, /id="describe"[^>]*maxlength="500"/);
+    assert.equal(MAX_DESCRIPTION_CHARS, 500);
+    assert.equal(MAX_SERVER_DESCRIPTION_CHARS, MAX_DESCRIPTION_CHARS);
   });
 
   test('refuses query parameters and unauthenticated callers', async () => {
@@ -204,6 +314,107 @@ describe('POST /api/gpme/interpret', () => {
   });
 });
 
+describe('replaceable interpreter output is validated before it crosses the boundary', () => {
+  const GOOD = {
+    needCategoryIds: [3], reasons: new Map([[3, ['job']]]), ageRange: { min: 18, max: 24 }, participantZip: '11101', notes: [],
+  };
+  const run = async (output, { version = 'test-interpreter', store = createMemoryReferralStore(syntheticSeed()) } = {}) => {
+    const logged = [];
+    const service = createGpmeService({
+      store, interpreter: { version, interpret: async () => output }, logFailure: (err) => logged.push(err.message),
+    });
+    return { out: await service.interpret(DEV_USER_ID, { text: 'anything' }), logged };
+  };
+
+  test('well-formed output passes unchanged', async () => {
+    const { out } = await run(GOOD);
+    assert.equal(out.status, 'INTERPRETED');
+    assert.deepEqual(out.needs.map((n) => n.needCategoryId), [3]);
+    assert.deepEqual(out.ageRange, { min: 18, max: 24 });
+    assert.equal(out.participantZip, '11101');
+  });
+
+  test('anything unexpected is a technical failure, and nothing from it is returned', async () => {
+    const bad = [
+      ['unknown id', { ...GOOD, needCategoryIds: [999] }],
+      ['inactive category', { ...GOOD, needCategoryIds: [3, 6] }],
+      ['duplicate ids', { ...GOOD, needCategoryIds: [3, 3] }],
+      ['non-integer id', { ...GOOD, needCategoryIds: ['3'] }],
+      ['prose in place of ids', { ...GOOD, needCategoryIds: 'Employment' }],
+      ['extra key', { ...GOOD, summary: 'Maria Synthetic needs a job' }],
+      ['age as text', { ...GOOD, ageRange: '18 to 24' }],
+      ['age with an extra key', { ...GOOD, ageRange: { min: 18, max: 24, label: 'adult' } }],
+      ['age out of bounds', { ...GOOD, ageRange: { min: 18, max: 500 } }],
+      ['age reversed', { ...GOOD, ageRange: { min: 30, max: 20 } }],
+      ['age not whole', { ...GOOD, ageRange: { min: 1.5, max: 4 } }],
+      ['four-digit zip', { ...GOOD, participantZip: '1110' }],
+      ['zip with text', { ...GOOD, participantZip: '11101 Main St' }],
+      ['zip as number', { ...GOOD, participantZip: 11101 }],
+      ['unknown note', { ...GOOD, notes: ['Call Maria at 555-0100'] }],
+      ['notes not a list', { ...GOOD, notes: 'MULTIPLE_AGES' }],
+      ['sentence as a matched term', { ...GOOD, reasons: new Map([[3, ['Maria Synthetic needs a job at 555-0100']]]) }],
+      ['reasons for an id not proposed', { ...GOOD, reasons: new Map([[4, ['housing']]]) }],
+      ['reasons as a plain object', { ...GOOD, reasons: { 3: ['job'] } }],
+      ['not an object', 'needs a job'],
+      ['null', null],
+      ['array', [3]],
+    ];
+    for (const [label, output] of bad) {
+      const { out, logged } = await run(output);
+      assert.deepEqual(out, { status: 'UNABLE_TO_INTERPRET' }, label);
+      assert.equal(logged.length, 1, label);
+      assert.ok(!/maria|555/i.test(logged[0]), label);
+    }
+  });
+
+  test('a bad version label is refused too', async () => {
+    for (const version of ['', 'has spaces and prose', 'x'.repeat(65), null]) {
+      const { out } = await run(GOOD, { version });
+      assert.deepEqual(out, { status: 'UNABLE_TO_INTERPRET' }, String(version));
+    }
+  });
+
+  test('a category retired after the list was read is refused, not passed along', async () => {
+    const store = createMemoryReferralStore(syntheticSeed());
+    const { out } = await run({ ...GOOD, needCategoryIds: [3], reasons: new Map() }, {
+      store: { ...store, listNeedCategories: async () => [{ needCategoryId: 3, name: 'Employment', lifecycleStatus: 'DISCONTINUED' }] },
+    });
+    assert.deepEqual(out, { status: 'UNABLE_TO_INTERPRET' });
+  });
+
+  test('only the approved shape comes out of the service', async () => {
+    const { out } = await run({ ...GOOD, notes: ['NOT_REQUESTED', 'NOT_REQUESTED'] });
+    assert.deepEqual(out.notes, ['NOT_REQUESTED']);
+    assert.deepEqual(Object.keys(out).sort(), ['ageRange', 'interpreterVersion', 'needs', 'notes', 'participantZip', 'status']);
+  });
+
+  test('a refused service never reaches the worker as a proposed need, end to end', async () => {
+    const { app } = setup();
+    const res = await request(app).post('/api/gpme/interpret').send({ text: "She doesn't need housing but needs a job" });
+    assert.equal(res.status, 200);
+    assert.deepEqual(res.body.needs.map((n) => n.name), ['Employment (sample)']);
+    const refusedOnly = await request(app).post('/api/gpme/interpret').send({ text: 'Not interested in housing' });
+    assert.deepEqual(refusedOnly.body.needs, []);
+    assert.deepEqual(refusedOnly.body.notes, ['NOT_REQUESTED']);
+  });
+});
+
+describe('language is not a matching criterion (PRD 8.2)', () => {
+  test('neither route accepts a language, and Programs are never excluded by one', async () => {
+    const { app } = setup();
+    for (const path of ['/api/gpme/match', '/api/gpme/interpret']) {
+      const body = path.endsWith('match') ? { needCategoryIds: [3], preferredLanguage: 'es' } : { text: 'a job', preferredLanguage: 'es' };
+      const res = await request(app).post(path).send(body);
+      assert.equal(res.status, 400, path);
+      assert.equal(res.body.code, 'UNEXPECTED_FIELD', path);
+    }
+    const src = (name) => readFileSync(new URL(`../src/gpme/${name}`, import.meta.url), 'utf8');
+    for (const file of ['matchPrograms.js', 'validateMatchRequest.js', 'programFacts.js', 'interpretation/ruleBasedInterpreter.js']) {
+      assert.ok(!/language/i.test(src(file).replace(/\/\/.*$/gm, '')), file);
+    }
+  });
+});
+
 describe('confirm, then match: the full flow with GPME unchanged', () => {
   test('a corrected proposal is what gets matched', async () => {
     const { app } = setup();
@@ -244,7 +455,9 @@ describe('screen logic for the describe step', () => {
 
   test('validates the description before sending', () => {
     assert.equal(validateDescription(''), DESCRIBE_MESSAGES.EMPTY);
-    assert.equal(validateDescription('x'.repeat(401)), DESCRIBE_MESSAGES.TOO_LONG);
+    assert.equal(validateDescription('x'.repeat(501)), DESCRIBE_MESSAGES.TOO_LONG);
+    assert.equal(validateDescription('x'.repeat(500)), null);
+    assert.match(DESCRIBE_MESSAGES.TOO_LONG, /500/);
     assert.equal(validateDescription('needs a job'), null);
   });
 
@@ -277,6 +490,12 @@ describe('screen logic for the describe step', () => {
   test('ambiguity notes are shown to the worker', () => {
     const r = interpretInterpretResponse(body({ notes: ['MULTIPLE_AGES'] }));
     assert.deepEqual(r.notes, [DESCRIBE_MESSAGES.NOTES.MULTIPLE_AGES]);
+  });
+
+  test('a note for a service that was not wanted is shown, and names no service', () => {
+    const r = interpretInterpretResponse(body({ notes: ['NOT_REQUESTED'] }));
+    assert.deepEqual(r.notes, [DESCRIBE_MESSAGES.NOTES.NOT_REQUESTED]);
+    assert.ok(DESCRIBE_MESSAGES.NOTES.NOT_REQUESTED.length > 0);
   });
 });
 

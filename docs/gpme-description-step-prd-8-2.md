@@ -16,7 +16,7 @@ participant ZIP. Anything else a caller sends is ignored or refused
 
 ## What the new step adds
 
-A worker may type up to 400 characters describing the need. That text is a
+A worker may type up to 500 characters describing the need. That text is a
 fourth thing the application receives from the worker. It is not a
 matching input:
 
@@ -51,3 +51,13 @@ The free text is used before matching, to pre-fill those inputs.
    page is on this branch.
 
 Decision, date and approver: **none recorded.**
+
+## Hardening pass (interpreter `interpret-rules-v2`)
+
+- No age range is assumed from words like "teen" or "elderly"; the worker enters it. Two or more ages ("ages 6 and 9") propose none; "and" makes a range only after "between".
+- A ZIP is read only straight after ZIP wording ("ZIP 11101"), never from a bare five-digit number.
+- A plainly refused service ("doesn't need housing") is not proposed. This is a short list of refusal phrases inside one clause, not a negation engine.
+- Everyday wording is attached to a category by its `needCategoryId`, so renaming a category does not change what is recognized. A category with no attachment is read by its current name words only. Attaching wording to QCH's real categories needs their ids and is a QCH / Program Management decision.
+- The server validates the whole interpreter output (`validateInterpretation.js`) before the worker sees it: active category ids, whole-number ages 0 to 120, a five-digit ZIP, fixed note codes, short vocabulary terms. Anything else makes the whole interpretation fail as UNABLE_TO_INTERPRET.
+- The description limit is 500 characters on the server, in the page, and in the screen logic.
+- Language is not a matching criterion, so a language mismatch never excludes a Program. Showing a Program's available languages is not part of this pass.
