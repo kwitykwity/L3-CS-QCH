@@ -8,6 +8,8 @@ early. The real run repeats every check on the freeze candidate before
 Nov. 2; see [Re-run on the freeze candidate](#re-run-on-the-freeze-candidate).
 
 The freeze decision belongs to Christina. This page gives her the evidence.
+It records a practice audit of `36f6e82` only. It does not approve the
+freeze for that revision or any later one.
 
 How findings are classified (from the Task V card):
 
@@ -16,6 +18,13 @@ How findings are classified (from the Task V card):
 - **HANDOFF / QCH IT DEPENDENCY**: waits on QCH or QCH IT, or belongs to
   handoff. Documented, not guessed.
 - **POST-CAPSTONE / P1**: real, but can wait.
+
+One more label is used for client-confirmed requirements:
+
+- **PENDING SCOPE / RECONCILIATION DECISION**: QCH confirmed it, and it is
+  not built. It cannot be treated as deferred until a decision records the
+  agreed scope, the approver and the date. This audit can recommend
+  deferral; it cannot decide it.
 
 ## Findings
 
@@ -28,12 +37,15 @@ How findings are classified (from the Task V card):
 | 5 | Home page link says "Make a Direct Referral", but the page also offers guided matching | **DEMO FIX** | Rename the link, for example "Make a referral" |
 | 6 | No way to set a Program's notification email in the app, and no card for it. A Program created in the app gets no recipient, so its new-referral emails fail with `NO_RECIPIENT`. The referral itself is still saved (PRD 11.4) | **HANDOFF / QCH IT DEPENDENCY** | Add a card. Recipients could also come from the initial data load, which depends on the storage decision |
 | 7 | Production pieces that wait on QCH IT: production data store (Azure SQL or SharePoint), Entra sign-in, Microsoft Graph sender, hosting, monitoring, repeatable deployment, and one backup and restore test (PRD 23). End-to-end tests run on the in-memory store, not "across Azure SQL" as PRD 17.2 says | **HANDOFF / QCH IT DEPENDENCY** | Already tracked in [pending-qch-it-decisions.md](pending-qch-it-decisions.md) decisions 1, 2, 5 and 6 |
-| 8 | Requests QCH confirmed on Oct 26 are not built: language of service, availability and contact in Find a Program, "Important Information About Our Program", and two ways to list multiple locations | **POST-CAPSTONE / P1** (proposed) | The team decides in the Oct 30 PRD revision which, if any, fit before the freeze (PRD 20.3). Register rows R7, R8, R12 to R14 |
+| 8 | Requests QCH confirmed on Oct 26 are not built: language of service, availability and contact in Find a Program, "Important Information About Our Program", and two ways to list multiple locations | **PENDING SCOPE / RECONCILIATION DECISION** | Kyle confirmed these on Oct 26, so they are not deferred until a decision records the agreed scope, approver and date. Recommendation only: decide in the Oct 30 PRD revision which, if any, fit before the freeze (PRD 20.3, 20.4). Register rows R7, R8, R12 to R14 |
 | 9 | A report request with a bad period answers "The referral is not valid." Staff do not see it; the Reporting Center shows its own messages | **POST-CAPSTONE / P1** | Give reporting its own error wording |
 | 10 | Three handoff docs described work as not done that had already merged: the README "Not built yet" list (Reporting Center screens), [pending-qch-it-decisions.md](pending-qch-it-decisions.md) (Reporting screens, Task C) and [security-regression.md](security-regression.md) (Task E #42, Task C #44) | Fixed in this PR | None |
 
-Only finding 1 is a blocker, and what it blocks is the missing decision,
-not necessarily the missing code.
+In this practice run, finding 1 is the only item classed BLOCKS FREEZE,
+and what it blocks is the missing decision, not necessarily the missing
+code. That does not mean the other open items are settled: finding 8 still
+needs a recorded scope decision, findings 2 and 3 must merge before the
+freeze, and every finding is re-checked on the freeze candidate.
 
 ## Checks
 
