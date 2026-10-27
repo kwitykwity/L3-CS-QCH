@@ -76,14 +76,14 @@ and an active user with no grants.
 
 ## Not covered here, and why
 
-- **Notifications.** On `main` the notification module is not called by any
-  route. Wiring it in is PR #42 (Task E), which carries its own security
-  tests: the recipient is server-derived and never returned, a request
-  cannot supply one, and no participant data reaches the email, the
-  delivery row or the logs. Once #42 merges, its routes are unchanged, so
+- **Notifications.** Referral creation starts the notification module after
+  each referral commits (Task E, merged in #42). Its security tests live in
+  `test/notificationWiring.test.js`: the recipient is server-derived and
+  never returned, a request cannot supply one, and no participant data
+  reaches the email, the delivery row or the logs. It adds no routes, so
   this inventory stays complete.
-- **Open pull requests that add routes** (for example Task C #44, Task D
-  #43). The inventory test fails until each new route that changes data
+- **Open pull requests that add routes** (for example Task D #43, which
+  adds `POST /api/gpme/interpret`). The inventory test fails until each new route that changes data
   gets a row here, so none can merge unaccounted for.
 - **Security headers.** The application sets `Cache-Control: no-store` on
   every API response and hides `X-Powered-By`, but no other security
