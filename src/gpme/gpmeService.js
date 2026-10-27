@@ -27,6 +27,7 @@ import { validateInterpretRequest } from './interpretation/validateInterpretRequ
 import { validateInterpretation, validateInterpreterVersion } from './interpretation/validateInterpretation.js';
 import { readMatchingFacts } from './programFacts.js';
 import { readCurrentProgramInformation } from '../programs/currentProgramInformation.js';
+import { attachProgramInformation } from './programInformationForResults.js';
 import { matchingFactsOf } from '../programs/validateMatchingChange.js';
 
 function compareText(a, b) {
@@ -188,12 +189,16 @@ export function createGpmeService({
         throw gpmeErrors.invalidRequest(['needCategoryIds']);
       }
 
+      let result;
       try {
         candidates = await store.listMatchablePrograms();
-        return matchPrograms(input, { candidates, needCategories, ruleVersion });
+        result = matchPrograms(input, { candidates, needCategories, ruleVersion });
       } catch (err) {
         return unableToMatch(err);
       }
+      // Descriptive current Program information (Task X), attached after
+      // matching so it can never add, remove, or reorder a result.
+      return attachProgramInformation(store, result, { logFailure });
     },
   };
 }

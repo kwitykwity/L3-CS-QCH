@@ -23,8 +23,8 @@ import { interpretAffiliationSave } from './affiliation.js';
 import { SIZES, loadSize, saveSize } from './textSize.js';
 import {
   DESCRIBE_MESSAGES, GUIDED_FIELD_MESSAGES, GUIDED_MESSAGES, firstGuidedError, interpretCategoriesResponse,
-  interpretInterpretResponse, interpretMatchResponse, notCheckedNote, toMatchRequest, validateDescription,
-  validateGuidedForm,
+  interpretInterpretResponse, interpretMatchResponse, notCheckedNote, programInformationOf, toMatchRequest,
+  validateDescription, validateGuidedForm,
 } from './guided.js';
 
 const $ = (id) => document.getElementById(id);
@@ -540,8 +540,48 @@ function renderMatchItem(item) {
   choose.textContent = `Choose ${item.name}`;
   choose.addEventListener('click', () => chooseMatch(item));
 
-  li.append(head, whyLabel, why, choose);
+  li.append(head, whyLabel, why, renderProgramInformation(item), choose);
   return li;
+}
+
+// Current Program information (Task X): availability, wait list, primary
+// contact and similar, as maintained in Program Management. Informational
+// only: it never hides a result, and choosing the Program in QCH Connect
+// stays the referral action. textContent only; nothing is stored.
+function renderProgramInformation(item) {
+  const box = document.createElement('div');
+  box.className = 'match__info';
+  const headingId = `info-${item.programId}`;
+  const heading = document.createElement('p');
+  heading.className = 'match__why-label';
+  heading.id = headingId;
+  heading.textContent = GUIDED_MESSAGES.PROGRAM_INFO_HEADING;
+  box.append(heading);
+
+  const info = programInformationOf(item);
+  if (info === null || info.length === 0) {
+    const note = document.createElement('p');
+    note.className = 'match__info-note';
+    note.textContent = info === null ? GUIDED_MESSAGES.PROGRAM_INFO_UNAVAILABLE : GUIDED_MESSAGES.PROGRAM_INFO_NONE;
+    box.append(note);
+    return box;
+  }
+
+  const list = document.createElement('dl');
+  list.className = 'match__info-list';
+  list.setAttribute('aria-labelledby', headingId);
+  for (const field of info) {
+    const term = document.createElement('dt');
+    term.textContent = field.label;
+    const value = document.createElement('dd');
+    value.textContent = field.value ?? GUIDED_MESSAGES.PROGRAM_INFO_NOT_ON_FILE;
+    list.append(term, value);
+  }
+  const referFirst = document.createElement('p');
+  referFirst.className = 'match__info-note';
+  referFirst.textContent = GUIDED_MESSAGES.PROGRAM_INFO_REFER_FIRST;
+  box.append(list, referFirst);
+  return box;
 }
 
 function renderResults(result) {

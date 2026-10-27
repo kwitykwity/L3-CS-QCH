@@ -38,7 +38,27 @@ export const GUIDED_MESSAGES = Object.freeze({
     + 'Send again, or send it to the same Program as a Direct Referral.',
   ORDER_NOTE: 'Listed by Department, then Program name. The order does not rank them.',
   SUGGESTION_NOTE: 'These are suggestions to help you choose. They are not an eligibility decision. You choose the Program, and the receiving Program decides.',
+  // Current Program information shown with each result (Task X).
+  PROGRAM_INFO_HEADING: 'Current Program information:',
+  PROGRAM_INFO_NOT_ON_FILE: 'Not on file',
+  PROGRAM_INFO_NONE: 'No current availability or contact information on file. Confirm with the Program.',
+  PROGRAM_INFO_UNAVAILABLE: 'Current Program information could not be loaded. Confirm with the Program.',
+  PROGRAM_INFO_REFER_FIRST:
+    'Send the referral through QCH Connect first. Use any Program contact shown for questions.',
 });
+
+// Current Program information on a match result (Task X): an array of
+// { label, value } where value null means not on file, or null when the
+// server could not load it. Anything malformed is treated as not loaded,
+// never as "available". Display only; never stored or put in a URL.
+export function programInformationOf(item) {
+  const info = item?.programInformation;
+  if (!Array.isArray(info)) return null;
+  const valid = info.every((field) => field && typeof field === 'object'
+    && typeof field.label === 'string' && field.label.trim() !== ''
+    && (field.value === null || typeof field.value === 'string'));
+  return valid ? info : null;
+}
 
 // Describe-the-need step (Task D). The description only PROPOSES answers
 // for the worker to check; matching still runs on the confirmed need

@@ -467,7 +467,7 @@ describe('GPME explanations and edges', () => {
   test('results return minimum-necessary Program fields only', async () => {
     const result = await serviceFor().match(100, T2_INPUT);
     assert.deepEqual(Object.keys(result.plausible[0]).sort(),
-      ['departmentId', 'departmentName', 'explanations', 'name', 'programId', 'site']);
+      ['departmentId', 'departmentName', 'explanations', 'name', 'programId', 'programInformation', 'site']);
     assert.deepEqual(Object.keys(result).sort(),
       ['notCheckedForNeedCount', 'plausible', 'possible', 'ruleVersion', 'status']);
   });
