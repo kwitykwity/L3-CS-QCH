@@ -412,15 +412,19 @@ to provide, the handoff checklist, and dependency licenses.
 
 Built and tested on in-memory stores with synthetic data: Direct
 Referrals, receiving (the received list and referral screens: respond,
-record and correct outcomes, correct decisions; merged in #37), Guided
-Program Matching, Program Management
-(Programs, matching facts, fields, values, Departments), the report APIs
-(Total Referrals, Timing Metrics, Referral activity), permission checks by
-grant, and the audit trail. The schema design and migrations are in `db/`.
+record and correct outcomes, correct decisions; merged in #37), Referrals
+I sent (Task L, #49), Guided Program Matching, Program Management
+(Programs, matching facts, fields, values, Departments, current Program
+information; Task C, #44), the report APIs (Total Referrals, Timing
+Metrics, Referral activity) and the Reporting Center screens (Task B, #41;
+Task M), new-referral notifications started after each referral commits
+(Task E, #42; simulated outbox), permission checks by grant, and the audit
+trail. The schema design and migrations are in `db/`.
 
-**Not built yet:** a production data store, Entra sign-in, screens to give
-or remove permissions, the Microsoft Graph sender (notifications run on a
-simulated outbox in development),
-reporting screens, and any Azure resources. Some of these wait on QCH IT
-decisions; [`docs/pending-qch-it-decisions.md`](docs/pending-qch-it-decisions.md)
+**Not built yet:** a production data store, Entra sign-in, demo sign-in
+(Task O, in progress), screens to give or remove permissions, a way to set
+a Program's notification email, the Microsoft Graph sender (notifications
+run on a simulated outbox in development), and any Azure resources. Some
+of these wait on QCH IT decisions;
+[`docs/pending-qch-it-decisions.md`](docs/pending-qch-it-decisions.md)
 says which. Any data used for demos must be synthetic.
