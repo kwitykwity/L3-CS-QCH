@@ -59,6 +59,10 @@ a { color: var(--primary); }
 
 .skip-link { position: absolute; left: -9999px; }
 .skip-link:focus { left: 1rem; top: 1rem; background: var(--card); padding: 0.5rem 1rem; z-index: 10; }
+/* The skip link target: Safari only moves keyboard focus to a focusable
+   target, so <main> has tabindex="-1". The next Tab shows a ring; the whole
+   report needs no outline or highlight. */
+main[tabindex="-1"]:focus { outline: none; background-color: transparent; }
 
 .topbar {
   display: flex;

@@ -55,6 +55,17 @@ describe('every page', () => {
         assert.equal(tags(html, 'h1').length, 1);
       });
 
+      test('a skip link lands on a <main> that can take focus (Safari; Task R)', () => {
+        // Safari moves keyboard focus only to a focusable target. Without
+        // tabindex="-1" the next Tab after the skip link went back to the
+        // header (heard in the VoiceOver run, docs/screen-reader-check.md A3).
+        if (!/class="skip-link"/.test(html)) return;
+        assert.match(html, /<a class="skip-link" href="#main">/);
+        const [main] = tags(html, 'main');
+        assert.match(main, /\bid="main"/);
+        assert.match(main, /\btabindex="-1"/);
+      });
+
       test('heading levels never skip (h2 before h3, ...)', () => {
         const levels = [...html.matchAll(/<h([1-6])\b/g)].map((m) => Number(m[1]));
         for (let i = 1; i < levels.length; i += 1) {

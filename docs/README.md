@@ -43,6 +43,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 | [demo-environment.md](demo-environment.md) | Starting, resetting and safety-checking the synthetic demo for Nov 9 (Task S) |
 | [regression-coverage.md](regression-coverage.md) | Accessibility and end-to-end regression coverage, and the manual keyboard checklist |
 | [screen-reader-check.md](screen-reader-check.md) | VoiceOver script and record sheet: labels, required fields, errors, announcements, dialogs, focus |
+| [demo-rehearsal.md](demo-rehearsal.md) | Demo dress rehearsal: one connected synthetic journey through every feature, its record, and what it found (Task R) |
 
 Elsewhere in the repository:
 
