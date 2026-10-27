@@ -119,17 +119,21 @@ Reporting Center, **Monthly, All of QCH** (the default):
 - **By Department:**
   - Youth Services: made 2.
   - Adult Services: received 2.
-- **Times** show "Under 1 minute", because everything happened during the demo.
+- **Times** (time to first response, time to recorded service) are real
+  elapsed times between the steps during the demo, so they depend on the
+  presenter's pace: often "Under 1 minute" or a few minutes. Any value is
+  correct. A different time does **not** mean the server wasn't reset.
 - The page says "Incomplete period". That is correct: the month isn't over.
 
-If the numbers differ, the server wasn't reset before the demo. Reset and
-repeat, or explain that the numbers include earlier practice referrals.
+If the **counts** differ (total, accepted, not appropriate, resulted), the
+server wasn't reset before the demo. Reset and repeat, or explain that the
+counts include earlier practice referrals.
 
 ## 6. If something fails
 
 | Problem | Do this |
 | --- | --- |
-| Find a Program shows "Unable to perform matching right now" | That is the designed fallback (PRD 8.8). Click **Use Direct Referral** and continue at step 12 |
+| Find a Program shows "Unable to perform matching right now. This is a technical problem, not a result." (step 3 or 4) | That is the designed fallback (PRD 8.8); say so. Click **Use Direct Referral**, tick **Housing Help Desk (sample)**, **Continue to referral details**, then do **step 5** as written from "Participant name". It is still Referral ID 1, and steps 6 to 16 and section 5 stay exactly the same. The only difference is that the referral is saved as a Direct Referral instead of Find a Program, which the Reporting counts don't show. If matching is still down at step 17, skip step 17 and say the Program change applies to the next search once matching is back |
 | The browser asks "Leave page?" when you change pages | That's the unsaved-work protection (PRD 7.6). Choose **Leave** |
 | A send says "Referral not confirmed !" | Click **Check whether it was received**. It confirms without sending twice. Never press Send again until it answers |
 | A list or report won't load | Click the page's **Try again** or **Reload** button. If it still fails, reset (section 1) and resume from step 2 |
