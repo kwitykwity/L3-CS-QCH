@@ -21,6 +21,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 
 | File | What it covers |
 | --- | --- |
+| [demo-runbook.md](demo-runbook.md) | **Nov. 9 demo runbook**: setup, who plays which role, the exact journey and what to expect, reset, fallbacks, and what must not be presented as done (Task T) |
 | [pending-qch-it-decisions.md](pending-qch-it-decisions.md) | **Pending QCH IT Architecture Decisions**, and which unfinished work is an engineering gap versus an outside dependency |
 | [architecture.md](architecture.md) | How the application is built today: where it runs, folders, request flow, permissions, API, screens, tests |
 | [data-dictionary.md](data-dictionary.md) | Every table and column in the current schema design |
