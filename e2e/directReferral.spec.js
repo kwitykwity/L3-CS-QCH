@@ -249,3 +249,24 @@ test.describe('automatic accessibility scan, WCAG 2.2 AA rules (axe)', () => {
     });
   }
 });
+
+test.describe('signed out (Task R; PRD 16.1 fail closed)', () => {
+  test('New Referral says the person is not signed in, instead of "reload to try again"', async ({ page }) => {
+    // The synthetic server always signs in its one identity, so answer the
+    // two first-load requests the way production does without sign-in.
+    const notSignedIn = { status: 401, contentType: 'application/json',
+      body: JSON.stringify({ error: 'Sign-in is required.', code: 'NOT_AUTHENTICATED' }) };
+    await page.route('**/api/me/affiliation', (route) => route.fulfill(notSignedIn));
+    await page.route('**/api/programs', (route) => route.fulfill(notSignedIn));
+    await page.goto('/referral/');
+    await expect(page.locator('#affiliation-loading')).toHaveText('You are not signed in, so nothing can be shown. Sign in, then reload this page.');
+    await page.locator('#path-direct').click();
+    await expect(page.locator('#programs-loading')).toHaveText('You are not signed in, so nothing can be shown. Sign in, then reload this page.');
+  });
+
+  test('a server error still says to reload', async ({ page }) => {
+    await page.route('**/api/me/affiliation', (route) => route.fulfill({ status: 500, contentType: 'application/json', body: '{}' }));
+    await page.goto('/referral/');
+    await expect(page.locator('#affiliation-loading')).toHaveText('Your Program affiliation could not be loaded. Reload the page to try again.');
+  });
+});

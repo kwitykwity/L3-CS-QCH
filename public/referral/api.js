@@ -12,7 +12,7 @@
 //   POST /api/gpme/match  { needCategoryIds, ageRange?, participantZip? }
 //                                              -> RESULTS | NO_PLAUSIBLE_MATCH,
 //                                                 503 UNABLE_TO_MATCH
-//   POST /api/gpme/interpret  { text }         -> INTERPRETED (proposed criteria),
+//   POST /api/gpme/interpret  { text }         -> INTERPRETED or NOTHING_RECOGNIZED,
 //                                                 503 UNABLE_TO_INTERPRET
 //   A GPME-assisted referral adds `gpme` (the same matching answers) to the
 //   POST /api/referrals body.

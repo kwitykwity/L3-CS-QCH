@@ -122,8 +122,9 @@ details are in the README sections and the header comment of each
 | `/` | Start page with links and a backend status | Temporary; to be replaced by navigation (PRD 13.5) |
 | `/referral/` | Choose a Program (guided matching or Direct Referral) and send a referral | Built |
 | `/program-management/` | Program information and lifecycle, matching facts, fields and options, field reuse and replacement, Departments, creating and moving Programs | Built |
+| `/sent/` | Referrals I sent: the creator's own referrals and each one's Response, Decision and Service outcome, read-only | Built (Trello Task L) |
 | `/receiving/` | Received referrals, respond, record and correct outcomes | Built (Trello Task A, merged in #37 as e3fd11e) |
-| Reports | | Not built (Trello Task B) |
+| `/reporting/` | Reporting Center: aggregate counts, rates and timing by period and scope | Built (Trello Task B, merged in #41) |
 | Permission administration | | Not built |
 
 Every page supports keyboard-only use, S/M/L/XL text sizes and light and
@@ -141,3 +142,31 @@ dark themes; see [regression-coverage.md](regression-coverage.md).
 
 What the tests cannot show yet: anything about the production store, Entra
 sign-in, Microsoft Graph, or QCH's hosting.
+
+## PR 59: interpretation contract alignment
+
+Rob's review clarification, supplied by Christina, confirms that the
+three-state interpretation contract was already settled. This change aligns
+the implementation with that contract; it does not introduce a new product
+decision.
+
+- HTTP 200 `INTERPRETED`: interpretation succeeded and produced at least one
+  usable approved concept: a need category, age information, or ZIP.
+- HTTP 200 `NOTHING_RECOGNIZED`: interpretation succeeded but produced no
+  usable approved concepts. Advisory notes alone do not count as concepts.
+- HTTP 503 `UNABLE_TO_INTERPRET`: interpretation failed, including invalid
+  output from a replaceable interpreter.
+
+Successful responses retain the existing proposal fields: `interpreterVersion`,
+`needs`, `ageRange`, `participantZip`, and `notes`. Nothing recognized is shown
+as nothing understood, with manual answers and Direct Referral available.
+It is not a GPME no-match result: matching has not evaluated employee-confirmed
+criteria at that point. A recognized age or ZIP without a need remains
+reviewable, but the employee must select a need before matching.
+
+The age clarification supersedes the earlier proposed `min < max` restriction.
+Exact ages and ranges are accepted. An exact age of 17 remains
+`{ min: 17, max: 17 }`, displayed as "Age: 17"; it is not broadened into a
+guessed range. Employees review and may correct the interpreted information
+before choosing Find Programs. Program eligibility and existing matching
+overlap behavior are unchanged.

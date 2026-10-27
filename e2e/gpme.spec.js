@@ -805,3 +805,68 @@ test.describe('describe what the participant needs', () => {
     await expectNoAxeViolations(page);
   });
 });
+
+test.describe('PR 59 three-state contract and age review', () => {
+  for (const example of [
+    { text: 'age 17, needs a job', min: '17', max: '17', label: 'Age: 17' },
+    { text: 'ages 18 to 24, needs a job', min: '18', max: '24', label: 'Age range: 18 to 24' },
+  ]) {
+    test(`employee reviews ${example.label} before matching, without guessed expansion`, async ({ page }) => {
+      const posts = recordMatchPosts(page);
+      await openGuided(page);
+      await page.locator('#describe').fill(example.text);
+      const interpreted = page.waitForResponse((r) =>
+        r.request().method() === 'POST'
+        && new URL(r.url()).pathname === '/api/gpme/interpret');
+      await page.locator('#describe-go').click();
+      const response = await interpreted;
+      expect(response.status()).toBe(200);
+      expect((await response.json()).status).toBe('INTERPRETED');
+
+      await expect(page.locator('#understood')).toBeVisible();
+      await expect(page.locator('#understood-list')).toContainText(example.label);
+      await expect(page.locator('#ageMin')).toHaveValue(example.min);
+      await expect(page.locator('#ageMax')).toHaveValue(example.max);
+      expect(posts).toHaveLength(0);
+      await expect(page.locator('#match-results')).toBeHidden();
+
+      const matching = page.waitForResponse((r) =>
+        r.request().method() === 'POST'
+        && new URL(r.url()).pathname === '/api/gpme/match');
+      await findPrograms(page);
+      expect((await matching).status()).toBe(200);
+      expect(posts).toHaveLength(1);
+      expect(posts[0].ageRange).toEqual({
+        min: Number(example.min), max: Number(example.max),
+      });
+      await expect(page.locator('#ageMin')).toHaveAttribute('aria-invalid', 'false');
+    });
+  }
+
+  test('nothing recognized is a successful interpretation, not a technical failure or a matching result', async ({ page }) => {
+    const posts = recordMatchPosts(page);
+    await openGuided(page);
+    await page.locator('#describe').fill('please help');
+    const interpreted = page.waitForResponse((r) =>
+      r.request().method() === 'POST'
+      && new URL(r.url()).pathname === '/api/gpme/interpret');
+    await page.locator('#describe-go').click();
+    const response = await interpreted;
+    expect(response.status()).toBe(200);
+    expect((await response.json()).status).toBe('NOTHING_RECOGNIZED');
+
+    await expect(page.locator('#understood-message')).toContainText('Nothing was filled in');
+    await expect(page.locator('#understood-message')).not.toContainText('technical problem');
+    await expect(page.locator('#understood-message')).not.toContainText('No plausible match');
+    expect(posts).toHaveLength(0);
+    await expect(page.locator('#match-results')).toBeHidden();
+
+    // Matching happens only after the employee supplies and confirms answers.
+    await need(page, 'Childcare (sample)').check();
+    await page.locator('#ageMin').fill('40');
+    await page.locator('#ageMax').fill('45');
+    await findPrograms(page);
+    await expect(matchMessage(page)).toContainText('No plausible match identified');
+    expect(posts).toHaveLength(1);
+  });
+});
