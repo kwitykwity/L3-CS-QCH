@@ -126,6 +126,12 @@ const ROUTES = [
 
   // Program maintenance (card 14, PRs #21, #22, #24, #25)
   ...programRoutes(),
+
+  // Permission administration (Task Y): ADMINISTER_PERMISSIONS only
+  { method: 'get', path: '/api/permissions/overview' },
+  { method: 'get', path: '/api/permissions/users/:userId/grants' },
+  { method: 'post', path: '/api/permissions/users/:userId/grants', body: () => ({ permission: 'MANAGE_PROGRAM', programId: 11 }) },
+  { method: 'post', path: '/api/permissions/users/:userId/grants/:grantId/revoke', body: () => ({}) },
 ];
 
 function programRoutes() {
@@ -171,7 +177,9 @@ const fillIds = (p, ctx = {}) => p
   .replace(':programId', '11')
   .replace(':fieldId', '1')
   .replace(':optionId', '1')
-  .replace(':departmentId', '1');
+  .replace(':departmentId', '1')
+  .replace(':userId', '2')
+  .replace(':grantId', '1');
 const fill = (route, ctx) => fillIds(route.path, ctx);
 const send = (agent, route, ctx, { body, query } = {}) => {
   let req = agent[route.method](fill(route, ctx));
@@ -208,6 +216,7 @@ describe('route inventory', () => {
       'reporting/routes.js': '/api/reports',
       'gpme/routes.js': '/api/gpme',
       'affiliation/routes.js': '/api',
+      'permissions/routes.js': '/api/permissions',
     };
     const found = [];
     for (const file of files) {

@@ -377,6 +377,41 @@ field).
   `PROGRAM` audit events in the same transaction, full rollback on audit
   failure. No schema change.
 
+## Permission administration (Trello Task Y)
+
+| Method | Path (under `/api/permissions`) | Body |
+| ------ | ------------------------------- | ---- |
+| `GET`  | `/overview` | none (staff names, Programs that are not retired, what can be granted) |
+| `GET`  | `/users/:userId/grants` | none (that person's active grants) |
+| `POST` | `/users/:userId/grants` | `{ permission, programId? }` (201) |
+| `POST` | `/users/:userId/grants/:grantId/revoke` | `{}` |
+
+- **Who (PRD 3.6, 3.8):** an active user with `ADMINISTER_PERMISSIONS` as
+  an ORG-scope grant. A PROGRAM-scope copy doesn't count. DEMO grants count
+  only when demo grants are on (development and test). Checked inside the
+  transaction, so an administrator who just lost the right is refused.
+- **What can be granted:** the receiving capabilities and `MANAGE_PROGRAM`
+  for one Program, and `MANAGE_ORGANIZATION` organization-wide. The server
+  picks the scope; each permission has exactly one, so no grant can be
+  saved that the app would then ignore. `ADMINISTER_PERMISSIONS` itself is
+  never granted here: PRD 3.8 sets up administrators through a controlled,
+  documented, QCH-approved process.
+- **Team decisions to confirm with QCH:** nobody changes their own
+  permissions (add or remove); new grants only for active users (removal
+  is always allowed); only grants made here (`IN_APP`) can be removed here,
+  so DEMO and seeded grants are read-only; the screen shows staff names,
+  never email addresses.
+- **Safety:** one change at a time across the whole screen (a global hold
+  taken first), so two administrators cannot deadlock or both add the same
+  grant. A duplicate answers 409 `ALREADY_GRANTED` and a removal of a grant
+  that is already gone answers 409 `GRANT_CHANGED`, each with the current
+  list. A removal waits for any receiving action already in progress for
+  that person, then takes effect for the next one.
+- **Audit:** every add and removal writes a `USER_GRANT` audit event
+  (`GRANTED` / `REVOKED`) in the same transaction. If the audit fails,
+  nothing changes. No schema change.
+- **Screen:** `/permissions/` (linked from the start page).
+
 ## Referral activity report (card 12)
 
 `GET /api/reports/referral-activity?period=&date=&programId|departmentId`
@@ -416,10 +451,10 @@ record and correct outcomes, correct decisions; merged in #37), Guided
 Program Matching, Program Management
 (Programs, matching facts, fields, values, Departments), the report APIs
 (Total Referrals, Timing Metrics, Referral activity), permission checks by
-grant, and the audit trail. The schema design and migrations are in `db/`.
+grant, giving and removing permissions (`/permissions/`), and the audit
+trail. The schema design and migrations are in `db/`.
 
-**Not built yet:** a production data store, Entra sign-in, screens to give
-or remove permissions, the Microsoft Graph sender (notifications run on a
+**Not built yet:** a production data store, Entra sign-in, the Microsoft Graph sender (notifications run on a
 simulated outbox in development),
 reporting screens, and any Azure resources. Some of these wait on QCH IT
 decisions; [`docs/pending-qch-it-decisions.md`](docs/pending-qch-it-decisions.md)

@@ -106,7 +106,6 @@ decision above (or another QCH input) it depends on.
 | Migration-history handling and a database readiness check | External, then engineering | Decision 1 |
 | Staff sign-in through Entra ID | External, then engineering | Decision 5 |
 | Demo sign-in for non-production demos (PRD 16.1) | Engineering | Nothing |
-| Permission administration screens (grant and remove capabilities in the app, PRD 3.8) | Engineering | Nothing to build; QCH names the first administrators (policy) |
 | Microsoft Graph sender, and starting the notifier and retry timer in the hosted app | External, then engineering | Decisions 2 and 6 |
 | Managing a Program's notification email (routing) | Engineering | Nothing; Program creation says routing is set up separately, and no screen or route sets it yet |
 | Reporting screens | Engineering | Nothing (Trello Task B) |

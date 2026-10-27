@@ -95,9 +95,33 @@
 //   for the same cohort and scope as countReferrals (see its comment).
 //
 // Read methods (card 6, receiving queue + authorization):
-//   getActiveGrants(userId) -> [{ permission, scopeType, programId,
-//       departmentId, grantSource, revokedAt }] from dbo.user_grants where
-//       revoked_at IS NULL. Authorization is decided by the service, not here.
+//   getActiveGrants(userId) -> [{ grantId, permission, scopeType, programId,
+//       departmentId, grantSource, grantedAt, revokedAt }] from dbo.user_grants
+//       where revoked_at IS NULL. Authorization is decided by the service, not here.
+//
+// Permission administration (Task Y, PRD 3.8). All inside withTransaction:
+//   tx.holdPermissionAdministration()
+//       Serializes permission changes across the whole application: one
+//       grant or revoke transaction at a time. Call it FIRST, before any
+//       locking read, so two administrators editing each other cannot
+//       deadlock. In SQL: sp_getapplock @Resource = 'permission-administration',
+//       @LockMode = 'Exclusive', @LockOwner = 'Transaction'.
+//   tx.listUsers()       dbo.users (no locking read needed: the hold above
+//       plus tx.getUser on the target cover the rows that matter)
+//   tx.insertGrant({ userId, permission, scopeType, programId, departmentId,
+//       grantSource }) -> { grantId, ..., grantedAt, revokedAt: null }
+//       INSERT dbo.user_grants; granted_at from the database default.
+//   tx.revokeGrant({ grantId, userId }) -> { ...grant, revokedAt } | null
+//       UPDATE dbo.user_grants SET revoked_at = SYSUTCDATETIME()
+//         WHERE grant_id = @grantId AND user_id = @userId AND revoked_at IS NULL;
+//       0 rows -> null (already revoked or not this user's), nothing written.
+//   Both apply only when the transaction commits, after waiting for every
+//   other transaction that has read that user's grants (a receiving
+//   response, for example), and together with the audit event: if the
+//   audit write fails, no grant changes. A unique filtered index on active
+//   grants (user, permission, scope, Program, Department WHERE revoked_at
+//   IS NULL) is recommended for the SQL store; the service already refuses
+//   duplicates under the hold above.
 //   getReferralById(referralId) -> referral row | null
 //   listReferralsByReceivingPrograms(programIds, { stage, limit, after })
 //   listReferralsByCreator(userId, { stage, limit, after })
@@ -376,6 +400,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     const staged = {
       referrals: [], audit: [], locks: [], updates: [], responseLocks: [], programUpdates: [], holds: [],
       departmentInserts: [], programInserts: [], departmentUpdates: [], evaluations: [],
+      grantInserts: [], grantRevokes: [],
     };
     // Uncommitted field-table rows: "table:id" -> row.
     const overlay = new Map();
@@ -483,6 +508,33 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       listActivePrograms: base.listActivePrograms,
       listNeedCategories: base.listNeedCategories,
       listMatchablePrograms: base.listMatchablePrograms,
+      listUsers: base.listUsers,
+
+      // ----- Permission administration (Task Y) -----
+      async holdPermissionAdministration() {
+        await holdForUpdate('permission-administration');
+      },
+      async insertGrant({ userId, permission, scopeType, programId = null, departmentId = null, grantSource }) {
+        if (!holds('permission-administration')) {
+          throw new Error('insertGrant requires holdPermissionAdministration first');
+        }
+        const row = {
+          grantId: nextGrantId++, userId, permission, scopeType, programId, departmentId, grantSource,
+          grantedAt: now().toISOString(), revokedAt: null,
+        };
+        staged.grantInserts.push(row);
+        return { ...row };
+      },
+      async revokeGrant({ grantId, userId }) {
+        if (!holds('permission-administration')) {
+          throw new Error('revokeGrant requires holdPermissionAdministration first');
+        }
+        const grant = grants.find((g) => g.grantId === grantId && g.userId === userId && g.revokedAt == null);
+        if (!grant || staged.grantRevokes.some((r) => r.grantId === grantId)) return null; // 0 rows
+        const revokedAt = now().toISOString();
+        staged.grantRevokes.push({ grantId, userId, revokedAt });
+        return { ...grant, revokedAt };
+      },
 
       async insertGpmeEvaluation({ ruleVersion, results }) {
         // Like an IDENTITY column: IDs are never reused, gaps are possible.
@@ -753,6 +805,11 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       for (const { programId } of staged.programUpdates) {
         writeReleases.push(await locks.upgrade(`program:${programId}`, owner));
       }
+      // Grant changes wait for every other reader of that user's grants.
+      const grantUsers = new Set([...staged.grantInserts, ...staged.grantRevokes].map((g) => g.userId));
+      for (const userId of grantUsers) {
+        writeReleases.push(await locks.upgrade(`grants:${userId}`, owner));
+      }
       for (const row of staged.departmentInserts) base._insertDepartment(row);
       for (const row of staged.programInserts) base._insertProgram(row);
       for (const { departmentId, fields } of staged.departmentUpdates) {
@@ -770,6 +827,10 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       referrals.push(...staged.referrals);
       for (const { referralId, fields } of staged.updates) {
         Object.assign(referrals.find((r) => r.referralId === referralId), fields);
+      }
+      grants.push(...staged.grantInserts);
+      for (const { grantId, revokedAt } of staged.grantRevokes) {
+        grants.find((g) => g.grantId === grantId).revokedAt = revokedAt;
       }
       auditEvents.push(...staged.audit);
       gpmeEvaluations.push(...staged.evaluations);
@@ -798,7 +859,11 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     },
   });
 
-  const grants = (seed.grants ?? []).map((g) => ({ revokedAt: null, ...g }));
+  // grantId stands in for dbo.user_grants.grant_id (IDENTITY).
+  const grants = (seed.grants ?? []).map((g, index) => ({
+    revokedAt: null, grantedAt: null, ...g, grantId: g.grantId ?? index + 1,
+  }));
+  let nextGrantId = Math.max(0, ...grants.map((g) => g.grantId)) + 1;
   const reasons = (seed.notAppropriateReasons ?? []).map((r) => ({ requiresExplanation: false, lifecycleStatus: 'ACTIVE', ...r }));
   const activeGrants = (userId) =>
     grants.filter((g) => g.userId === userId && g.revokedAt == null).map((g) => ({ ...g }));

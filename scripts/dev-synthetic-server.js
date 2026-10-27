@@ -38,7 +38,9 @@ if (config.nodeEnv !== 'development') {
   process.exit(1);
 }
 
-const store = createMemoryReferralStore(syntheticSeed({ programManagement: true, organizationManagement: true, receiving: true }));
+const store = createMemoryReferralStore(syntheticSeed({
+  programManagement: true, organizationManagement: true, receiving: true, permissionAdministration: true,
+}));
 if (process.env.QCH_TASK_C_SYNTHETIC_DEMO === 'true') {
   const { seedSyntheticProgramInformation } = await import('./syntheticProgramInformation.js');
   await seedSyntheticProgramInformation(store, DEV_USER_ID);

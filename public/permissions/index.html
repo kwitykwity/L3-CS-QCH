@@ -1,0 +1,83 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Permissions - QCH Connect</title>
+  <link rel="stylesheet" href="/referral/referral.css" />
+  <script type="module" src="app.js"></script>
+  <style>
+    /* Page-only layout (Task Y). Shared styles stay in referral.css. */
+    #grant-list { padding-left: 1.25rem; }
+    #grant-list li { margin: 0 0 0.75rem; }
+    #grant-list .grant__text { display: block; overflow-wrap: anywhere; }
+    #grant-list .grant__note { display: block; }
+    #grant-list button { margin-top: 0.25rem; }
+  </style>
+</head>
+<body>
+  <a class="skip-link" href="#main">Skip to main content</a>
+  <header class="topbar">
+    <a class="brand" href="/">QCH Connect</a>
+    <div class="text-size" role="group" aria-labelledby="text-size-label">
+      <span id="text-size-label" class="text-size__label">Text size</span>
+      <button type="button" data-size="S" aria-pressed="false">S</button>
+      <button type="button" data-size="M" aria-pressed="true">M</button>
+      <button type="button" data-size="L" aria-pressed="false">L</button>
+      <button type="button" data-size="XL" aria-pressed="false">XL</button>
+    </div>
+  </header>
+  <main id="main" class="page" tabindex="-1">
+    <h1>Permissions</h1>
+    <p>Give or remove what staff can do in QCH Connect. Signing in to QCH Connect is managed separately by QCH IT.</p>
+    <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p>
+    <div id="perm-status" class="status status--info" role="status" aria-live="polite" tabindex="-1">
+      <span class="status__text">Loading...</span>
+    </div>
+
+    <section class="panel" aria-labelledby="choose-heading">
+      <h2 id="choose-heading">Choose a staff member</h2>
+      <form id="choose-form" novalidate>
+        <fieldset id="choose-controls" class="plain" disabled>
+          <div class="field">
+            <label for="person-select">Staff member <span aria-hidden="true">*</span></label>
+            <select id="person-select" required aria-required="true">
+              <option value="">Choose a staff member</option>
+            </select>
+          </div>
+          <button type="submit" id="show-person" class="btn btn--primary">Show permissions</button>
+          <button type="button" id="reload" class="btn btn--secondary">Reload</button>
+        </fieldset>
+      </form>
+    </section>
+
+    <section id="person-panel" class="panel" aria-labelledby="person-heading" hidden>
+      <h2 id="person-heading" tabindex="-1"></h2>
+      <p id="person-note" class="muted" hidden></p>
+      <h3>Current permissions</h3>
+      <ul id="grant-list"></ul>
+      <p id="no-grants" class="muted" hidden>No permissions. This person can still sign in, send referrals and see aggregate reports, like everyone with access.</p>
+
+      <form id="add-form" novalidate hidden>
+        <fieldset id="add-controls" class="plain">
+          <legend>Add a permission</legend>
+          <div class="field">
+            <label for="permission-select">Permission <span aria-hidden="true">*</span></label>
+            <select id="permission-select" required aria-required="true" aria-describedby="add-error">
+              <option value="">Choose a permission</option>
+            </select>
+          </div>
+          <div id="program-field" class="field" hidden>
+            <label for="program-select">For which Program <span aria-hidden="true">*</span></label>
+            <select id="program-select" aria-describedby="add-error">
+              <option value="">Choose a Program</option>
+            </select>
+          </div>
+          <p id="add-error" class="field__error" hidden></p>
+          <button type="submit" id="add-permission" class="btn btn--primary">Add permission</button>
+        </fieldset>
+      </form>
+    </section>
+  </main>
+</body>
+</html>

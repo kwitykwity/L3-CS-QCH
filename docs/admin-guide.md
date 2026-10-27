@@ -9,9 +9,8 @@ refused safely if someone else changed the same record first.
 
 **Not available yet:**
 
-- **Giving or removing permissions** (PRD 3.8). Permissions are stored as
-  grants (see [architecture.md](architecture.md#who-may-do-what)), but no
-  screen or route changes them yet. Who the first permission
+- **Making someone a permission administrator** (PRD 3.8). That is done
+  outside the app through a QCH-approved process. Who the first permission
   administrators are is a QCH decision
   ([qch-it-requirements.md](qch-it-requirements.md)).
 - **Setting a Program's notification email** (where new-referral emails
@@ -27,6 +26,7 @@ refused safely if someone else changed the same record first.
 | Change a shared field's wording or options, replace or discontinue it | `MANAGE_PROGRAM` for **every** Program that uses the field |
 | Retire a field | `MANAGE_ORGANIZATION` (organization-wide), and only 90 days after it was discontinued (see the note below) |
 | Create a Program, move a Program to another Department, create or rename a Department, discontinue or reactivate a Department | `MANAGE_ORGANIZATION` |
+| Give or remove permissions on the Permissions screen | `ADMINISTER_PERMISSIONS` (organization-wide) |
 
 **About the 90 days:** the exact 90-day wait before a field can be retired
 is the team's implementation decision (`RETIRE_AFTER_DAYS` in
@@ -35,6 +35,30 @@ different period.
 
 Creating a Program does **not** give anyone permission to manage it. Its
 managers need a `MANAGE_PROGRAM` grant first.
+
+## Permissions (`/permissions/`)
+
+1. Choose a staff member and select **Show permissions**.
+2. Their current permissions are listed, each with the Program it is for or
+   "Organization-wide".
+3. To add one, choose the permission and, if it is for one Program, the
+   Program, then select **Add permission**.
+4. To take one away, select **Remove** next to it and confirm.
+
+Things to know:
+
+- You cannot change your own permissions. Ask another administrator.
+- Administrator rights are not given here; they are set up outside the app.
+- Staff who are not active cannot get new permissions, but you can still
+  remove theirs.
+- Permissions marked "Managed outside this screen" or "Demo data; not
+  managed here" were not added on this screen and cannot be removed here.
+- If another administrator changed the same person first, nothing is
+  changed and the current list is shown. Check it, then try again if you
+  still need to.
+- Every add and removal is saved with an audit event naming who did it.
+- A removed permission stops working for that person's next action. Pages
+  they already have open are refused by the server when they act.
 
 ## Program Management (`/program-management/`)
 

@@ -12,6 +12,9 @@
 //       `version` is an opaque string that changes every time the Program
 //       row changes (dbo.programs.row_version). Callers only compare it.
 //   getDepartment(departmentId)-> { departmentId, name, lifecycleStatus, version } | null
+//   listUsers()                -> [{ userId, displayName, isActive, ... }]
+//       dbo.users, for permission administration (Task Y). Callers choose
+//       what to return; email is never sent to the browser.
 //   listActivePrograms()       -> [{ program, department }] where BOTH are ACTIVE
 //
 // GPME additions (card 10, migration 003):
@@ -169,6 +172,10 @@ export function createMemoryStore(
   return {
     async getUser(userId) {
       return publicUser(usersById.get(userId));
+    },
+
+    async listUsers() {
+      return [...usersById.values()].map(publicUser).sort((a, b) => a.userId - b.userId);
     },
 
     async getProgram(programId) {
