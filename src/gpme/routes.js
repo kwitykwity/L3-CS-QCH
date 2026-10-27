@@ -5,7 +5,7 @@
 //
 //   POST /api/gpme/interpret   (Task D: interpretation layer)
 //        body: { text: "<short description, up to 500 characters>" }
-//        200 { status: "INTERPRETED", interpreterVersion,
+//        200 { status: "INTERPRETED" | "NOTHING_RECOGNIZED", interpreterVersion,
 //              needs: [{ needCategoryId, name, matchedTerms,
 //                        currentProgramCount | null }],
 //              ageRange: { min, max } | null, participantZip | null,

@@ -491,7 +491,7 @@ describe('screen logic for the describe step', () => {
   });
 
   test('nothing understood and technical failure are different states', () => {
-    assert.equal(interpretInterpretResponse(body({ needs: [] })).state, 'NOTHING_UNDERSTOOD');
+    assert.equal(interpretInterpretResponse(body({ status: 'NOTHING_RECOGNIZED', needs: [] })).state, 'NOTHING_UNDERSTOOD');
     assert.equal(interpretInterpretResponse({ status: 503, body: { status: 'UNABLE_TO_INTERPRET' } }).state, 'UNABLE');
     assert.equal(interpretInterpretResponse({ networkError: true }).state, 'UNABLE');
     assert.equal(interpretInterpretResponse({ status: 401, body: {} }).state, 'NOT_SIGNED_IN');
@@ -551,5 +551,93 @@ describe('privacy and scope boundaries', () => {
     assert.match(html, /id="describe"/);
     assert.match(html, /<label for="describe">/);
     assert.match(html, /id="path-direct"/);
+  });
+});
+
+describe('PR 59 interpretation contract regressions', () => {
+  test('successful empty interpretation returns NOTHING_RECOGNIZED, including notes-only output', async () => {
+    const { app } = setup();
+    for (const text of ['please help', 'not interested in housing']) {
+      const res = await request(app).post('/api/gpme/interpret').send({ text });
+      assert.equal(res.status, 200);
+      assert.equal(res.headers['cache-control'], 'no-store');
+      assert.equal(res.body.status, 'NOTHING_RECOGNIZED');
+      assert.deepEqual(res.body.needs, []);
+      assert.equal(res.body.ageRange, null);
+      assert.equal(res.body.participantZip, null);
+      assert.equal(interpretInterpretResponse(res).state, 'NOTHING_UNDERSTOOD');
+      assert.ok(!('plausible' in res.body) && !('possible' in res.body));
+      if (text.startsWith('not interested')) {
+        assert.deepEqual(res.body.notes, ['NOT_REQUESTED']);
+        assert.deepEqual(
+          interpretInterpretResponse(res).notes,
+          [DESCRIBE_MESSAGES.NOTES.NOT_REQUESTED],
+        );
+      }
+    }
+  });
+
+  test('an interpreter failure returns HTTP 503 and UNABLE_TO_INTERPRET', async () => {
+    const { app } = setup({
+      interpreter: {
+        version: 'failing-test-interpreter',
+        interpret() { throw new Error('synthetic test failure'); },
+      },
+    });
+    const res = await request(app).post('/api/gpme/interpret').send({ text: 'needs a job' });
+    assert.equal(res.status, 503);
+    assert.deepEqual(res.body, { status: 'UNABLE_TO_INTERPRET' });
+    assert.equal(interpretInterpretResponse(res).state, 'UNABLE');
+  });
+
+  test('age-only or ZIP-only recognition is INTERPRETED and still requires an employee-selected need', async () => {
+    const { app } = setup();
+    for (const text of ['age 17', 'ZIP 11101']) {
+      const res = await request(app).post('/api/gpme/interpret').send({ text });
+      assert.equal(res.status, 200);
+      assert.equal(res.body.status, 'INTERPRETED');
+      const view = interpretInterpretResponse(res);
+      assert.equal(view.state, 'PROPOSED');
+      assert.equal(view.needsStillRequired, true);
+    }
+  });
+
+  test('exact ages and ranges remain reviewable, are not broadened, and are accepted for matching', async () => {
+    const { validateGuidedForm } = await import('../public/referral/guided.js');
+    const { app } = setup();
+    const cases = [
+      ['age 17, needs a job', { min: 17, max: 17 }, 'Age: 17'],
+      ['ages 18 to 24, needs a job', { min: 18, max: 24 }, 'Age range: 18 to 24'],
+    ];
+    for (const [text, expected, label] of cases) {
+      const proposal = await request(app).post('/api/gpme/interpret').send({ text });
+      assert.equal(proposal.status, 200);
+      assert.equal(proposal.body.status, 'INTERPRETED');
+      assert.deepEqual(proposal.body.ageRange, expected);
+      assert.ok(!proposal.body.notes.includes('INVALID_AGE'));
+
+      const view = interpretInterpretResponse(proposal);
+      assert.equal(view.state, 'PROPOSED');
+      assert.ok(view.understood.includes(label));
+      assert.equal(view.message, DESCRIBE_MESSAGES.CHECK_PROMPT);
+      assert.deepEqual(validateGuidedForm(view), {});
+
+      const confirmed = toMatchRequest(view);
+      assert.deepEqual(confirmed.ageRange, expected);
+      const matched = await request(app).post('/api/gpme/match').send(confirmed);
+      assert.equal(matched.status, 200);
+      assert.ok(['RESULTS', 'NO_PLAUSIBLE_MATCH'].includes(matched.body.status));
+    }
+  });
+
+  test('contradictory interpretation responses and match outcomes are not accepted as interpretation success', () => {
+    const empty = { needs: [], ageRange: null, participantZip: null, notes: [] };
+    for (const body of [
+      { ...empty, status: 'INTERPRETED' },
+      { ...empty, status: 'NOTHING_RECOGNIZED', ageRange: { min: 17, max: 17 } },
+      { ...empty, status: 'NO_PLAUSIBLE_MATCH' },
+    ]) {
+      assert.equal(interpretInterpretResponse({ status: 200, body }).state, 'UNABLE');
+    }
   });
 });

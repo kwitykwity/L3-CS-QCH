@@ -88,7 +88,8 @@ export function interpretInterpretResponse(response) {
   if (status === 401 || status === 403) return { state: 'NOT_SIGNED_IN', message: DESCRIBE_MESSAGES.NOT_SIGNED_IN };
   if (status === 400) return { state: 'INVALID', message: DESCRIBE_MESSAGES.EMPTY };
 
-  const wellFormed = status === 200 && body?.status === 'INTERPRETED'
+  const wellFormed = status === 200
+    && ['INTERPRETED', 'NOTHING_RECOGNIZED'].includes(body?.status)
     && Array.isArray(body.needs)
     && body.needs.every((n) => Number.isSafeInteger(n?.needCategoryId) && typeof n.name === 'string')
     && Array.isArray(body.notes);
@@ -108,7 +109,13 @@ export function interpretInterpretResponse(response) {
   if (age) understood.push(age.min === age.max ? `Age: ${age.min}` : `Age range: ${age.min} to ${age.max}`);
   if (zip) understood.push(`ZIP code: ${zip}`);
 
-  if (body.needs.length === 0 && !age && !zip) {
+  const hasConcepts = body.needs.length > 0 || Boolean(age) || Boolean(zip);
+  // Successful interpretation and successful-but-empty are distinct API outcomes.
+  // Contradictory responses are technical failures, never matching results.
+  if ((body.status === 'INTERPRETED') !== hasConcepts) {
+    return { state: 'UNABLE', message: DESCRIBE_MESSAGES.UNABLE };
+  }
+  if (body.status === 'NOTHING_RECOGNIZED') {
     return { state: 'NOTHING_UNDERSTOOD', message: DESCRIBE_MESSAGES.NOTHING_UNDERSTOOD, notes };
   }
   return {

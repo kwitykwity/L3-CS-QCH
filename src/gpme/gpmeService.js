@@ -37,6 +37,7 @@ function compareText(a, b) {
 
 export const INTERPRET_STATUS = Object.freeze({
   INTERPRETED: 'INTERPRETED',
+  NOTHING_RECOGNIZED: 'NOTHING_RECOGNIZED',
   UNABLE_TO_INTERPRET: 'UNABLE_TO_INTERPRET',
 });
 
@@ -129,7 +130,9 @@ export function createGpmeService({
         }));
 
       return {
-        status: INTERPRET_STATUS.INTERPRETED,
+        status: needs.length > 0 || proposal.ageRange !== null || proposal.participantZip !== null
+          ? INTERPRET_STATUS.INTERPRETED
+          : INTERPRET_STATUS.NOTHING_RECOGNIZED,
         interpreterVersion: interpreter.version,
         needs,
         ageRange: proposal.ageRange,
