@@ -200,6 +200,14 @@ function readAge(paddedText, notes) {
       const ranges = kind === 'range'
         ? [[Number(m[1]), Number(m[2])]]
         : (kind === 'list' ? m[1].match(/\d+/g) : [m[1]]).map((n) => [Number(n), Number(n)]);
+      // "ages 6 to 9 and 12": a number joined on after a range is one more age.
+      if (kind === 'range') {
+        const extra = /^(?:\s+old)?\s+(?:and|or)\s+(\d{1,3})\b(?!\s*(?:-|to|through))/.exec(paddedText.slice(span[1]));
+        if (extra) {
+          ranges.push([Number(extra[1]), Number(extra[1])]);
+          consumed.push([span[1], span[1] + extra[0].length]);
+        }
+      }
       for (const [a, b] of ranges) {
         if (!inRange(a) || !inRange(b) || a > b) notes.add(NOTES.INVALID_AGE);
         else found.push({ min: a, max: b });

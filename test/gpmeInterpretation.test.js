@@ -101,6 +101,15 @@ describe('rule-based interpreter', () => {
     }
   });
 
+  test('an age joined onto a range is not silently dropped', () => {
+    for (const text of ['ages 6 to 9 and 12', 'age 6-9 and 12', '6 to 9 years old or 12']) {
+      const out = read(text);
+      assert.equal(out.ageRange, null, text);
+      assert.deepEqual(out.notes, ['MULTIPLE_AGES'], text);
+    }
+    assert.deepEqual(read('ages 6 to 9 and a ZIP of 11101').ageRange, { min: 6, max: 9 });
+  });
+
   test('an explicit range is still read', () => {
     assert.deepEqual(read('between 6 and 9 years old').ageRange, { min: 6, max: 9 });
     assert.deepEqual(read('between ages 6 and 9').ageRange, { min: 6, max: 9 });
@@ -265,6 +274,8 @@ describe('POST /api/gpme/interpret', () => {
     assert.equal(heavy.status, 200);
     const html = readFileSync(new URL('../public/referral/index.html', import.meta.url), 'utf8');
     assert.match(html, /id="describe"[^>]*maxlength="500"/);
+    // The limit is also stated to the worker, not only enforced (PRD 10.7).
+    assert.match(html, /id="describe-hint"[^>]*>[^<]*Up to 500 characters/);
     assert.equal(MAX_DESCRIPTION_CHARS, 500);
     assert.equal(MAX_SERVER_DESCRIPTION_CHARS, MAX_DESCRIPTION_CHARS);
   });
