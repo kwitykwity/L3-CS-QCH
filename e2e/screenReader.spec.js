@@ -320,10 +320,11 @@ test('the skip link moves keyboard focus into the main content on every page (fo
     '/program-management/matching.html', '/program-management/organization.html',
     '/program-management/organization-programs.html', '/program-management/reuse-field.html',
     '/program-management/replace-field.html',
+    '/receiving/', '/receiving/referral.html?id=1', '/sent/', '/sent/referral.html?id=1', '/reporting/',
   ]) {
     await page.goto(path);
     // Some pages move focus to a message on load, so focus the link directly.
-    await page.getByRole('link', { name: 'Skip to main content' }).focus();
+    await page.locator('a.skip-link').focus();
     await page.keyboard.press('Enter');
     await expect(page.getByRole('main'), path).toBeFocused();
     // The next Tab goes forward from the main content, never back up to the

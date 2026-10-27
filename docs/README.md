@@ -42,6 +42,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 | [dependencies.md](dependencies.md) | Direct dependencies and how to list every license |
 | [regression-coverage.md](regression-coverage.md) | Accessibility and end-to-end regression coverage, and the manual keyboard checklist |
 | [screen-reader-check.md](screen-reader-check.md) | VoiceOver script and record sheet: labels, required fields, errors, announcements, dialogs, focus |
+| [demo-rehearsal.md](demo-rehearsal.md) | Demo dress rehearsal: one connected synthetic journey through every feature, its record, and what it found (Task R) |
 
 Elsewhere in the repository:
 

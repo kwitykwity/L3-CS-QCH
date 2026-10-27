@@ -173,10 +173,15 @@ function closeAffiliationForm() {
   $('affiliation-change').focus();
 }
 
+// Reloading does not help someone who is not signed in, so say so
+// (PRD 7.5, 16.1: without sign-in the app fails closed).
+const NOT_SIGNED_IN_LOAD = 'You are not signed in, so nothing can be shown. Sign in, then reload this page.';
+
 async function loadAffiliation() {
   const res = await api.getAffiliation();
   if (res.networkError || res.status !== 200) {
-    $('affiliation-loading').textContent = 'Your Program affiliation could not be loaded. Reload the page to try again.';
+    $('affiliation-loading').textContent = res.status === 401 ? NOT_SIGNED_IN_LOAD
+      : 'Your Program affiliation could not be loaded. Reload the page to try again.';
     return;
   }
   state.affiliation = res.body;
@@ -262,7 +267,8 @@ async function loadPrograms() {
   $('programs-loading').hidden = true;
   if (res.networkError || res.status !== 200) {
     $('programs-loading').hidden = false;
-    $('programs-loading').textContent = 'Programs could not be loaded. Reload the page to try again.';
+    $('programs-loading').textContent = res.status === 401 ? NOT_SIGNED_IN_LOAD
+      : 'Programs could not be loaded. Reload the page to try again.';
     return;
   }
   state.programs = res.body.programs;
