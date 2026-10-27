@@ -876,6 +876,16 @@ function confirmDiscard() {
 
 function initDiscardDialog() {
   const dialog = $('discard-dialog');
+  // Escape keeps the work. Safari does not focus a button when it is clicked,
+  // so the browser has no opener to return focus to: return it to Cancel here
+  // (docs/browser-verification.md).
+  let escaped = false;
+  dialog.addEventListener('cancel', () => { escaped = true; });
+  dialog.addEventListener('close', () => {
+    if (!escaped) return;
+    escaped = false;
+    $('cancel').focus();
+  });
   $('discard-stay').addEventListener('click', () => {
     dialog.close();
     $('cancel').focus();

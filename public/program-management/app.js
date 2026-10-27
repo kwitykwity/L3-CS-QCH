@@ -129,16 +129,35 @@ function explain(response) {
   return 'The action could not be completed. Your edits remain on this page.';
 }
 
+// Safari does not focus a button when it is clicked, so the browser cannot
+// return focus to it when a dialog closes. Remember the last clicked button
+// and return focus to it ourselves when the worker stays or presses Escape
+// (docs/browser-verification.md).
+let lastClickedButton = null;
+document.addEventListener('click', (event) => { lastClickedButton = event.target.closest('button'); }, true);
+let confirmOpener = null;
+let confirmEscaped = false;
+$('confirm-dialog').addEventListener('cancel', () => { confirmEscaped = true; });
+$('confirm-dialog').addEventListener('close', () => {
+  if (!confirmEscaped) return;
+  confirmEscaped = false;
+  confirmOpener?.focus();
+});
+
 function confirmAction(text, action) {
   const dialog = $('confirm-dialog');
   $('confirm-message').textContent = text;
+  confirmOpener = lastClickedButton;
   $('confirm-proceed').onclick = () => {
     dialog.close();
     action();
   };
   dialog.showModal();
 }
-$('confirm-stay').addEventListener('click', () => $('confirm-dialog').close());
+$('confirm-stay').addEventListener('click', () => {
+  $('confirm-dialog').close();
+  confirmOpener?.focus();
+});
 
 async function loadList() {
   if (busy) return;
