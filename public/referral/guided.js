@@ -80,8 +80,10 @@ export function validateDescription(text) {
 
 // response: { networkError: true } or { status, body } from POST /api/gpme/interpret.
 // Returns { state: 'PROPOSED' | 'NOTHING_UNDERSTOOD' | 'UNABLE' | 'NOT_SIGNED_IN' | 'INVALID', ... }.
-// PROPOSED carries what to fill in (needCategoryIds, ageMin, ageMax, matchZip)
-// and the lines the page shows under "What the application understood".
+// PROPOSED carries what to fill in (needCategoryIds, ageMode, ageExact, ageMin,
+// ageMax, matchZip) and the lines the page shows under "What the application
+// understood". One age is proposed as an exact age, never as a range
+// (Handoff PRD 5.3).
 export function interpretInterpretResponse(response) {
   if (!response || response.networkError) return { state: 'UNABLE', message: DESCRIBE_MESSAGES.UNABLE };
   const { status, body } = response;
@@ -122,8 +124,7 @@ export function interpretInterpretResponse(response) {
     state: 'PROPOSED',
     message: DESCRIBE_MESSAGES.CHECK_PROMPT,
     needCategoryIds: body.needs.map((n) => n.needCategoryId),
-    ageMin: age ? String(age.min) : '',
-    ageMax: age ? String(age.max) : '',
+    ...proposedAge(age),
     matchZip: zip ?? '',
     understood,
     warnings,
@@ -133,12 +134,21 @@ export function interpretInterpretResponse(response) {
   };
 }
 
+// How a proposed age fills the form: one age goes in the Exact age box, a
+// range in the From and To boxes. Nothing proposed leaves the mode alone.
+function proposedAge(age) {
+  if (!age) return { ageMode: null, ageExact: '', ageMin: '', ageMax: '' };
+  if (age.min === age.max) return { ageMode: 'exact', ageExact: String(age.min), ageMin: '', ageMax: '' };
+  return { ageMode: 'range', ageExact: '', ageMin: String(age.min), ageMax: String(age.max) };
+}
+
 export const GUIDED_FIELD_MESSAGES = Object.freeze({
   needs: 'Choose at least one need.',
   ageRange: {
     incomplete: 'Enter both ages, or leave both blank.',
     invalid: 'Enter whole ages from 0 to 120.',
     order: 'The first age must not be greater than the second.',
+    exactInvalid: 'Enter a whole age from 0 to 120, or leave it blank.',
   },
   matchZip: 'Enter a 5-digit ZIP code, or leave it blank.',
 });
@@ -151,7 +161,9 @@ const ZIP = /^\d{5}$/;
 // Order of fields on screen, for moving focus to the first problem.
 export const GUIDED_FIELD_ORDER = Object.freeze(['needs', 'ageRange', 'matchZip']);
 
-// values: { needCategoryIds: number[], ageMin: string, ageMax: string, matchZip: string }
+// values: { needCategoryIds: number[], ageMode?: 'exact' | 'range',
+//           ageExact?: string, ageMin: string, ageMax: string, matchZip: string }
+// ageMode defaults to 'range'. Only the boxes for the chosen mode count.
 // Returns { field: message } for each problem; {} when the answers can be sent.
 export function validateGuidedForm(values) {
   const errors = {};
@@ -159,9 +171,14 @@ export function validateGuidedForm(values) {
     errors.needs = GUIDED_FIELD_MESSAGES.needs;
   }
 
+  const exact = (values.ageExact ?? '').trim();
   const min = (values.ageMin ?? '').trim();
   const max = (values.ageMax ?? '').trim();
-  if (min || max) {
+  if (values.ageMode === 'exact') {
+    if (exact && (!WHOLE_AGE.test(exact) || Number(exact) > MAX_AGE)) {
+      errors.ageRange = GUIDED_FIELD_MESSAGES.ageRange.exactInvalid;
+    }
+  } else if (min || max) {
     if (!min || !max) errors.ageRange = GUIDED_FIELD_MESSAGES.ageRange.incomplete;
     else if (!WHOLE_AGE.test(min) || !WHOLE_AGE.test(max) || Number(min) > MAX_AGE || Number(max) > MAX_AGE) {
       errors.ageRange = GUIDED_FIELD_MESSAGES.ageRange.invalid;
@@ -179,12 +196,18 @@ export function firstGuidedError(errors) {
 
 // The exact body for POST /api/gpme/match, and the `gpme` part of a
 // GPME-assisted referral. Only the three approved inputs (PRD 8.2); blank
-// optional answers are left out.
+// optional answers are left out. An exact age is sent as that one age
+// (min equals max), never widened into a range (Handoff PRD 5.3).
 export function toMatchRequest(values) {
   const body = { needCategoryIds: [...new Set(values.needCategoryIds)].sort((a, b) => a - b) };
-  const min = (values.ageMin ?? '').trim();
-  const max = (values.ageMax ?? '').trim();
-  if (min && max) body.ageRange = { min: Number(min), max: Number(max) };
+  if (values.ageMode === 'exact') {
+    const exact = (values.ageExact ?? '').trim();
+    if (exact) body.ageRange = { min: Number(exact), max: Number(exact) };
+  } else {
+    const min = (values.ageMin ?? '').trim();
+    const max = (values.ageMax ?? '').trim();
+    if (min && max) body.ageRange = { min: Number(min), max: Number(max) };
+  }
   const zip = (values.matchZip ?? '').trim();
   if (zip) body.participantZip = zip;
   return body;

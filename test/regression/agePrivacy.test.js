@@ -239,9 +239,9 @@ async function runJourney(t, ageCase) {
   const draft = {
     submissionId: SUBMISSION_ID,
     receivingProgramId: P_ADULT_ED,
-    participantName: 'Synthetic Person Age Privacy',
+    participantName: 'Synthetic Person Privacy',
     contactMethod: 'NOT_AVAILABLE',
-    referralContext: 'Synthetic context for the age privacy test',
+    referralContext: 'Synthetic context for the privacy test',
     gpme: answers,
   };
   const sent = await worker.post('/api/referrals', draft);
@@ -389,8 +389,8 @@ describe('Task HH: participant age is used for matching but never kept (Handoff 
     await request(app).put('/api/me/affiliation').send({ programId: P_FAMILY, version: affiliation.body.version });
     const base = {
       submissionId: SUBMISSION_ID, receivingProgramId: P_ADULT_ED,
-      participantName: 'Synthetic Person Age Privacy', contactMethod: 'NOT_AVAILABLE',
-      referralContext: 'Synthetic context for the age privacy test',
+      participantName: 'Synthetic Person Privacy', contactMethod: 'NOT_AVAILABLE',
+      referralContext: 'Synthetic context for the privacy test',
     };
     for (const extra of [{ age: EXACT_AGE }, { ageRange: RANGE }, { participantAge: EXACT_AGE }, { dateOfBirth: '1989-01-01' }]) {
       const res = await request(app).post('/api/referrals').send({ ...base, ...extra });

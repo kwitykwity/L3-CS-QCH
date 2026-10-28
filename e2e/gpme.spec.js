@@ -721,12 +721,15 @@ test.describe('describe what the participant needs', () => {
     await expect(page.locator('#understood-list')).toContainText('Age: 25');
     await expect(need(page, 'Education (sample)')).toBeChecked();
     await expect(need(page, 'Employment (sample)')).toBeChecked();
-    await expect(page.locator('#ageMin')).toHaveValue('25');
+    // One age is proposed as an exact age (Handoff PRD 5.3, Task HH).
+    await expect(page.locator('#ageMode-exact')).toBeChecked();
+    await expect(page.locator('#ageExact')).toHaveValue('25');
     // Nothing is matched until the worker chooses Find Programs.
     expect(matchPosts).toHaveLength(0);
     await expect(page.locator('#match-results')).toBeHidden();
 
     // The worker corrects the proposal: the age becomes a range.
+    await page.locator('#ageMode-range').check();
     await page.locator('#ageMin').fill('19');
     await page.locator('#ageMax').fill('30');
     await findPrograms(page);
@@ -807,9 +810,11 @@ test.describe('describe what the participant needs', () => {
 });
 
 test.describe('PR 59 three-state contract and age review', () => {
+  // One age fills the Exact age box; a range fills From and To (Handoff PRD
+  // 5.3, Task HH). Either way matching gets min and max.
   for (const example of [
-    { text: 'age 17, needs a job', min: '17', max: '17', label: 'Age: 17' },
-    { text: 'ages 18 to 24, needs a job', min: '18', max: '24', label: 'Age range: 18 to 24' },
+    { text: 'age 17, needs a job', mode: 'exact', min: '17', max: '17', label: 'Age: 17' },
+    { text: 'ages 18 to 24, needs a job', mode: 'range', min: '18', max: '24', label: 'Age range: 18 to 24' },
   ]) {
     test(`employee reviews ${example.label} before matching, without guessed expansion`, async ({ page }) => {
       const posts = recordMatchPosts(page);
@@ -825,8 +830,16 @@ test.describe('PR 59 three-state contract and age review', () => {
 
       await expect(page.locator('#understood')).toBeVisible();
       await expect(page.locator('#understood-list')).toContainText(example.label);
-      await expect(page.locator('#ageMin')).toHaveValue(example.min);
-      await expect(page.locator('#ageMax')).toHaveValue(example.max);
+      await expect(page.locator(`#ageMode-${example.mode}`)).toBeChecked();
+      if (example.mode === 'exact') {
+        await expect(page.locator('#ageExact')).toBeVisible();
+        await expect(page.locator('#ageExact')).toHaveValue(example.min);
+        await expect(page.locator('#ageRange-group')).toBeHidden();
+      } else {
+        await expect(page.locator('#ageMin')).toHaveValue(example.min);
+        await expect(page.locator('#ageMax')).toHaveValue(example.max);
+        await expect(page.locator('#ageExact-group')).toBeHidden();
+      }
       expect(posts).toHaveLength(0);
       await expect(page.locator('#match-results')).toBeHidden();
 
@@ -839,7 +852,7 @@ test.describe('PR 59 three-state contract and age review', () => {
       expect(posts[0].ageRange).toEqual({
         min: Number(example.min), max: Number(example.max),
       });
-      await expect(page.locator('#ageMin')).toHaveAttribute('aria-invalid', 'false');
+      await expect(page.locator(example.mode === 'exact' ? '#ageExact' : '#ageMin')).toHaveAttribute('aria-invalid', 'false');
     });
   }
 
