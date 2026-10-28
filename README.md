@@ -429,8 +429,8 @@ Task M), new-referral notifications started after each referral commits
 (Task E, #42; simulated outbox), permission checks by grant, and the audit
 trail. The schema design and migrations are in `db/`.
 
-**Not built yet:** a production data store, Entra sign-in, demo sign-in
-(Task O, in progress), screens to give or remove permissions, a way to set
+**Not built yet:** a production data store, Entra sign-in, screens to give
+or remove permissions (open PR #63, Task Y), a way to set
 a Program's notification email, the Microsoft Graph sender (notifications
 run on a simulated outbox in development), and any Azure resources. Some
 of these wait on QCH IT decisions;

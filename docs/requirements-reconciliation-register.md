@@ -48,10 +48,10 @@ here instead of being treated as already covered.
 
 | ID | Item | Status | Built on `main`? |
 | --- | --- | --- | --- |
-| R1 | Open-ended "describe the need" search | CONFIRMED | No. In review as PR #43 |
-| R2 | Show what the app understood, so staff can correct it before matching | CONFIRMED | No. In review as PR #43 |
+| R1 | Open-ended "describe the need" search | CONFIRMED | Yes. PR #43 merged (`f3905cb`) |
+| R2 | Show what the app understood, so staff can correct it before matching | CONFIRMED | Yes. PR #43 merged (`f3905cb`) |
 | R3 | How the free-text step fits PRD 8.2 | TEAM PRODUCT DECISION (not yet recorded) | Not applicable |
-| R4 | Everyday age words ("teen", "older adult") mapped to age ranges | TEAM PRODUCT DECISION (not yet recorded) | No. In PR #43 |
+| R4 | Everyday age words ("teen", "older adult") mapped to age ranges | TEAM PRODUCT DECISION (not yet recorded) | Yes. PR #43 merged (`f3905cb`) |
 | R5 | Approved AI or language-processing boundary | OPEN QCH DECISION | Rules only, no AI |
 | R6 | Need is the most important matching factor | CONFIRMED | Yes |
 | R7 | Language of service, more than one per Program | CONFIRMED | Yes, shown only (Task W); not used in matching |
@@ -83,7 +83,7 @@ here instead of being treated as already covered.
 | PRD | 2.1 (Guided path), 8.1, 8.2 (approved criteria), 5.3 (matching inputs), 5.4 (sensitive free text) |
 | Evidence | Oct 23: program staff asked for a text box where staff describe the need in their own words, instead of only picking from lists. Oct 26: asked whether staff should be able to describe participant needs in their own words and receive matching Program suggestions, Kyle answered "Yes, definitely!" |
 | Impact | A new worker input on the Find a Program screen. The free text is a fourth thing the app receives, so the PRD has to say what may be done with it (see R3) |
-| Today | `main` matches on need categories, an age range and a ZIP only (`src/gpme/matchPrograms.js`, `public/referral/guided.js`). PR #43 (Task D, branch `task-d`) adds the text box and a rules-based interpreter in the application |
+| Today | `main` matches on need categories, an age range and a ZIP only (`src/gpme/matchPrograms.js`, `public/referral/guided.js`). PR #43 (Task D, branch `task-d`) added the text box and a rules-based interpreter in the application; it merged as `f3905cb`, and `POST /api/gpme/interpret` is on `main` |
 | Status | **CONFIRMED** (the requirement). How it fits PRD 8.2 is R3 |
 | Affected | PR #43; `src/gpme/`, `public/referral/` |
 | Approver | Kyle Butler (QCH), Oct 26, 2026 |
@@ -95,7 +95,7 @@ here instead of being treated as already covered.
 | PRD | 8.1 (staff decide), 8.6 (explanations) |
 | Evidence | Oct 26: asked whether the app should show its reading of the needs so staff can review or correct it before seeing suggestions, Kyle answered "Yes, that would be great" |
 | Impact | The interpret, confirm, then match flow becomes a requirement rather than a team design choice |
-| Today | Not on `main`. PR #43 proposes needs, age and ZIP, and matching runs only after the worker confirms or corrects them |
+| Today | On `main` since PR #43 merged (`f3905cb`). The interpreter proposes needs, age and ZIP, and matching runs only after the worker confirms or corrects them |
 | Status | **CONFIRMED** |
 | Affected | PR #43 |
 | Approver | Kyle Butler (QCH), Oct 26, 2026 |
@@ -108,8 +108,8 @@ here instead of being treated as already covered.
 | Evidence | No QCH evidence on this point. The Task D branch has a proposed reading in `docs/gpme-description-step-prd-8-2.md` (status there: proposed, not approved), written without the PRD text |
 | What the PRD says | 8.2 limits what **matching** may use: only explicitly approved structured criteria, never hidden factors such as free-text Notes or Referral Context. 5.3 lets temporary matching inputs stay in memory during the workflow but not be persisted. 5.4 names Referral Context and Notes as sensitive free text. 21 makes external generative-AI services processing referral data a non-goal |
 | Impact | The PRD text supports the PR #43 design: free text is read only to propose structured criteria, the worker confirms them, and matching uses only the confirmed criteria. The revision still needs to say two things the PRD does not: that the describe-the-need text is handled like the 5.4 sensitive free text (never logged, stored or sent), and that the interpreter runs inside the application |
-| Today | On PR #43, the text is never sent to matching, never saved with the referral, and never logged or returned |
-| Status | **TEAM PRODUCT DECISION**, not yet recorded. Decide before PR #43 merges, then write it into the Oct 30 revision |
+| Today | On `main` (PR #43 merged without this decision recorded), the text is never sent to matching, never saved with the referral, and never logged or returned |
+| Status | **TEAM PRODUCT DECISION**, not yet recorded. PR #43 has merged, so record it now and write it into the Oct 30 revision |
 | Affected | PR #43; Trello Task Q's special handling for PR #43 |
 | Approver | None recorded |
 
@@ -120,7 +120,7 @@ here instead of being treated as already covered.
 | PRD | 8.2 (age range input) |
 | Evidence | No QCH evidence. Team proposal in PR #43's interpreter: "teen" or "teenager" proposes ages 13 to 19; "elderly" or "older adult" proposes 60 and up |
 | Impact | Only a proposal the worker sees and can change, so a wrong range is visible before matching. For comparison, QCH's program sheet lists Older Adult Centers as 60 and up and Teen Outreach as 13 to 21 |
-| Today | Not on `main` |
+| Today | On `main` with PR #43 (`src/gpme/interpretation/ruleBasedInterpreter.js`) |
 | Status | **TEAM PRODUCT DECISION**, not yet recorded. The team can ask QCH to confirm the ranges, but should not present them as QCH's |
 | Affected | PR #43 (`src/gpme/interpretation/ruleBasedInterpreter.js` on `task-d`) |
 | Approver | None recorded |
