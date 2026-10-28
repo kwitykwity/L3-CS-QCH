@@ -77,11 +77,6 @@ removed. Each one made a test fail:
 | The sent list puts a name in the page address | `e2e/privacy.spec.js` |
 | The sent list sends a name in a query string | `e2e/privacy.spec.js` |
 
-When the SharePoint store and Azure Functions hosting are built (R19, R20
-in [requirements-reconciliation-register.md](requirements-reconciliation-register.md)),
-re-run both files against them. The Functions host's own logging
-(Application Insights) must be checked then too.
-
 ## Route inventory
 
 49 API routes (30 use POST, PUT or PATCH: 27 change shared data, 3 are self-service or read-only), plus `GET /health` (public, availability only). People used
