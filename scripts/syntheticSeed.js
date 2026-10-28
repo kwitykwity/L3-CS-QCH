@@ -40,20 +40,28 @@ export function syntheticSeed({ programManagement = false, organizationManagemen
       { needCategoryId: 4, name: 'Housing (sample)', lifecycleStatus: 'ACTIVE' },
       { needCategoryId: 5, name: 'Older adult support (sample)', lifecycleStatus: 'ACTIVE' },
     ],
+    // Languages of service (Task W). Kyle's three examples (Oct 26), as
+    // SAMPLES only: the real list is an open QCH decision. Programs 2 and 5
+    // have none on purpose, to show "not on file".
+    serviceLanguages: [
+      { languageId: 1, name: 'English', lifecycleStatus: 'ACTIVE' },
+      { languageId: 2, name: 'Spanish', lifecycleStatus: 'ACTIVE' },
+      { languageId: 3, name: 'Chinese', lifecycleStatus: 'ACTIVE' },
+    ],
     programs: [
       { programId: 1, departmentId: 1, name: 'Early Childhood Playgroup (sample)', site: 'Site A', lifecycleStatus: 'ACTIVE',
-        needCategoryIds: [1], ageLimitState: 'SET', ageMin: 0, ageMax: 5, ...NO_AREA_LIMIT },
+        needCategoryIds: [1], ageLimitState: 'SET', ageMin: 0, ageMax: 5, ...NO_AREA_LIMIT, languageIds: [1, 2] },
       { programId: 2, departmentId: 1, name: 'After-School Homework Club (sample)', site: 'Site B', lifecycleStatus: 'ACTIVE',
         needCategoryIds: [2], ageLimitState: 'SET', ageMin: 6, ageMax: 13,
         serviceAreaState: 'SET', serviceAreaZips: ['99901', '99902'] },
       { programId: 3, departmentId: 2, name: 'Adult Evening Classes (sample)', site: 'Site A', lifecycleStatus: 'ACTIVE',
-        needCategoryIds: [2, 3], ageLimitState: 'SET', ageMin: 18, ageMax: null, ...NO_AREA_LIMIT },
+        needCategoryIds: [2, 3], ageLimitState: 'SET', ageMin: 18, ageMax: null, ...NO_AREA_LIMIT, languageIds: [1, 2, 3] },
       { programId: 4, departmentId: 2, name: 'Housing Help Desk (sample)', site: 'Site C', lifecycleStatus: 'ACTIVE',
-        needCategoryIds: [4], ...NO_AGE_LIMIT, serviceAreaState: 'OTHER_LIMIT', serviceAreaZips: [] },
+        needCategoryIds: [4], ...NO_AGE_LIMIT, serviceAreaState: 'OTHER_LIMIT', serviceAreaZips: [], languageIds: [1, 2] },
       { programId: 5, departmentId: 2, name: 'Job Readiness Workshop (sample)', site: 'Site B', lifecycleStatus: 'ACTIVE',
         needCategoryIds: [3], ageLimitState: 'NOT_ON_FILE', ageMin: null, ageMax: null, ...NO_AREA_LIMIT },
       { programId: 6, departmentId: 3, name: 'Older Adult Wellness Center (sample)', site: 'Site D', lifecycleStatus: 'ACTIVE',
-        needCategoryIds: [5], ageLimitState: 'SET', ageMin: 60, ageMax: null, ...NO_AREA_LIMIT },
+        needCategoryIds: [5], ageLimitState: 'SET', ageMin: 60, ageMax: null, ...NO_AREA_LIMIT, languageIds: [1, 3] },
       { programId: 7, departmentId: 3, name: 'Retired Sample Program', site: 'Site D', lifecycleStatus: 'DISCONTINUED',
         needCategoryIds: [5], ...NO_AGE_LIMIT, ...NO_AREA_LIMIT },
     ],

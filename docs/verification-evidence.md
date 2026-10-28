@@ -97,7 +97,7 @@ focus to the Program box. The test now checks both behaviors.
 | The same journeys against the production store (persistence, locking, constraints) | Where data lives (pending decision 1) |
 | Real sign-in in the journeys instead of the synthetic identity | Entra (pending decision 5) |
 | A real new-referral email at the end of step 2 | The Graph sender and mailbox permission (pending decision 6). The wiring is merged (#42) and uses the simulated outbox until then |
-| The supported-browser list and its runs | QCH's agreement on the browser matrix |
+| The supported-browser list | QCH's agreement on the browser matrix. Runs in Edge, Chromium, Firefox and WebKit on the team's baseline are in [browser-verification.md](browser-verification.md) |
 | Running in QCH's hosting (HTTPS, headers, monitoring) | Hosting (pending decision 2) |
 
 See [pending-qch-it-decisions.md](pending-qch-it-decisions.md) and

@@ -44,12 +44,13 @@ top of the suites above and do not repeat them:
   text, and 22 refused or invalid requests that carry the markers.
 - `e2e/privacy.spec.js` (`npm run test:e2e`): one referral carried through
   every screen in Chromium, recording every request, page address and
-  console message.
+  console message, then checking storage and every cookie (HttpOnly too).
 
 | Acceptance item | Where it is checked |
 | --- | --- |
 | No participant data in URLs or query strings | `e2e/privacy.spec.js`: every request and page address; page addresses carry numeric IDs only. Server routes refuse unknown query parameters without echoing them (`securityPass`) |
-| No sensitive data in browser storage | `e2e/privacy.spec.js`: localStorage holds only the text size; sessionStorage, IndexedDB, Cache Storage, service workers and cookies are empty after the whole journey. Also `e2e/gpme.spec.js` for the describe step |
+| No sensitive data in browser storage | `e2e/privacy.spec.js`: localStorage holds only the text size; sessionStorage, IndexedDB, Cache Storage and service workers are empty after the whole journey. Also `e2e/gpme.spec.js` for the describe step |
+| No participant data in cookies | `e2e/privacy.spec.js` reads the browser's own cookie jar (`page.context().cookies()`), so HttpOnly cookies, which `document.cookie` cannot see, are checked too: no cookie name or value carries a marker. **Scope:** the e2e fixture is the fixed-identity dev server, which sets no cookies, so that test also expects an empty jar. That expectation does not apply to the Task O demo (`npm run dev:demo`), which legitimately uses an HttpOnly session cookie. `privacyRegression` covers the demo: every `Set-Cookie` through sign-in, a referral, a Not Appropriate response, switching person and sign-out is only `qch_demo_session` with a random 32-character token (or the sign-out clear), and carries no marker. Production cookies wait on Entra sign-in (decision 5) |
 | Logs and console carry no participant data or free text | `privacyRegression` (every console channel, whole workflow, failures included); `e2e/privacy.spec.js` (browser console and page errors); `securityPass`, `errorHandler`, `notificationWiring` |
 | Notifications stay generic | `privacyRegression` (every email sent in the run); `notifications`, `notificationWiring` |
 | Reporting is aggregate only | `privacyRegression`: every report, two periods, no markers and no referral fields; `securityRegression` |
@@ -76,6 +77,7 @@ removed. Each one made a test fail:
 | The sent page copies itself into sessionStorage | `e2e/privacy.spec.js` |
 | The sent list puts a name in the page address | `e2e/privacy.spec.js` |
 | The sent list sends a name in a query string | `e2e/privacy.spec.js` |
+| Creating a referral sets an HttpOnly cookie holding the participant's name (invisible to `document.cookie`) | `e2e/privacy.spec.js` and `privacyRegression` (demo cookie test) |
 
 When the SharePoint store and Azure Functions hosting are built (R19, R20
 in [requirements-reconciliation-register.md](requirements-reconciliation-register.md)),

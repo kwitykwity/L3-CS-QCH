@@ -10,10 +10,16 @@
 // recorded. At the end the test checks that no marker reached:
 //   - an address or query string (requests and page addresses),
 //   - localStorage (only the text size may be kept), sessionStorage,
-//     IndexedDB, Cache Storage, a service worker, or a cookie,
+//     IndexedDB, Cache Storage, a service worker,
+//   - any cookie, read from the browser itself so HttpOnly cookies (which
+//     page scripts cannot see) are checked too,
 //   - the browser console.
-// Server logs, reports and emails are checked in
-// test/regression/privacyRegression.test.js.
+// This runs on the e2e fixture: the synthetic dev server with one fixed
+// identity, which sets no cookies at all. The Task O demo mode
+// (npm run dev:demo) does set an HttpOnly session cookie holding only a
+// random token; that cookie is checked in
+// test/regression/privacyRegression.test.js, with server logs, reports and
+// emails.
 
 import { test, expect } from '@playwright/test';
 import { ensureAffiliation } from './helpers.js';
@@ -125,11 +131,19 @@ test('participant data never reaches an address, browser storage or the console 
     indexedDb: (await indexedDB.databases()).map((db) => db.name),
     caches: await caches.keys(),
     workers: (await navigator.serviceWorker.getRegistrations()).length,
-    cookie: document.cookie,
   }));
   expect(Object.keys(stored.local).every((key) => key === 'qchConnect.textSize'), JSON.stringify(stored.local)).toBe(true);
   expect(leaks(JSON.stringify(stored.local))).toEqual([]);
-  expect(stored).toMatchObject({ session: 0, indexedDb: [], caches: [], workers: 0, cookie: '' });
+  expect(stored).toMatchObject({ session: 0, indexedDb: [], caches: [], workers: 0 });
+
+  // Cookies, from the browser's own cookie jar, HttpOnly ones included
+  // (document.cookie cannot see those). Their contents never carry
+  // participant data. And this fixed-identity fixture sets none at all;
+  // that empty-jar expectation is about this fixture only, not the Task O
+  // demo, which legitimately uses an HttpOnly session cookie.
+  const cookies = await page.context().cookies();
+  expect(cookies.flatMap((c) => leaks(`${c.name}=${c.value}`).map((what) => `${what} in cookie ${c.name}`))).toEqual([]);
+  expect(cookies.map((c) => `${c.name} (httpOnly: ${c.httpOnly})`), 'the fixed-identity fixture sets no cookies').toEqual([]);
 
   // Console: nothing about the participant, on any page.
   expect(consoleLines.flatMap((line) => leaks(line).map((what) => `${what}: ${line}`))).toEqual([]);

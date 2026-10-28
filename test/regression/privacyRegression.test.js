@@ -18,13 +18,18 @@
 //   test/regression/securityRegression.test.js  refusals leak nothing
 //   test/notifications.test.js, test/notificationWiring.test.js  email content
 //   test/gpmeInterpretation.test.js  the describe-step boundary in detail
-// The browser side (URLs, storage, console) is e2e/privacy.spec.js.
+// The browser side (URLs, storage, console, cookies on the fixed-identity
+// fixture) is e2e/privacy.spec.js. The Task O demo mode's session cookie
+// is checked here, at the end of this file.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { randomUUID } from 'node:crypto';
+import express from 'express';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
+import { createDemoSignIn } from '../../scripts/demoSignIn.js';
+import { withDemoPeople } from '../../scripts/demoPersonas.js';
 import { createMemoryReferralStore } from '../../src/referrals/memoryReferralStore.js';
 import { createNotificationService } from '../../src/notifications/notificationService.js';
 import { createSimulatedOutboxSender } from '../../src/notifications/simulatedOutbox.js';
@@ -275,6 +280,49 @@ describe('Task DD: participant data stays inside the referral record', () => {
       assertClean(res.text, `user ${userId} (response)`);
     }
 
+    assertClean(lines.join('\n'), 'console output');
+  });
+});
+
+// The Task O demo mode (npm run dev:demo) is the one setup that uses a
+// cookie: an HttpOnly session cookie holding only a random token. The
+// browser test's "no cookies" expectation is about the fixed-identity
+// fixture; this checks the demo cookie never carries participant data.
+describe('Task DD: the Task O demo session cookie carries no participant data', () => {
+  test('every cookie the demo sets, through a whole referral, is only the random session token', async (t) => {
+    const lines = captureConsole(t);
+    const store = createMemoryReferralStore(withDemoPeople(syntheticSeed({ receiving: true })));
+    const demo = createDemoSignIn({ nodeEnv: 'development' });
+    const server = express();
+    demo.mount(server);
+    server.use(createApp({ affiliationStore: store, referralStore: store, resolveIdentity: demo.resolveIdentity }));
+
+    const setCookies = [];
+    const seen = (res) => { setCookies.push(...(res.headers['set-cookie'] ?? [])); return res; };
+    const referrer = request.agent(server);
+    const receiver = request.agent(server);
+    seen(await referrer.post('/demo/api/sign-in').send({ person: 'referring-worker' }));
+    seen(await receiver.post('/demo/api/sign-in').send({ person: 'housing-receiver' }));
+
+    const created = seen(await referrer.post('/api/referrals').send(referralBody()));
+    assert.equal(created.status, 201);
+    const id = created.body.referral.referralId;
+    seen(await referrer.get('/api/referrals/sent'));
+    seen(await receiver.get('/api/referrals/received'));
+    seen(await receiver.get(`/api/referrals/${id}`));
+    const responded = seen(await receiver.post(`/api/referrals/${id}/response`)
+      .send({ decision: 'NOT_APPROPRIATE', reasonId: 5, explanation: MARK.explanation }));
+    assert.equal(responded.status, 200);
+    seen(await referrer.get(`/api/referrals/${id}`));
+    seen(await receiver.get('/sent/'));
+    seen(await referrer.post('/demo/api/sign-in').send({ person: 'wellness-receiver' }));
+    seen(await receiver.post('/demo/api/sign-out'));
+
+    assert.ok(setCookies.length >= 4, 'sign-in, switching and sign-out set the session cookie');
+    for (const cookie of setCookies) {
+      assertClean(cookie, 'a Set-Cookie header');
+      assert.match(cookie, /^qch_demo_session=([0-9a-f]{32})?; Path=\/; HttpOnly; SameSite=Strict(; Max-Age=0)?$/, cookie);
+    }
     assertClean(lines.join('\n'), 'console output');
   });
 });

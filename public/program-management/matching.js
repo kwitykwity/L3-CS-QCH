@@ -45,6 +45,7 @@ function message(text, error = false, focus = true) {
 function snapshot() {
   return JSON.stringify([
     [...document.querySelectorAll('[data-category]')].map((input) => [input.value, input.checked]),
+    [...document.querySelectorAll('[data-language]')].map((input) => [input.value, input.checked]),
     ...['age-limit-state', 'matching-age-min', 'matching-age-max', 'service-area-state', 'matching-zips']
       .map((id) => $(id).value),
   ]);
@@ -107,6 +108,7 @@ function render(data) {
     group.append(input, label);
     options.append(group);
   }
+  renderLanguages(data);
   $('age-limit-state').value = data.facts.ageLimitState;
   $('matching-age-min').value = data.facts.ageMin ?? '';
   $('matching-age-max').value = data.facts.ageMax ?? '';
@@ -116,11 +118,37 @@ function render(data) {
   original = snapshot();
   controls();
 }
+// Language of service (Task W): same rules as categories. Shown only when
+// the server sent the language list.
+function renderLanguages(data) {
+  const box = $('matching-language-options');
+  box.replaceChildren();
+  $('matching-languages').hidden = !Array.isArray(data.languages);
+  if (!Array.isArray(data.languages)) return;
+  const selected = new Set(data.facts.languageIds ?? []);
+  for (const language of data.languages) {
+    if (language.lifecycleStatus !== 'ACTIVE' && !selected.has(language.languageId)) continue;
+    const group = document.createElement('div');
+    const input = document.createElement('input');
+    input.type = 'checkbox';
+    input.id = `matching-language-${language.languageId}`;
+    input.dataset.language = '';
+    input.value = String(language.languageId);
+    input.checked = selected.has(language.languageId);
+    const label = document.createElement('label');
+    label.htmlFor = input.id;
+    label.textContent = `${language.name}${language.lifecycleStatus === 'ACTIVE' ? '' : ' (discontinued; existing selection)'}`;
+    group.append(input, label);
+    box.append(group);
+  }
+}
 function showCurrent(current) {
   const facts = current.matchingFacts;
   const names = new Map(saved.categories.map((row) => [row.needCategoryId, row.name]));
+  const languageNames = new Map((saved.languages ?? []).map((row) => [row.languageId, row.name]));
   const rows = [
     ['Service categories', facts.needCategoryIds.map((id) => names.get(id) ?? 'Category unavailable').join(', ') || 'Not on file'],
+    ['Languages of service', (facts.languageIds ?? []).map((id) => languageNames.get(id) ?? 'Language unavailable').join(', ') || 'Not on file'],
     ['Age rule', states[facts.ageLimitState]],
     ['Minimum age', facts.ageMin ?? 'Not set'],
     ['Maximum age', facts.ageMax ?? 'Not set'],
@@ -209,6 +237,11 @@ $('matching-form').addEventListener('submit', async (event) => {
     ageMax: ageSet && max !== '' ? Number(max) : null,
     serviceAreaState: $('service-area-state').value,
     serviceAreaZips: zips,
+    // Sent only when the language list was shown, so the saved languages
+    // are never cleared by accident.
+    ...(Array.isArray(saved.languages) ? {
+      languageIds: [...document.querySelectorAll('[data-language]:checked')].map((input) => Number(input.value)),
+    } : {}),
   };
   busy = true;
   controls();
@@ -217,7 +250,7 @@ $('matching-form').addEventListener('submit', async (event) => {
   busy = false;
   if (result.status === 200 && result.body?.program?.programId === programId
       && typeof result.body.program.version === 'string' && validFacts(result.body.facts)) {
-    render({ ...result.body, categories: saved.categories });
+    render({ ...result.body, categories: saved.categories, languages: saved.languages });
     message('Matching information saved.');
   } else if (result.body?.code === 'PROGRAM_CHANGED'
       && typeof result.body.current?.version === 'string' && validFacts(result.body.current.matchingFacts)) {
@@ -233,6 +266,7 @@ $('matching-form').addEventListener('submit', async (event) => {
     message('Matching information was not saved. Check your access and entered facts. Your edits remain.', true, false);
     const fields = result.body?.fields ?? [];
     const id = fields.includes('needCategoryIds') ? 'matching-categories'
+      : fields.includes('languageIds') ? 'matching-languages'
       : fields.some((field) => ['ageLimitState', 'ageRange', 'ageMin', 'ageMax'].includes(field)) ? 'age-limit-state'
         : fields.some((field) => ['serviceAreaState', 'serviceAreaZips'].includes(field)) ? 'service-area-state' : 'matching-status';
     $(id).tabIndex = -1;
