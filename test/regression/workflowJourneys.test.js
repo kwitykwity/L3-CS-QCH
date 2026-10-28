@@ -26,10 +26,12 @@
 //               Find a Program (serviceLanguages, programInformation) without
 //               changing who is found; missing information stays unknown;
 //               authorization and stale-version refusals; rename, option
-//               and field discontinue, retire and Program discontinue follow
-//               the lifecycle rules; referrals sent earlier, their GPME
-//               evaluation, audit trail and every view of them stay
-//               byte-for-byte the same.
+//               and field discontinue, retire (after an implementation-chosen
+//               review period) and Program discontinue follow the lifecycle
+//               rules; each change has exactly one audit record with what,
+//               who and when; referrals sent earlier, their GPME
+//               evaluation, audit trail and every view of them (each loaded
+//               successfully) stay byte-for-byte the same.
 //
 // Like journeys.test.js, each journey drives the real Express app over
 // HTTP the way the screens do, switching between staff members. The
@@ -49,6 +51,7 @@ import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { createMemoryReferralStore } from '../../src/referrals/memoryReferralStore.js';
 import { createGpmeService } from '../../src/gpme/gpmeService.js';
+import { RETIRE_AFTER_DAYS } from '../../src/programs/fieldService.js';
 
 // Staff in the synthetic organization.
 const WORKER = 100;         // sends referrals; no receiving rights
@@ -908,14 +911,33 @@ describe('Journey 13: Program Management changes reach Find a Program; referral 
     const directSent = await worker.post('/api/referrals', referralTo(P_YOUTH));
     assert.deepEqual([guidedSent.status, directSent.status], [201, 201]);
     const sentIds = [guidedSent.body.referral.referralId, directSent.body.referral.referralId];
-    const history = async () => ({
-      rows: JSON.stringify(store._referrals),
-      evaluations: JSON.stringify(store._gpmeEvaluations),
-      referralAudit: JSON.stringify(store._referralAuditEvents.filter((e) => e.entityType === 'REFERRAL')),
-      senderViews: await Promise.all(sentIds.map(async (id) => (await worker.get(`/api/referrals/${id}`)).body)),
-      receiverView: (await intake.get(`/api/referrals/${sentIds[0]}`)).body,
-      sentList: (await worker.get('/api/referrals/sent')).body,
-    });
+    // Each view must load successfully, so two identical error answers can
+    // never pass for "unchanged history".
+    const ok = async (pending, what) => {
+      const res = await pending;
+      assert.equal(res.status, 200, `${what} must load`);
+      return res.body;
+    };
+    const history = async () => {
+      const senderViews = [];
+      for (const id of sentIds) {
+        const view = await ok(worker.get(`/api/referrals/${id}`), `sender view of referral ${id}`);
+        assert.equal(view.referral.referralId, id);
+        senderViews.push(view);
+      }
+      const receiverView = await ok(intake.get(`/api/referrals/${sentIds[0]}`), 'receiver view');
+      assert.equal(receiverView.referral.referralId, sentIds[0]);
+      const sentList = await ok(worker.get('/api/referrals/sent'), 'sent list');
+      assert.deepEqual(sentList.referrals.map((r) => r.referralId).sort((a, b) => a - b), [...sentIds].sort((a, b) => a - b));
+      return {
+        rows: JSON.stringify(store._referrals),
+        evaluations: JSON.stringify(store._gpmeEvaluations),
+        referralAudit: JSON.stringify(store._referralAuditEvents.filter((e) => e.entityType === 'REFERRAL')),
+        senderViews,
+        receiverView,
+        sentList,
+      };
+    };
     const before = await history();
 
     // The Director maintains P11's current information (Program Management).
@@ -1011,9 +1033,12 @@ describe('Journey 13: Program Management changes reach Find a Program; referral 
     assert.deepEqual([kept.lifecycleStatus, kept.value], ['DISCONTINUED', 'Synthetic front desk']);
     // - retiring is refused until the review period has passed, then the
     //   field stays out of Find a Program and its value stays as history.
+    //   The length of that period (RETIRE_AFTER_DAYS in
+    //   src/programs/fieldService.js) is an IMPLEMENTATION DECISION, not QCH
+    //   policy; this test follows the constant rather than a fixed number.
     const tooSoon = await as(ORG_ADMIN).post(`${PM}/fields/${contact.fieldId}/retire`, { version: discontinued.body.field.version });
     assert.equal(tooSoon.body.code, 'RETIRE_NOT_YET');
-    clock += 91 * DAY;
+    clock += (RETIRE_AFTER_DAYS + 1) * DAY;
     const retired = await as(ORG_ADMIN).post(`${PM}/fields/${contact.fieldId}/retire`, { version: discontinued.body.field.version });
     assert.equal(retired.status, 200);
     assert.equal(valueOf(infoOf(await find(), P_ADULT_ED), 'Primary Program contact'), undefined);
@@ -1025,10 +1050,49 @@ describe('Journey 13: Program Management changes reach Find a Program; referral 
     assert.equal((await director12.post(`${PM}/programs/${P_YOUTH}/discontinue`, { version: p12.version })).status, 200);
     assert.equal(shown(await find(), P_YOUTH), undefined);
 
-    // Every change is audited to the person who made it (PRD 9.6).
-    const actors = new Set(store._referralAuditEvents
-      .filter((e) => e.entityType !== 'REFERRAL' && e.entityType !== 'USER').map((e) => e.actorUserId));
-    assert.deepEqual([...actors].sort((a, b) => a - b), [DIRECTOR, DIRECTOR_12, ORG_ADMIN].sort((a, b) => a - b));
+    // Audit (Handoff MVP §12, §19): every Program Management change made
+    // here has exactly one audit record, in order, with what changed (entity,
+    // action, before/after) and who changed it. Refused attempts above
+    // (403 / 409 / 400) added none.
+    const programAudit = store._referralAuditEvents.filter((e) => e.entityType !== 'REFERRAL' && e.entityType !== 'USER');
+    for (const e of programAudit) assert.match(e.occurredAt, /^\d{4}-\d{2}-\d{2}T.*Z$/, 'each record says when (UTC)');
+    const [openOption, limitedOption] = availability.options;
+    const row = (entityType, entityId, action, actor, before, after) => ({ entityType, entityId, action, actor, before, after });
+    const pick = (value, keys) => (value == null ? null : Object.fromEntries(keys.map((k) => [k, value[k]])));
+    const facts = (languageIds) => ({ ...P11_FACTS, languageIds });
+    assert.deepEqual(programAudit.map((e) => {
+      const keys = Object.keys(e.after ?? e.before ?? {});
+      return row(e.entityType, e.entityId, e.action, e.actorUserId, pick(e.before, keys), pick(e.after, keys));
+    }), [
+      row('FIELD', availability.fieldId, 'CREATED', DIRECTOR, null,
+        { label: 'Current availability', data_type: 'SINGLE_SELECT', applies_to: 'PROGRAM_INFO', replaces_field_id: null }),
+      row('FIELD_OPTION', openOption.optionId, 'CREATED', DIRECTOR, null,
+        { field_id: availability.fieldId, label: 'Synthetic open', display_order: 0 }),
+      row('FIELD_OPTION', limitedOption.optionId, 'CREATED', DIRECTOR, null,
+        { field_id: availability.fieldId, label: 'Synthetic limited', display_order: 1 }),
+      row('FIELD_OPTION', waitListed.optionId, 'CREATED', DIRECTOR, null,
+        { field_id: availability.fieldId, label: 'Synthetic wait list', display_order: 2 }),
+      row('PROGRAM_FIELD', P_ADULT_ED, 'CREATED', DIRECTOR, null, { field_id: availability.fieldId, is_required: false, display_order: 2 }),
+      row('FIELD', contact.fieldId, 'CREATED', DIRECTOR, null,
+        { label: 'Primary Program contact', data_type: 'TEXT', applies_to: 'PROGRAM_INFO', replaces_field_id: null }),
+      row('PROGRAM_FIELD', P_ADULT_ED, 'CREATED', DIRECTOR, null, { field_id: contact.fieldId, is_required: false, display_order: 3 }),
+      row('FIELD', waitList.fieldId, 'CREATED', DIRECTOR, null,
+        { label: 'Wait-list information', data_type: 'TEXT', applies_to: 'PROGRAM_INFO', replaces_field_id: null }),
+      row('PROGRAM_FIELD', P_ADULT_ED, 'CREATED', DIRECTOR, null, { field_id: waitList.fieldId, is_required: false, display_order: 4 }),
+      row('PROGRAM', P_ADULT_ED, 'UPDATED', DIRECTOR, { matching_facts: facts([]) }, { matching_facts: facts([ENGLISH, SPANISH]) }),
+      row('PROGRAM_FIELD', P_ADULT_ED, 'UPDATED', DIRECTOR,
+        { field_id: availability.fieldId, value: null }, { field_id: availability.fieldId, value: waitListed.optionId }),
+      row('PROGRAM_FIELD', P_ADULT_ED, 'UPDATED', DIRECTOR,
+        { field_id: contact.fieldId, value: null }, { field_id: contact.fieldId, value: 'Synthetic intake desk, ext. 000' }),
+      row('PROGRAM', P_ADULT_ED, 'UPDATED', DIRECTOR, { site: 'Site B' }, { site: 'Synthetic Site B2' }),
+      row('PROGRAM_FIELD', P_ADULT_ED, 'UPDATED', DIRECTOR,
+        { field_id: contact.fieldId, value: 'Synthetic intake desk, ext. 000' }, { field_id: contact.fieldId, value: 'Synthetic front desk' }),
+      row('FIELD', availability.fieldId, 'RENAMED', DIRECTOR, { label: 'Current availability' }, { label: 'Availability this cycle' }),
+      row('FIELD_OPTION', waitListed.optionId, 'DISCONTINUED', DIRECTOR, { lifecycle_status: 'ACTIVE' }, { lifecycle_status: 'DISCONTINUED' }),
+      row('FIELD', contact.fieldId, 'DISCONTINUED', DIRECTOR, { lifecycle_status: 'ACTIVE' }, { lifecycle_status: 'DISCONTINUED' }),
+      row('FIELD', contact.fieldId, 'RETIRED', ORG_ADMIN, { lifecycle_status: 'DISCONTINUED' }, { lifecycle_status: 'RETIRED' }),
+      row('PROGRAM', P_YOUTH, 'DISCONTINUED', DIRECTOR_12, { lifecycle_status: 'ACTIVE' }, { lifecycle_status: 'DISCONTINUED' }),
+    ]);
 
     // History: referrals sent before the changes are byte-for-byte the same,
     // as are their GPME evaluation (what was shown then), their audit trail,
