@@ -14,6 +14,12 @@
 //               meaning; values follow the field's identity.
 //   Journey 11  Organization changes, slice 14C (#25): new Department and
 //               Program, referrals to it, move it, Department lifecycle.
+//   Journey 12  Both referral paths (Task Z): Find a Program and Direct
+//               Referral run the same lifecycle (Not Appropriate ->
+//               correction -> outcome -> outcome correction), the same
+//               authorization refusals and the same audit trail, differing
+//               only in source; GPME only suggests; the employee's choice
+//               is saved; Direct Referral never depends on matching.
 //
 // Like journeys.test.js, each journey drives the real Express app over
 // HTTP the way the screens do, switching between staff members. The
@@ -652,5 +658,180 @@ describe('Journey 11: organization changes, slice 14C (#25; PRD 3.6, 4.4, 9.1, 9
       assert.ok(!JSON.stringify(res.body ?? {}).includes('notification'), res.req.path);
     }
     noStore(responses, PM);
+  });
+});
+
+describe('Journey 12: both referral paths, one lifecycle (Task Z; PRD 2.1 to 2.4, 6.1 to 6.5, 8.1, 8.8, 9.6, 17.2, 17.3)', () => {
+  // Path A: Find a Program (GPME-assisted). Path B: Direct Referral.
+  // Same staff, same receiving Program, same steps after the send. The two
+  // paths must differ only in how the Program was found.
+  const ANSWERS = { needCategoryIds: [EMPLOYMENT], ageRange: { min: 19, max: 20 }, participantZip: '99918' };
+  const DESCRIPTION = 'Synthetic description marker QZ12DESC: looking for help finding a job';
+
+  const referralState = (store) => ({
+    referrals: store._referrals.length,
+    evaluations: store._gpmeEvaluations.length,
+    referralAudit: store._referralAuditEvents.filter((e) => e.entityType === 'REFERRAL').length,
+  });
+
+  // Sends one referral to Program 11 by the given path, then runs the whole
+  // receiving lifecycle across staff. Returns what both paths must share.
+  async function journey(path) {
+    const { store, as, responses } = startApp();
+    const worker = as(WORKER);
+    await chooseAffiliation(worker, P_FAMILY);
+
+    let draft = referralTo(P_ADULT_ED);
+    if (path === 'GUIDED') {
+      // Describe -> confirm answers -> Find Programs. Suggestions only.
+      const described = await worker.post('/api/gpme/interpret', { text: DESCRIPTION });
+      assert.equal(described.status, 200);
+      const found = await worker.post('/api/gpme/match', ANSWERS);
+      assert.equal(found.body.status, 'RESULTS');
+      assert.ok(ids(found.body.plausible).includes(P_ADULT_ED));
+      assert.deepEqual(referralState(store), { referrals: 0, evaluations: 0, referralAudit: 0 },
+        'describing and matching create nothing (PRD 8.1)');
+      draft = referralTo(P_ADULT_ED, { gpme: ANSWERS });
+    }
+
+    const sent = await worker.post('/api/referrals', draft);
+    assert.equal(sent.status, 201, `${path}: sent`);
+    const id = sent.body.referral.referralId;
+    const url = (suffix = '') => `/api/referrals/${id}${suffix}`;
+    const row = () => store._referrals.find((r) => r.referralId === id);
+
+    // Authorization is the same on both paths (PRD 3.3 to 3.7, 17.3).
+    // Refusals change nothing.
+    const before = JSON.stringify(row());
+    const auditBefore = store._referralAuditEvents.length;
+    assert.equal((await as(HOUSING_STAFF).get(url())).status, 404, `${path}: another Program cannot see it`);
+    assert.equal((await as(null).get(url())).status, 401);
+    for (const [userId, status] of [[WORKER, 403], [VIEWER, 403], [OUTCOMES, 403], [HOUSING_STAFF, 404], [LEFT, 403]]) {
+      const res = await as(userId).post(url('/response'), { decision: 'ACCEPTED' });
+      assert.equal(res.status, status, `${path}: user ${userId} may not respond`);
+    }
+    assert.equal(JSON.stringify(row()), before, `${path}: refused requests changed nothing`);
+    assert.equal(store._referralAuditEvents.length, auditBefore);
+
+    // Not Appropriate -> outcome refused -> corrected to Accepted ->
+    // outcome recorded -> outcome corrected.
+    const intake = as(INTAKE);
+    const outcomes = as(OUTCOMES);
+    const supervisor = as(SUPERVISOR);
+    assert.equal((await intake.post(url('/response'), {
+      decision: 'NOT_APPROPRIATE', reasonId: 1, explanation: MARKERS.explanation,
+    })).status, 200);
+    const early = await outcomes.post(url('/outcome'), { outcome: 'RESULTED_IN_SERVICE' });
+    assert.equal(early.body.code, 'OUTCOME_NOT_ALLOWED', `${path}: no outcome on Not Appropriate`);
+    const version = (await supervisor.get(url())).body.referral.version;
+    assert.equal((await supervisor.post(url('/response/correction'), { decision: 'ACCEPTED', version })).status, 200);
+    const recorded = await outcomes.post(url('/outcome'), { outcome: 'RESULTED_IN_SERVICE' });
+    assert.equal(recorded.status, 200);
+    assert.equal((await supervisor.post(url('/outcome/correction'), {
+      outcome: 'DID_NOT_RESULT_IN_SERVICE', version: recorded.body.referral.version,
+    })).status, 200);
+
+    // The sender sees the result, read-only.
+    const senderView = await worker.get(url());
+    const sentList = await worker.get('/api/referrals/sent');
+
+    const finalRow = row();
+    return {
+      store,
+      responses,
+      source: finalRow.source,
+      gpmeEvaluationId: finalRow.gpmeEvaluationId ?? null,
+      shared: {
+        referringProgramId: finalRow.referringProgramId,
+        receivingProgramId: finalRow.receivingProgramId,
+        decision: finalRow.decision,
+        serviceOutcome: finalRow.serviceOutcome,
+        senderStage: senderView.body.referral.stage,
+        senderOutcome: senderView.body.referral.serviceOutcome,
+        senderCanChange: Object.entries(senderView.body.viewerAccess)
+          .filter(([key, allowed]) => key.startsWith('can') && key !== 'canView' && allowed === true).map(([key]) => key),
+        sentList: sentList.body.referrals.map((r) => r.stage),
+        trail: auditOf(store, 'REFERRAL', finalRow.referralId).map((e) => [e.action, e.actorUserId]),
+      },
+    };
+  }
+
+  test('Find a Program and Direct Referral run the same lifecycle, authorization and audit trail', async () => {
+    const guided = await journey('GUIDED');
+    const direct = await journey('DIRECT');
+
+    // Only how the Program was found differs.
+    assert.equal(guided.source, 'GPME_ASSISTED');
+    assert.equal(direct.source, 'DIRECT');
+    assert.notEqual(guided.gpmeEvaluationId, null);
+    assert.equal(direct.gpmeEvaluationId, null);
+    assert.equal(direct.store._gpmeEvaluations.length, 0);
+    assert.equal(direct.responses.filter((r) => r.req.path.startsWith('/api/gpme')).length, 0,
+      'Direct Referral never calls GPME');
+
+    assert.deepEqual(guided.shared, direct.shared);
+    assert.deepEqual(direct.shared.trail, [
+      ['CREATED', WORKER],
+      ['NOT_APPROPRIATE', INTAKE],
+      ['CORRECTED', SUPERVISOR],
+      ['SERVICE_OUTCOME_RECORDED', OUTCOMES],
+      ['CORRECTED', SUPERVISOR],
+    ]);
+    assert.equal(direct.shared.senderOutcome, 'DID_NOT_RESULT_IN_SERVICE');
+    assert.deepEqual(direct.shared.senderCanChange, [], 'the sender can only read');
+
+    // The description and matching answers are stored nowhere (PRD 5.3, 8.7).
+    const stored = JSON.stringify([guided.store._referrals, guided.store._gpmeEvaluations, guided.store._referralAuditEvents]);
+    assert.ok(!stored.includes('QZ12DESC'), 'the description is not stored');
+    assert.ok(!stored.includes('99918'), 'the ZIP answer is not stored');
+    for (const { responses } of [guided, direct]) noStore(responses, '/api/');
+  });
+
+  test('GPME only suggests; the employee chooses, and Direct Referral does not depend on matching', async () => {
+    const { store, as } = startApp();
+    const worker = as(WORKER);
+    await chooseAffiliation(worker, P_FAMILY);
+
+    // Matching many times creates nothing.
+    for (let i = 0; i < 3; i += 1) assert.equal((await worker.post('/api/gpme/match', ANSWERS)).status, 200);
+    assert.equal((await worker.post('/api/gpme/interpret', { text: DESCRIPTION })).status, 200);
+    assert.deepEqual(referralState(store), { referrals: 0, evaluations: 0, referralAudit: 0 });
+
+    // The employee may pick any shown Program, not just the first one.
+    const found = await worker.post('/api/gpme/match', ANSWERS);
+    assert.deepEqual(ids(found.body.plausible), [P_ADULT_ED, P_YOUTH]);
+    const picked = await worker.post('/api/referrals', referralTo(P_YOUTH, { gpme: ANSWERS }));
+    assert.equal(picked.status, 201);
+    assert.equal(picked.body.referral.receivingProgramId, P_YOUTH, 'the employee\'s choice is what is saved');
+    const evaluation = await store.getGpmeEvaluation(store._referrals[0].gpmeEvaluationId);
+    assert.deepEqual(evaluation.results.filter((r) => r.wasSelected).map((r) => r.programId), [P_YOUTH]);
+
+    // A guided send to a Program matching did not show is refused, and nothing is saved.
+    const notShown = referralTo(P_FAMILY, { gpme: ANSWERS });
+    const refused = await worker.post('/api/referrals', notShown);
+    assert.equal(refused.status, 409);
+    assert.equal(refused.body.code, 'GPME_RESULT_CHANGED');
+    assert.deepEqual(referralState(store), { referrals: 1, evaluations: 1, referralAudit: 1 });
+
+    // The same Program as a Direct Referral: the employee's judgement, no matching rules applied.
+    const { gpme, ...direct } = notShown;
+    const sent = await worker.post('/api/referrals', direct);
+    assert.equal(sent.status, 201);
+    assert.equal(sent.body.referral.receivingProgramId, P_FAMILY);
+    assert.equal(store._referrals.find((r) => r.referralId === sent.body.referral.referralId).source, 'DIRECT');
+    assert.deepEqual(referralState(store), { referrals: 2, evaluations: 1, referralAudit: 2 });
+
+    // With matching completely down, Direct Referral still works and guided sends fail honestly.
+    store._failMatching();
+    const down = await worker.post('/api/gpme/match', ANSWERS);
+    assert.equal(down.status, 503);
+    assert.equal(down.body.status, 'UNABLE_TO_MATCH');
+    const guidedDown = await worker.post('/api/referrals', referralTo(P_ADULT_ED, { gpme: ANSWERS }));
+    assert.equal(guidedDown.status, 503);
+    assert.equal(guidedDown.body.code, 'GPME_UNAVAILABLE');
+    assert.deepEqual(referralState(store), { referrals: 2, evaluations: 1, referralAudit: 2 }, 'a failed send saves nothing');
+    const directDown = await worker.post('/api/referrals', referralTo(P_ADULT_ED));
+    assert.equal(directDown.status, 201);
+    assert.deepEqual(referralState(store), { referrals: 3, evaluations: 1, referralAudit: 3 });
   });
 });
