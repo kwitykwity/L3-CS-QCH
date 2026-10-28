@@ -1,14 +1,75 @@
 # Requirements reconciliation register
 
-**Status: working register for the Oct 30, 2026 controlled PRD revision
-(Trello Task U).** This page does not change any requirement by itself.
-The Oct 14, 2026 Final Technical PRD stays the baseline until the team
-makes the single controlled revision from this register.
+> **HISTORICAL SUPPORTING EVIDENCE. NOT GOVERNING REQUIREMENTS.**
+> Since October 28, 2026 the governing requirements are the frozen
+> **QCH Connect Handoff PRD** (Status: Frozen Handoff PRD, October 28,
+> 2026). The **QCH Connect Handoff MVP** (October 28, 2026) is derived from
+> it, and the **Current Handoff Wireframes** (Final v1.6, October 28, 2026)
+> from both. Where this register and those documents differ, the Handoff
+> PRD governs. The team holds those documents; they are not in this
+> repository.
+>
+> This page is kept only to show where post-October-14 evidence came from
+> and how it reached the Handoff PRD. Its statuses (CONFIRMED, TEAM
+> PRODUCT DECISION, OPEN QCH DECISION) and its "Today" and "Built on
+> `main`?" columns record the team's view on October 26 and 27, 2026, and
+> are no longer maintained. Do not read them as current requirements or as
+> current implementation status. It adds no requirements.
 
-One place for every piece of new QCH or QCH IT evidence received after the
-Final Technical PRD, what it would change, and what the code does today,
-so the PRD revision does not have to be rebuilt from Slack, pull request
-descriptions or memory.
+**Original purpose (Trello Task U):** one place for every piece of new QCH
+or QCH IT evidence received after the Final Technical PRD, what it would
+change, and what the code did at the time, so the controlled PRD revision
+did not have to be rebuilt from Slack, pull request descriptions or
+memory. That revision is the Handoff PRD above.
+
+## Where each item ended up (October 28, 2026)
+
+Each row checked against the frozen Handoff PRD (HPRD) and Handoff MVP
+(MVP). This table only points to where the governing text is; it adds and
+changes no requirement.
+
+- **Incorporated:** the Handoff PRD states it, consistent with this row.
+- **Superseded:** the Handoff PRD settles it differently from what this
+  row recorded. The row's text is a historical assumption; follow the
+  Handoff PRD.
+- **Not restated:** the Handoff PRD neither repeats nor contradicts it.
+- **Production dependency:** the Handoff PRD lists it as a QCH or QCH IT
+  dependency (HPRD 37, MVP 31).
+
+| ID | Item | Governing text | Result |
+| --- | --- | --- | --- |
+| R1 | Open-ended "describe the need" | HPRD 4.1, 5.1; MVP 4.1, 5 | Incorporated |
+| R2 | Show what was understood before matching | HPRD 5.2; MVP 5 | Incorporated |
+| R3 | How the free-text step fits PRD 8.2 | HPRD 3.1, 3.2, 5, 7, 15, 28; MVP 5, 15, 26, 29 | **Superseded.** The open "team decision, not yet recorded" is settled: the interpreter is advisory and replaceable, the employee confirms before matching, discovery inputs are not persisted, no external AI |
+| R4 | Everyday age words mapped to age ranges | HPRD 5.3; MVP 6 | **Superseded. Conflicts.** This row records a proposal that "teen" means 13 to 19 and "older adult" means 60 and up. HPRD 5.3: the system must not silently convert an exact age into an invented age range; the employee may enter an exact age or a range. (The merged interpreter proposes no age from such words: `test/gpmeInterpretation.test.js`, "no age range is assumed from everyday wording") |
+| R5 | Approved AI or language-processing boundary | HPRD 7; MVP 26 | **Superseded.** Recorded here as an open QCH decision; the Handoff PRD settles it: no external AI in the MVP, and any future external processing needs QCH approval, QCH IT approval, security and privacy review, approved data handling and explicit authorization |
+| R6 | Need is the most important matching factor | HPRD 6.2 (only approved, explicit, versioned criteria) | Not restated |
+| R7 | Language of service, more than one per Program | HPRD 6.3, 8, 10; MVP 8 | Incorporated (shown; unknown is "not on file", never English; non-exclusionary; not a GPME input; a future language rule needs approval) |
+| R8 | Full or wait-listed Programs still appear | HPRD 6.4; MVP 9 | Incorporated (availability shown, non-exclusionary, not a GPME input) |
+| R9 | No participant waitlist-management system | HPRD 2; MVP 3 | Incorporated (not intake, enrollment or case management) |
+| R10 | QCH adds and removes Programs | HPRD 11, 12; MVP 13 | Incorporated (discontinue or retire, not destructive delete) |
+| R11 | Mix of standardized and flexible fields | HPRD 9 | Incorporated |
+| R12 | "Program Description" and "Important Information About Our Program" | HPRD 9; MVP 10 | Incorporated |
+| R13 | Multiple locations | HPRD 13; MVP 14 | Incorporated |
+| R14 | Program contact, with a prompt to refer through the app | HPRD 14; MVP 11 | Incorporated |
+| R15 | "No match found" path | HPRD 6.5; MVP 7 | Incorporated |
+| R16 | No automatic fallback Program | HPRD 6.5 | Incorporated ("no predetermined automatic fallback Program") |
+| R17 | How matching improves | HPRD 6.7 | Incorporated |
+| R18 | Missing Program information never "no restriction" | HPRD 6.3 (language only) | Not restated for age and service area |
+| R19 | Production data store | HPRD 27, 28; MVP 28, 29 | **Superseded. Conflicts.** Recorded here as open, with the Azure SQL design in `db/migrations/` as the team's plan. HPRD 27: SharePoint Lists in a dedicated private site, no separate production database |
+| R20 | Server-side hosting and compute | HPRD 29; MVP 28 | **Superseded. Conflicts.** Recorded here as open, against Azure App Service. HPRD 29: Azure Functions with managed identity, no embedded secrets |
+| R21 | SharePoint site and access model | HPRD 27, 30 | **Superseded.** Dedicated private site, employees through QCH Connect, direct access for QCH IT administrators, Sites.Selected |
+| R22 | Entra configuration | HPRD 22; dependency HPRD 37 item 3, MVP 31 item 3 | Production dependency |
+| R23 | Microsoft Graph and shared mailbox | HPRD 21, 30; dependencies HPRD 37 items 4 and 5 | **Superseded** (the permission model is set: Graph limited to the shared mailbox through Exchange RBAC for Applications). Provisioning remains a production dependency |
+| R24 | Department naming and mapping | HPRD 11; dependency HPRD 37 item 8 | Production dependency. HPRD 11: the four Department names are demo seed values, not a production taxonomy; QCH establishes the production structure |
+| R25 | Archive, retention and audit policy | HPRD 26, 31; dependency HPRD 37 item 9 | **Superseded** for archiving (at 2,500 active referrals, archive the 500 oldest eligible closed or completed; never open or Awaiting Response; archived records read-only and reportable). Retention and deletion policy remains a production dependency |
+
+Not carried here, by design: requirements the Handoff PRD adds that did
+not come through this register. Read the Handoff PRD for those.
+
+## Historical register (as recorded October 26 and 27, 2026)
+
+Everything below is the register as it stood. It is not maintained.
 
 ## How to read this page
 
@@ -38,6 +99,8 @@ descriptions or memory.
 | QCH IT infrastructure guidance | Oct 22, 2026 | Team copy, not in this repository. The open items it raised are tracked in [pending-qch-it-decisions.md](pending-qch-it-decisions.md) |
 | Midpoint check-in with QCH program staff | Oct 23, 2026 | Team transcript copy, not in this repository. Requests summarized in [ai-interpretation-options.md](ai-interpretation-options.md) and [task-c-program-information.md](task-c-program-information.md) |
 | Kyle Butler (QCH), reply to "QCH Connect: Midpoint Follow-Up and Remaining Questions" | Oct 26, 2026 | Email to the team. Kyle answered the non-technical questions and invited Joelle Tirado (QCH) to add to them |
+| QCH IT (Bassit Saidi), reply on the same thread, answering the hosting and security questions | Oct 27, 2026 | Email to the team. Not recorded in the rows below; its answers are in the Handoff PRD (21, 27 to 31) |
+| QCH Connect Handoff PRD (frozen) and Handoff MVP | Oct 28, 2026 | Team copies, not in this repository. **Governing.** See the top of this page |
 
 PRD 22 closed the business-clarification phase "unless genuinely new or
 conflicting business evidence emerges". The Oct 22, Oct 23 and Oct 26
@@ -102,6 +165,8 @@ here instead of being treated as already covered.
 
 ### R3. How the free-text step fits PRD 8.2
 
+> Superseded October 28, 2026: see HPRD 3.1, 3.2, 5, 7, 15, 28.
+
 | | |
 | --- | --- |
 | PRD | 8.2, 5.3, 5.4, 21 |
@@ -115,6 +180,8 @@ here instead of being treated as already covered.
 
 ### R4. Everyday age words mapped to age ranges
 
+> Superseded October 28, 2026, and conflicts with HPRD 5.3 (no invented age range). Historical only.
+
 | | |
 | --- | --- |
 | PRD | 8.2 (age range input) |
@@ -126,6 +193,8 @@ here instead of being treated as already covered.
 | Approver | None recorded |
 
 ### R5. Approved AI or language-processing boundary
+
+> Superseded October 28, 2026: see HPRD 7.
 
 | | |
 | --- | --- |
@@ -301,6 +370,8 @@ answered in Kyle's Oct 26 email.
 
 ### R19. Production data store
 
+> Superseded October 28, 2026, and conflicts with HPRD 27 (SharePoint Lists, no separate database). Historical only.
+
 | | |
 | --- | --- |
 | PRD | 1.3, 1.4 (Azure SQL Database marked CLIENT CONFIRMED / QCH IT), 9 |
@@ -313,6 +384,8 @@ answered in Kyle's Oct 26 email.
 
 ### R20. Server-side hosting and compute
 
+> Superseded October 28, 2026, and conflicts with HPRD 29 (Azure Functions, managed identity). Historical only.
+
 | | |
 | --- | --- |
 | PRD | 1.4 (Azure App Service marked CLIENT CONFIRMED / QCH IT), 3.7, 6.4 |
@@ -324,6 +397,8 @@ answered in Kyle's Oct 26 email.
 | Approver | Waiting on QCH IT |
 
 ### R21. SharePoint site and access model
+
+> Superseded October 28, 2026: see HPRD 27, 30.
 
 | | |
 | --- | --- |
@@ -349,6 +424,8 @@ answered in Kyle's Oct 26 email.
 
 ### R23. Microsoft Graph and shared mailbox
 
+> Superseded October 28, 2026: see HPRD 21, 30. Provisioning is a production dependency (HPRD 37).
+
 | | |
 | --- | --- |
 | PRD | 11.1 (Graph and a QCH shared mailbox, CLIENT CONFIRMED / QCH IT), 22 (mailbox configuration: open implementation dependency) |
@@ -373,6 +450,8 @@ answered in Kyle's Oct 26 email.
 
 ### R25. Archive, retention and audit policy
 
+> Archiving superseded October 28, 2026: see HPRD 31. Retention and deletion remain a production dependency (HPRD 37).
+
 | | |
 | --- | --- |
 | PRD | 6.5, 9.6, 9.11, 22 (retention and purge: open QCH policy dependency) |
@@ -383,11 +462,9 @@ answered in Kyle's Oct 26 email.
 | Affected | None until decided |
 | Approver | Waiting on QCH |
 
-## Keeping this register current
+## This register is closed
 
-- Add a row when new QCH or QCH IT evidence arrives before the Oct 30
-  cutoff. Record the date and who said it.
-- Change a status only with evidence. A merged pull request does not move
-  a row to CONFIRMED.
-- When the Oct 30 PRD revision is made, note its date here and which rows
-  it absorbed.
+As of October 28, 2026 this register takes no new rows and no status
+changes. The controlled revision it was built for is the frozen Handoff
+PRD; requirements change there, not here. Current implementation status
+belongs to the implementation audit, not to this page.
