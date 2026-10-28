@@ -67,6 +67,14 @@ codes where participants must live). Each limit has four states:
 | Not on file | Nobody has entered it | Shows the Program as "possible", never as "no limit" |
 | Other limit | A limit these fields cannot express | Treated like Not on file, explained differently |
 
+**Languages of service** are on the same page. Tick every language staff
+can serve participants in; a Program can have several. Ticking none means
+the languages are **not on file**, which is never read as "English only".
+Find a Program shows them on each result ("Languages of service: English,
+Spanish" or "not on file"). Matching does not use them: a Program is never
+hidden because of its languages. A language that is no longer offered stays
+on a Program that already has it, marked "discontinued; existing selection".
+
 ### Program fields
 
 **Program fields** holds extra information beyond the common boxes.
