@@ -571,27 +571,30 @@ function renderProgramInformation(item) {
 
   const info = programInformationOf(item);
   if (info === null || info.length === 0) {
+    // Failed to load, or no additional fields on file: say which, neutrally.
     const note = document.createElement('p');
     note.className = 'match__info-note';
     note.textContent = info === null ? GUIDED_MESSAGES.PROGRAM_INFO_UNAVAILABLE : GUIDED_MESSAGES.PROGRAM_INFO_NONE;
     box.append(note);
-    return box;
+  } else {
+    const list = document.createElement('dl');
+    list.className = 'match__info-list';
+    list.setAttribute('aria-labelledby', headingId);
+    for (const field of info) {
+      const term = document.createElement('dt');
+      term.textContent = field.label;
+      const value = document.createElement('dd');
+      value.textContent = field.value ?? GUIDED_MESSAGES.PROGRAM_INFO_NOT_ON_FILE;
+      list.append(term, value);
+    }
+    box.append(list);
   }
 
-  const list = document.createElement('dl');
-  list.className = 'match__info-list';
-  list.setAttribute('aria-labelledby', headingId);
-  for (const field of info) {
-    const term = document.createElement('dt');
-    term.textContent = field.label;
-    const value = document.createElement('dd');
-    value.textContent = field.value ?? GUIDED_MESSAGES.PROGRAM_INFO_NOT_ON_FILE;
-    list.append(term, value);
-  }
+  // The QCH Connect-first contact guidance (Handoff MVP §11) in every state.
   const referFirst = document.createElement('p');
-  referFirst.className = 'match__info-note';
+  referFirst.className = 'match__info-note match__refer-first';
   referFirst.textContent = GUIDED_MESSAGES.PROGRAM_INFO_REFER_FIRST;
-  box.append(list, referFirst);
+  box.append(referFirst);
   return box;
 }
 
