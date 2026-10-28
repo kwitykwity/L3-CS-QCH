@@ -60,7 +60,10 @@ describe('every page', () => {
         // tabindex="-1" the next Tab after the skip link went back to the
         // header (heard in the VoiceOver run, docs/screen-reader-check.md A3).
         if (!/class="skip-link"/.test(html)) return;
-        assert.match(html, /<a class="skip-link" href="#main">/);
+        // With Safari's default setting, Tab skips plain links; a link with
+        // tabindex="0" is still a Tab stop, so keyboard users can reach this
+        // skip link (docs/browser-verification.md).
+        assert.match(html, /<a class="skip-link" href="#main" tabindex="0">/);
         const [main] = tags(html, 'main');
         assert.match(main, /\bid="main"/);
         assert.match(main, /\btabindex="-1"/);
@@ -112,7 +115,7 @@ describe('every page', () => {
 
       if (isFormPage(html)) {
         test('form page: skip link, required-field note, and every required field marked for assistive tech (PRD 14.3)', () => {
-          assert.match(html, /<a class="skip-link" href="#main">/);
+          assert.match(html, /<a class="skip-link" href="#main" tabindex="0">/);
           assert.match(html, /id="main"/);
           assert.match(html, /Fields marked <span aria-hidden="true">\*<\/span> are required\./);
           for (const a of [...tags(html, 'input'), ...tags(html, 'select'), ...tags(html, 'textarea')]) {
@@ -235,20 +238,24 @@ describe('text size (PRD 14.5)', () => {
 
   // Task BB: number boxes were left out of the shared control style, so the
   // Program matching age range stayed at the browser's default size.
-  test('every kind of text box the pages use is in the shared control style', () => {
-    const used = new Set(pages.flatMap((p) => tags(p.html, 'input').map((a) => attr(a, 'type') ?? 'text'))
-      .filter((type) => !['radio', 'checkbox', 'hidden', 'submit', 'button'].includes(type)));
-    assert.ok(used.has('text'));
+  test('every kind of text box the pages use, in HTML or built by page scripts, is in the shared control style', () => {
+    const skip = ['radio', 'checkbox', 'hidden', 'submit', 'button', 'reset'];
+    const fromHtml = pages.flatMap((p) => tags(p.html, 'input').map((a) => attr(a, 'type') ?? 'text'));
+    // Page scripts that build inputs: `x.type = 'number'`, or a choice such as
+    // `x.type = cond ? 'number' : 'date'` (the Program fields page). Task BB
+    // found a scripted date box that the HTML-only version of this check missed.
+    const scripts = files.filter((f) => f.endsWith('.js')).map((f) => readFileSync(f, 'utf8'));
+    const fromScripts = scripts.flatMap((js) => [...js.matchAll(/\.type\s*=\s*([^;\n]+)/g)]
+      .flatMap((m) => [...m[1].matchAll(/'([a-z-]+)'/g)].map((q) => q[1])));
+    const used = new Set([...fromHtml, ...fromScripts].filter((type) => !skip.includes(type)));
+    assert.ok(used.has('text') && used.has('date') && used.has('number'));
     const shared = stylesheets.find((s) => s.name === path.join('referral', 'referral.css')).css;
-    const ownStyle = { date: path.join('reporting', 'reporting.css') }; // the Reporting Center styles its own date box
     for (const type of used) {
-      if (ownStyle[type]) {
-        assert.match(stylesheets.find((s) => s.name === ownStyle[type]).css, new RegExp(`input\\[type="${type}"\\][^{]*\\{[^}]*font: inherit`), type);
-        continue;
-      }
       // A page-wide selector (not one scoped to a single page's container).
       assert.match(shared, new RegExp(`(^|[,}])\\s*input\\[type="${type}"\\][^{]*\\{[^}]*font: inherit`, 'm'), `input type="${type}" is not in the shared control style`);
     }
+    // The Reporting Center has its own stylesheet and styles its date box there.
+    assert.match(stylesheets.find((s) => s.name === path.join('reporting', 'reporting.css')).css, /input\[type="date"\][^{]*\{[^}]*font: inherit/);
   });
 });
 

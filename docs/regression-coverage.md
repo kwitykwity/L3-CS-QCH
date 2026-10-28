@@ -32,11 +32,12 @@ stops it afterwards. To use a Chromium that is already installed, set
 | File | What it checks |
 | --- | --- |
 | `test/regression/journeys.test.js` | Whole workflows through the integrated app over HTTP, switching between staff members (Journeys 1 to 7) |
-| `test/regression/workflowJourneys.test.js` | Journeys 8 to 11, same style: GPME-assisted referral, outcome and corrections, Program fields and values (14B), organization changes (14C) |
+| `test/regression/workflowJourneys.test.js` | Journeys 8 to 12, same style: GPME-assisted referral, outcome and corrections, Program fields and values (14B), organization changes (14C), and both referral paths side by side (Task Z) |
 | `test/regression/accessibility.test.js` | Every page in `public/`: language, title, headings, labels, ids, required fields, status announcements, text size, link colors, and color contrast in both themes. Since Task BB also: no grid column has a text-size-scaled minimum that can be wider than the screen, and every kind of text box the pages use is in the shared control style |
-| `e2e/accessibilityFinal.spec.js` | Task BB: every screen on `main` swept the same way. S/M/L/XL are exactly 12/14/18/24px; at XL nothing scrolls sideways at 375px or 320px (the WCAG reflow width); the text size reaches every form control, not only labels; axe finds nothing at XL on a 320px screen in both themes. Each of the three defects Task BB fixed fails here if it returns (the New Referral path buttons, issue #46; sent and received list items at 320px; number boxes ignoring the text size) |
+| `e2e/accessibilityFinal.spec.js` | Task BB: every screen on `main` swept the same way, each in a populated state after asserting its own loaded content (seeded referral, six Program field types, a reusable field; the start page and Find a Program with results included). S/M/L/XL are exactly 12/14/18/24px; at XL nothing scrolls sideways at 375px or 320px (the WCAG reflow width); the text size reaches every form control, including ones built from data; axe finds nothing at XL on a 320px screen in both themes. Each of the four defects Task BB fixed fails here if it returns. Permissions is pending #63 |
 | `e2e/directReferral.spec.js` | In Chromium: the New Referral entry screen (no path preselected; Direct Referral chosen by keyboard), Direct Referral completed by keyboard only, visible focus on every stop, Shift+Tab order, Enter safety, undo/redo, S/M/L/XL, phone width at XL, and an axe WCAG 2.2 AA scan of the entry screen and every Direct Referral state in light and dark themes |
 | `e2e/gpme.spec.js` | In Chromium, against the synthetic backend: matching with explained plausible / possible results, choosing a Program, submission as a GPME-assisted referral (body carries only the approved matching inputs), no plausible match vs technical failure, answers preserved, Try again, Direct Referral fallback (after a failure and with matching fully down), recovery after `GPME_UNAVAILABLE`, `GPME_RESULT_CHANGED` and a lost confirmation, keyboard-only journey, nothing sensitive in URL / storage / console, axe on every guided state in light and dark, XL at phone width. The "not checked" wording (PRD 8.10) is tested by patching `notCheckedForNeedCount` into the real match response (with results, and with no plausible match), because the synthetic seed has no Program without need categories; plus a negative case with the seed as it is. The entry screen at XL on a 375px phone is checked too (it was issue #46, fixed in Task BB) |
+| `e2e/languageOfService.spec.js` | Task W: a manager changes a Program's languages by keyboard; Find a Program shows them, or "not on file"; the Program is never hidden; axe in both themes; XL at phone width |
 | `e2e/programManagement.spec.js`, `e2e/fieldValues.spec.js`, `e2e/organization.spec.js`, `e2e/matchingManagement.spec.js` | Card 14 (#32): each Program Management screen's main path in Chromium, with stale-page and lost-connection recovery and axe in both themes |
 | `e2e/programManagementJourneys.spec.js` | Card 52: the Program Management journeys the card 14 specs leave out, one block per area (fields, options, reuse, replacement, retirement, Departments, Program creation, Program moves): missing and duplicate input with focus on the problem, cancelled confirmations, stale pages, lost connections, what may be reused, replaced or retired, discontinued Departments as targets, referral history across a move, keyboard-only creation, XL at phone width on every screen, axe on error states |
 | `e2e/receiving.spec.js` | Task A: the receiving screens (received list, referral detail). The list shows only Programs I receive for, with Response, Decision and Service outcome kept separate, and stage filters. Accept, record and correct an outcome by keyboard (Accepted never reads as served). Not appropriate needs a reason, has no outcome, and becomes outcome-ready only after a correction to Accepted. A recorded outcome blocks a change to Not appropriate. Stale page, someone responding first, a lost connection, a save that commits but whose answer is lost, and Cancel: nothing is merged or sent twice, and an unknown outcome is described as "may have been saved", never "not saved". For each of the four changes, if the reload after a confirmed save fails, every action stays locked and the success message stays until an explicit reload succeeds. A referral I only sent is read-only, and the server refuses a direct request. An unknown ID reveals nothing. axe in both themes; XL at phone width |
@@ -65,6 +66,7 @@ against Azure SQL; that waits on the Azure SQL store.
 | Receiving lifecycle: outcome and corrections (#14) | Journey 9 (API): Not Appropriate with an explanation, outcome refused, decision corrected to Accepted, outcome recorded, outcome corrected, across four staff with separate capabilities; refusals by role (403 / 404 / 401) change nothing; stale screens refused with the current state; Not Appropriate blocked while an outcome is recorded; first service time never rewritten; the sender sees the result read-only; full audit history with the prior explanation kept; no participant data in confirmations or errors. Browser: `e2e/receiving.spec.js`, `e2e/receivingLifecycle.spec.js` | Run D in a second browser |
 | Program maintenance 14B: configurable fields and values (#22, #24) | Journey 10 (API): create a required choice field and set it, reuse it in a second Program as optional, a Director of one Program sets only its value and cannot change the shared definition, rename keeps identity and values, stale rename refused, a discontinued option stays selected where it was but cannot be newly picked, a meaning change replaces the field for both Programs (old value kept as history, no new values, no reactivation), current Program information shows only the replacement; audit by actor. Browser: `e2e/fieldValues.spec.js`, `e2e/programManagementJourneys.spec.js` | None |
 | Program maintenance 14C: create / move Programs, Department lifecycle (#25) | Journey 11 (API): only ORG-scope MANAGE_ORGANIZATION may change the organization; new Department (unique name) and Program, offered for new referrals, no implied management; referrals to it; Department discontinue refused while it has an active Program; move (stale move refused); earlier referrals keep the Department they were made under; discontinue, no create or move into it, stale rename refused, reactivate; audit with before and after; no routing details returned. Browser: `e2e/organization.spec.js`, `e2e/programManagementJourneys.spec.js` | None |
+| Two-path referral journey (Task Z): Find a Program and Direct Referral | Journey 12 (API): the same referral sent both ways to the same Program runs the same lifecycle (Not Appropriate, outcome refused, corrected to Accepted, outcome recorded, outcome corrected), the same authorization refusals (another Program 404, view-only / sender / outcome-only / deactivated 403, signed out 401, nothing changed), the same audit trail by the same people and the same read-only sender view; only the source and the saved evaluation differ, and Direct Referral makes no GPME call. Describing and matching create no referral, evaluation or audit record; the employee may choose any shown Program and that choice is saved; a guided send to a Program not shown is refused with nothing saved, and the same Program goes as a Direct Referral; with matching down, guided sends fail as `GPME_UNAVAILABLE` and Direct Referral still works. Mutation-checked against the result check and the source. Browser: `e2e/gpme.spec.js`, `e2e/directReferral.spec.js`, `e2e/mvpJourney.spec.js`, `e2e/receivingLifecycle.spec.js` | None |
 | P0 reporting: Total Referrals (#18), Timing Metrics (#26), Referral Activity (#30) | `test/regression/reportingJourney.test.js` over the known-answer world in `reportingFixture.js` (nine referrals built through the real API): every period type, organization / Program / Department scope with Department history, Zero vs No Data vs Pending vs Unknown vs error, partial periods, future and pre-2000 dates (API). On screen (Task M): `e2e/reportingKnownAnswers.spec.js` opens the Reporting Center over the SAME world and checks every period type, Program scope, Department scope with history, the Program and Department tables, Zero / No data / Pending / N/A, the partial-period note, future-date refusal, and no numbers for an inactive or signed-out person. `KNOWN_SCOPES` and `KNOWN_BREAKDOWNS` are shared by both | None |
 
 ### Merged on `main`: coverage still to add here
@@ -104,12 +106,24 @@ until they have a journey.
 
 ## Task BB: final accessibility verification
 
-Every screen on `main` was swept at S/M/L/XL, at 1280px, 375px and 320px,
-in light and dark: sideways scrolling, exact text sizes, every Tab stop
-(visible outline, on screen, nothing unreachable), text size on every form
-control, and axe at XL on 320px. Keyboard, labels, errors and screen-reader
-behavior per workflow were already covered by the specs above and were
-re-run. Three defects were found and fixed, each with a regression test:
+Every screen on `main` (including Task W's language of service, merged
+in #62) was swept at S/M/L/XL, at 1280px, 375px and 320px, in light and
+dark: sideways scrolling, exact text sizes, every Tab stop (visible
+outline, on screen, nothing unreachable), text size on every form control,
+and axe at XL on 320px. Keyboard, labels, errors and screen-reader behavior
+per workflow were already covered by the specs above and were re-run.
+
+`e2e/accessibilityFinal.spec.js` checks each screen in a **populated**
+state and first asserts that screen's own loaded content (a loaded
+message, the expected items, the seeded fields), never only that the
+network went quiet, which also happens on an error screen. It seeds a
+referral, one Program field of each of the six types (so the fields screen
+builds a text, number, date, yes/no, single-choice and multi-choice
+control), and a field another managed Program can reuse. It covers the
+start page and Find a Program with results showing, as well as every
+other screen.
+
+Four defects were found and fixed, each with a regression test:
 
 - **The New Referral path buttons were wider than a phone at XL (issue
   #46).** Their grid column had a minimum of 14rem, which is 336px at XL.
@@ -123,13 +137,33 @@ re-run. Three defects were found and fixed, each with a regression test:
   so the matching age range (and the reuse page's order box) stayed at the
   browser's 13px at every size. Number boxes are now in the shared style,
   at most 8rem wide.
+- **Date boxes built on the Program fields page ignored the text size.**
+  Found only once fields were seeded: the page builds a date field's box
+  in code, so a check of the HTML alone missed it, and it stayed at 13px
+  with the browser's default border. Date boxes are now in the shared
+  style too (at most 14rem wide), and the structure check also reads the
+  types page scripts create.
 
 Not changed: the skip link sits off screen until it is focused, and the
 Reporting Center's data tables scroll inside their own focusable region,
-which WCAG allows for data tables. Screens in open pull requests (language
-of service in #62, Permissions in #63) were not on `main`; re-run
-`e2e/accessibilityFinal.spec.js` after they merge and add their screens to
-its list.
+which WCAG allows for data tables. The start page has no S/M/L/XL control
+(no form; it is the temporary start page), so it is checked for reflow and
+axe at its own size.
+
+**Pending, not verified here:** the Permissions screen (PR #63, not on
+`main`). Add it to `screens()` in `e2e/accessibilityFinal.spec.js` when #63
+merges.
+
+**Still needs a person (not automated):**
+- A screen reader pass (VoiceOver or NVDA) on the screens added since the
+  last recorded run ([screen-reader-check.md](screen-reader-check.md)
+  covers New Referral and Program Management): receiving, Referrals I
+  sent, the Reporting Center, and Permissions after #63.
+- Browser zoom at 200% and 400% (PRD 14.5 keeps browser zoom supported;
+  the sweep tests the app's own text size, not zoom).
+- This sweep in Firefox, WebKit and Edge (`E2E_BROWSER`, #61). It ran in
+  Chromium only.
+- One look on a real phone at XL.
 
 ## Found, not fixed here
 
@@ -147,8 +181,10 @@ its list.
   has no S/M/L/XL control. It is a temporary backend status page with one
   link; PRD 13.5 navigation will replace it. Whoever builds that
   navigation should give it the text-size control.
-- **The browser tests run in Chromium only.** Safari and Edge, and a
-  screen reader, are covered by the short manual pass below and by
+- **`npm run test:e2e` runs Chromium only.** Edge, Firefox and WebKit run
+  with `npm run test:e2e:browsers` (results and limits in
+  [browser-verification.md](browser-verification.md)). Real Safari and a
+  screen reader are covered by the short manual pass below and by
   [screen-reader-check.md](screen-reader-check.md).
 
 ## Manual keyboard checklist (PRD 14.2, 14.3, 17.7)

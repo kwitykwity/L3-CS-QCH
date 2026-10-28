@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Demo sign-in · QCH Connect</title>
+    <link rel="stylesheet" href="/styles.css" />
+    <style>
+      .card { max-width: 560px; }
+      .banner { margin: 0 0 16px; padding: 10px 12px; border: 2px solid var(--text); border-radius: 8px; font-weight: 600; }
+      .person { display: block; width: 100%; margin: 12px 0 0; padding: 12px 14px; text-align: left; font: inherit; color: var(--text); background: var(--card); border: 1px solid var(--muted); border-radius: 8px; cursor: pointer; }
+      .person:hover { background: var(--bg); }
+      .person:focus-visible { outline: 3px solid var(--focus-ring); outline-offset: 2px; background: var(--bg); }
+      .person[aria-current="true"] { border: 2px solid var(--text); }
+      .person__name { display: block; font-weight: 600; }
+      .person__what { display: block; margin-top: 4px; color: var(--muted); font-size: 0.9rem; }
+      .error { color: var(--down); font-weight: 600; }
+    </style>
+  </head>
+  <body>
+    <main class="card">
+      <p class="banner">Demo sign-in. Production uses QCH Microsoft sign-in.</p>
+      <h1>Choose a demo person</h1>
+      <p class="subtitle">Synthetic people only. Each can do only what their permissions allow.</p>
+      <div id="people" role="group" aria-label="Demo people"></div>
+      <p id="message" role="status" aria-live="polite"></p>
+    </main>
+    <script type="module" src="/demo/page.js"></script>
+  </body>
+</html>

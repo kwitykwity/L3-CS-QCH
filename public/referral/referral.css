@@ -113,7 +113,7 @@ label, legend { display: block; font-weight: 600; margin-bottom: 0.25rem; }
 /* Number boxes are included so the S/M/L/XL preference reaches them too
    (PRD 14.5; Task BB found the matching age boxes stuck at the browser's
    default size). */
-input[type="text"], input[type="search"], input[type="tel"], input[type="email"], input[type="number"], select, textarea {
+input[type="text"], input[type="search"], input[type="tel"], input[type="email"], input[type="number"], input[type="date"], select, textarea {
   width: 100%;
   padding: 0.5rem 0.625rem;
   border: 1px solid var(--control-border);
@@ -123,6 +123,9 @@ input[type="text"], input[type="search"], input[type="tel"], input[type="email"]
   font: inherit;
 }
 input[type="number"] { max-width: 8rem; }
+/* Date boxes are built in code on the Program fields page; they were also
+   stuck at the browser's default size (Task BB, found with seeded fields). */
+input[type="date"] { max-width: 14rem; }
 textarea { resize: vertical; }
 
 input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] {
