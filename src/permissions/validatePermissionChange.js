@@ -10,7 +10,7 @@
 //
 // Not grantable here, on purpose:
 // - ADMINISTER_PERMISSIONS: TEAM RESTRICTION, not approved QCH policy
-//   (register R26). The team reads PRD 3.8 ("a controlled, documented,
+//   (pending QCH confirmation). The team reads PRD 3.8 ("a controlled, documented,
 //   QCH-approved process") as administrators being set up outside this
 //   screen; QCH has not approved that rule for this screen.
 // - VIEW_CREATED_REFERRAL: derived from being the referral's creator.
@@ -77,7 +77,7 @@ export function validateRevokeRequest(body) {
 // Grants that can be removed here: IN_APP grants of a grantable permission.
 // DEMO grants (non-production seed), seeded grants and
 // ADMINISTER_PERMISSIONS are shown read-only. TEAM RESTRICTION, not
-// approved QCH policy (register R26).
+// approved QCH policy (pending QCH confirmation).
 export function isRevocable(grant) {
   return grant.grantSource === 'IN_APP' && Object.hasOwn(GRANTABLE, grant.permission);
 }

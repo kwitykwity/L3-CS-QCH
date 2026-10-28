@@ -22,7 +22,7 @@
 // - New grants are always grantSource IN_APP.
 //
 // TEAM IMPLEMENTATION RESTRICTIONS: stricter than required, NOT approved
-// QCH policy. Pending QCH confirmation (reconciliation register R26); QCH
+// QCH policy. Pending QCH confirmation (README, "Permission administration"); QCH
 // may loosen them, so keep each one easy to change:
 // - All self-changes are refused, removals too (the contract only
 //   requires blocking self-elevation). See selfChange below.
@@ -223,7 +223,7 @@ export function createPermissionService({ store, allowDemoGrants = false }) {
     return store.withTransaction(async (tx) => {
       await tx.holdPermissionAdministration();
       await authorizeAdmin(tx, actorId);
-      // TEAM RESTRICTION, not approved QCH policy (register R26): removing
+      // TEAM RESTRICTION, not approved QCH policy (pending QCH confirmation): removing
       // your own permissions is not self-elevation; refused only by team choice.
       if (targetId === actorId) throw permissionErrors.selfChange();
 

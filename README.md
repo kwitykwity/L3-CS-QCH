@@ -410,9 +410,7 @@ field).
   safely.
 - **Team implementation restrictions, NOT approved QCH policy:** this
   build is stricter than the contract requires. Each of these is a team
-  choice awaiting QCH confirmation (R26 in
-  [the reconciliation register](docs/requirements-reconciliation-register.md)),
-  and QCH may loosen any of them:
+  choice awaiting QCH confirmation, and QCH may loosen any of them:
   1. **All self-changes are refused**, including removing your own
      permissions. The contract only requires preventing self-elevation.
   2. **Administrator rights are managed outside this screen**:
