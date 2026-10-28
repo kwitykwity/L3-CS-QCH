@@ -146,6 +146,37 @@ to see the result. To show two people at once, use two browser windows
 - No passwords or credentials exist. The people are invented and hold
   receiving rights only.
 
+## Demo data and reset verification (Task FF)
+
+Checked on `main` at `cd22455`, October 28, 2026, with
+`test/demoVerification.test.js` (plus the existing `test/demoEnvironment.test.js`).
+
+| Acceptance item | Result | Evidence |
+| --- | --- | --- |
+| Reset is deterministic | Pass | The full journey (Find a Program, Direct Referral, response, outcome, a response correction, an outcome correction, a failed notification, Reporting) run on two fresh starts gives identical counts. A Program-information edit made in one run is gone in the next, in both `dev:synthetic` and `dev:demo` modes |
+| No real participant data | Pass | Every name is invented and marked "(sample)" or "(demo)"; participant names used in tests are "Synthetic Person". The server log carries IDs and outcomes only, never names or need text |
+| No private Program Directory data committed | Pass | Test fails if any spreadsheet, CSV, PDF, Word, database or "Program Directory" file is tracked by git, or if an email in `scripts/` or `db/seeds/` is not on a reserved example domain |
+| Required journeys repeat | Pass | Same results on a second fresh start |
+| Demo data is clearly demo | Pass | Names marked; ZIPs are `999xx`; demo people end "(demo)" |
+| Failures are recoverable without database work | Pass | There is no database. Stop the server and start it again; see [Reset the demo](#reset-the-demo) |
+
+Features the demo can show: Find a Program with languages of service
+("not on file" for Programs 2 and 5), Direct Referral, Program Management,
+response and outcome correction, Reporting, notification SENT and FAILED
+(Program 5 has no address on purpose), and the completed Program-information
+fields.
+
+**The completed Program-information fields are off by default.** Start with
+`QCH_TASK_C_SYNTHETIC_DEMO=true npm run dev:synthetic` (or
+`QCH_TASK_C_SYNTHETIC_DEMO=true npm run dev:demo`) to give Adult Evening
+Classes its seven synthetic examples. `docs/demo-runbook.md` does not use that
+flag yet, so its journey does not show them.
+
+Not covered, and not changed here: the Program-information fields are visible
+in Program Management only, because the Find a Program display of them
+(Task X) is not on `main`. The runbook still says demo sign-in is not on
+`main`; Task O has since merged (Task T owns that text).
+
 ## Found while checking (not fixed here)
 
 - **Home page label.** The first link says "Make a Direct Referral", but
