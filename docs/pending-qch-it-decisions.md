@@ -109,8 +109,8 @@ decision above (or another QCH input) it depends on.
 | Permission administration screens (grant and remove capabilities in the app, PRD 3.8) | Engineering | Nothing to build; QCH names the first administrators (policy) |
 | Microsoft Graph sender, and starting the notifier and retry timer in the hosted app | External, then engineering | Decisions 2 and 6 |
 | Managing a Program's notification email (routing) | Engineering | Nothing; Program creation says routing is set up separately, and no screen or route sets it yet |
-| Reporting screens | Engineering | Nothing (Trello Task B) |
-| Program Management and matching changes asked for at the midpoint (for example a "program is full" status) | Requirement | Reconciling the Oct 23 requests with the Final Technical PRD (Trello Tasks C and D) |
+| Find a Program changes asked for at the midpoint (describe the need in your own words) | Requirement | PR #43 (Task D) in review; team decisions R3 and R4 in [requirements-reconciliation-register.md](requirements-reconciliation-register.md). Program information from Task C is merged (#44) |
+| Further midpoint requests confirmed by QCH on Oct 26 (language of service, availability and contact shown in Find a Program, two ways to list multiple locations) | Requirement | Not built; see the register (R7, R8, R12 to R14) |
 | AI-assisted matching | External | Decision 7, and the PRD reconciliation above |
 | Hosting, monitoring (Application Insights) and alerts | External | Decision 2 |
 | Backup, restore, and one restore test in an isolated environment (PRD 19.5) | External | Decisions 1 and 2 |

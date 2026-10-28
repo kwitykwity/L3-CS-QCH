@@ -59,7 +59,8 @@ test('a full, wait-listed Program still appears with its availability and primar
     await expect(info).toContainText(FULL);
     await expect(info).toContainText('Primary Program contact');
     await expect(info).toContainText('program-demo@example.invalid');
-    await expect(evening).toContainText('Send the referral through QCH Connect first.');
+    await expect(evening).toContainText(
+      'Send referrals through QCH Connect. Call or email the Program contact only if you cannot find what you need here.');
     await expect(evening.getByRole('button', { name: `Choose ${EVENING}` })).toBeVisible();
 
     // A Program with nothing on file says so; it is never shown as available.

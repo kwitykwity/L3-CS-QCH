@@ -147,11 +147,19 @@ export function createProgramService({ store, allowDemoGrants = false }) {
     return store.withTransaction(async (tx) => {
       const { program, department } = await authorize(tx, userId, programId, MANAGE_PROGRAM);
       const categories = await tx.listNeedCategories();
+      const languages = await tx.listServiceLanguages();
       return {
         program: toManagedProgram(program, department),
         facts: matchingFactsOf(program),
         categories: categories.map((row) => ({
           needCategoryId: row.needCategoryId,
+          name: row.name,
+          lifecycleStatus: row.lifecycleStatus,
+        })),
+        // Language of service (Task W): the controlled list, same rules as
+        // categories. Meaning comes from languageId, never from the name.
+        languages: languages.map((row) => ({
+          languageId: row.languageId,
           name: row.name,
           lifecycleStatus: row.lifecycleStatus,
         })),
@@ -166,7 +174,13 @@ export function createProgramService({ store, allowDemoGrants = false }) {
       if (program.lifecycleStatus === 'RETIRED') throw programErrors.programRetired();
       const validation = validateMatchingChange(body);
       if (!validation.ok) throwInvalid(validation);
-      const { version, facts } = validation.value;
+      const { version } = validation.value;
+      // languageIds is optional: left out, the saved languages are kept.
+      const facts = {
+        ...validation.value.facts,
+        languageIds: validation.value.facts.languageIds
+          ?? [...(program.languageIds ?? [])].sort((a, b) => a - b),
+      };
       const stale = () => programErrors.programChanged({
         ...toManagedProgram(program, department),
         matchingFacts: matchingFactsOf(program),
@@ -182,16 +196,28 @@ export function createProgramService({ store, allowDemoGrants = false }) {
         throw programErrors.invalidRequest(['needCategoryIds']);
       }
 
+      // Same rule for languages: an ACTIVE language, or one already saved.
+      const languages = await tx.listServiceLanguages();
+      const previousLanguages = new Set(program.languageIds ?? []);
+      const allowedLanguages = new Set(languages
+        .filter((row) => row.lifecycleStatus === 'ACTIVE' || previousLanguages.has(row.languageId))
+        .map((row) => row.languageId));
+      if (facts.languageIds.some((id) => !allowedLanguages.has(id))) {
+        throw programErrors.invalidRequest(['languageIds']);
+      }
+
       const before = matchingFactsOf(program);
       const comparable = {
         ...before,
         needCategoryIds: [...before.needCategoryIds].sort((a, b) => a - b),
         serviceAreaZips: [...before.serviceAreaZips].sort(),
+        languageIds: [...before.languageIds].sort((a, b) => a - b),
       };
       if (JSON.stringify(comparable) === JSON.stringify(facts)) throw programErrors.noChange();
 
-      // SQL implementations must update the Program, category links and ZIP
-      // rows in this same transaction, using the Program version.
+      // SQL implementations must update the Program, category links, ZIP
+      // rows and language links in this same transaction, using the
+      // Program version.
       const updated = await tx.updateProgram({
         programId, expectedVersion: version, set: structuredClone(facts),
       });

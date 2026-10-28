@@ -18,7 +18,8 @@ database. Every table and column is described in
 | `db/migrations/001_core_schema.sql`    | Creates 19 tables, their indexes, and 2 triggers      | Every database                     | No                 |
 | `db/migrations/002_reference_data.sql` | Adds the 4 departments and 5 Not Appropriate reasons  | Every database                     | No                 |
 | `db/migrations/003_gpme_matching_states.sql` | Adds GPME age and service-area states; renames the ZIP table | Every database        | No                 |
-| `db/seeds/dev_synthetic_seed.sql`      | Adds made-up service categories for dev and demos     | Development only, never production | Yes                |
+| `db/migrations/004_language_of_service.sql` | Adds the language-of-service list and each Program's languages (no values) | Every database | No |
+| `db/seeds/dev_synthetic_seed.sql`      | Adds made-up service categories and sample languages for dev and demos | Development only, never production | Yes                |
 
 ## Run order
 
@@ -27,7 +28,9 @@ database. Every table and column is described in
    errors.
 3. Run `003_gpme_matching_states.sql` third, and only after 002 finished with
    no errors.
-4. Run `dev_synthetic_seed.sql` last, only in development, and only after 003.
+4. Run `004_language_of_service.sql` fourth, and only after 003 finished with
+   no errors.
+5. Run `dev_synthetic_seed.sql` last, only in development, and only after 004.
 
 Run each migration one time per database, starting from an empty database.
 
@@ -37,6 +40,7 @@ Run each migration one time per database, starting from an empty database.
 sqlcmd -S <server> -d <database> <auth flags> -I -b -i db/migrations/001_core_schema.sql
 sqlcmd -S <server> -d <database> <auth flags> -I -b -i db/migrations/002_reference_data.sql
 sqlcmd -S <server> -d <database> <auth flags> -I -b -i db/migrations/003_gpme_matching_states.sql
+sqlcmd -S <server> -d <database> <auth flags> -I -b -i db/migrations/004_language_of_service.sql
 ```
 
 For any QCH database, the server, database name, and sign-in details come from

@@ -134,9 +134,12 @@ test.describe('Direct Referral, keyboard only (PRD 14.2, 14.3)', () => {
     expect(forward.slice(0, 3)).toEqual(['button#change-program', 'input#participantName', 'input#contactMethod']);
     expect(forward.at(-1)).toBe('button#cancel');
 
-    // Focus is now just past the last stop; walk back over every stop.
-    const backward = [];
-    for (let i = 0; i < forward.length; i += 1) {
+    // Start the walk back ON the last stop and press Shift+Tab over the rest.
+    // Where focus goes after a Tab off the end of the page (browser toolbar,
+    // wrap, or nowhere) differs by browser, so the test does not depend on it.
+    await page.locator('#cancel').focus();
+    const backward = [forward.at(-1)];
+    for (let i = 0; i < forward.length - 1; i += 1) {
       await page.keyboard.press('Shift+Tab');
       backward.push(await page.evaluate(() => {
         const el = document.activeElement;

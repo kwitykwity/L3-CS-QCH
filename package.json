@@ -11,11 +11,13 @@
     "start": "node src/server.js",
     "dev": "node --watch src/server.js",
     "dev:synthetic": "node scripts/dev-synthetic-server.js",
+    "dev:demo": "node scripts/dev-demo-server.js",
     "test": "node --test",
     "check-runtime": "node scripts/check-runtime.js",
     "test:runtime": "node --test test/runtime.test.js",
     "licenses": "node scripts/list-licenses.js",
-    "test:e2e": "playwright test"
+    "test:e2e": "playwright test",
+    "test:e2e:browsers": "node e2e/runBrowsers.js"
   },
   "dependencies": {
     "dotenv": "^18.0.7",
