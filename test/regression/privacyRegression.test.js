@@ -35,7 +35,9 @@ import { createNotificationService } from '../../src/notifications/notificationS
 import { createSimulatedOutboxSender } from '../../src/notifications/simulatedOutbox.js';
 import { DEV_RECEIVING_PROGRAM_ID, DEV_USER_ID, syntheticSeed } from '../../scripts/syntheticSeed.js';
 
-// Participant data that must stay inside the referral record (PRD 5.4).
+// Participant data that must be kept out of logs, aggregate reports,
+// notifications, URLs, browser storage and unauthorized responses (PRD 5.4,
+// 5.5). Authorized referral views legitimately show it.
 const MARK = Object.freeze({
   name: 'Synthetic Person DDLEAKNAME',
   email: 'ddleak.contact@example.test',
@@ -117,7 +119,7 @@ async function setAffiliation(agent, programId = 1) {
   assert.equal(saved.status, 200);
 }
 
-describe('Task DD: participant data stays inside the referral record', () => {
+describe('Task DD: participant data stays out of logs, reports, notifications and unauthorized responses', () => {
   test('a whole working day writes no participant data to any console channel, report or email', async (t) => {
     const lines = captureConsole(t);
     const { app, store, sender, notifier, started } = build();

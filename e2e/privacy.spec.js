@@ -7,13 +7,19 @@
 // explanation, a correction, the outcome), Referrals I sent, the
 // Reporting Center and Program Management. Along the way every request
 // the page makes, every address it shows and every console message is
-// recorded. At the end the test checks that no marker reached:
-//   - an address or query string (requests and page addresses),
-//   - localStorage (only the text size may be kept), sessionStorage,
-//     IndexedDB, Cache Storage, a service worker,
+// recorded. Authorized screens show the participant's details on purpose;
+// the test checks that the marked data is kept out of:
+//   - browser storage: localStorage (only the text size may be kept),
+//     sessionStorage, IndexedDB, Cache Storage, a service worker. Checked
+//     at seven points DURING the journey (after matching, with the details
+//     form filled in, after sending, after the Not appropriate response,
+//     after the correction and outcome, on the sent referral's page, and at
+//     the end), each while that sensitive page is still open,
 //   - any cookie, read from the browser itself so HttpOnly cookies (which
-//     page scripts cannot see) are checked too,
-//   - the browser console.
+//     page scripts cannot see) are checked too; same seven points,
+//   - addresses and query strings (every request and page address, recorded
+//     the whole time and checked at the end),
+//   - the browser console (recorded the whole time, checked at the end).
 // This runs on the e2e fixture: the synthetic dev server with one fixed
 // identity, which sets no cookies at all. The Task O demo mode
 // (npm run dev:demo) does set an HttpOnly session cookie holding only a
@@ -46,7 +52,31 @@ function leaks(text) {
   return found;
 }
 
-test('participant data never reaches an address, browser storage or the console (PRD 5.5)', async ({ page }) => {
+// Browser storage and cookies right now, on the page that is open. `stage`
+// names the point in the journey, so a failure says where it happened.
+async function expectCleanBrowserState(page, stage) {
+  const stored = await page.evaluate(async () => ({
+    local: Object.fromEntries(Object.entries(localStorage)),
+    session: sessionStorage.length,
+    indexedDb: (await indexedDB.databases()).map((db) => db.name),
+    caches: await caches.keys(),
+    workers: (await navigator.serviceWorker.getRegistrations()).length,
+  }));
+  expect(Object.keys(stored.local).every((key) => key === 'qchConnect.textSize'), `${stage}: localStorage ${JSON.stringify(stored.local)}`).toBe(true);
+  expect(leaks(JSON.stringify(stored.local)), `${stage}: localStorage`).toEqual([]);
+  expect(stored, `${stage}: browser storage`).toMatchObject({ session: 0, indexedDb: [], caches: [], workers: 0 });
+
+  // Cookies, from the browser's own cookie jar, HttpOnly ones included
+  // (document.cookie cannot see those). Their contents never carry
+  // participant data. And this fixed-identity fixture sets none at all;
+  // that empty-jar expectation is about this fixture only, not the Task O
+  // demo, which legitimately uses an HttpOnly session cookie.
+  const cookies = await page.context().cookies();
+  expect(cookies.flatMap((c) => leaks(`${c.name}=${c.value}`).map((what) => `${what} in cookie ${c.name}`)), `${stage}: cookies`).toEqual([]);
+  expect(cookies.map((c) => `${c.name} (httpOnly: ${c.httpOnly})`), `${stage}: the fixed-identity fixture sets no cookies`).toEqual([]);
+}
+
+test('participant data stays out of addresses, browser storage, cookies and the console (PRD 5.5)', async ({ page }) => {
   test.setTimeout(90000);
   const requests = [];
   const addresses = [];
@@ -67,6 +97,7 @@ test('participant data never reaches an address, browser storage or the console 
   await expect(page.locator('#understood')).toBeVisible();
   await page.locator('#find-programs').click();
   await expect(page.locator('#match-results')).toBeVisible();
+  await expectCleanBrowserState(page, '1. after describing the need and matching');
   await page.getByRole('button', { name: `Choose ${HOUSING}` }).click();
 
   // The referral details, with every sensitive field filled.
@@ -77,8 +108,11 @@ test('participant data never reaches an address, browser storage or the console 
   await page.locator('#referralContext').fill(MARK.context);
   await page.locator('#participantZip').fill('99577');
   await page.locator('#notes').fill(MARK.notes);
+  // Active-form data may live in memory (PRD 5.5), never in storage.
+  await expectCleanBrowserState(page, '2. details form filled in, before sending');
   await page.locator('#send').click();
   await expect(status(page)).toContainText('Referral received');
+  await expectCleanBrowserState(page, '3. after sending');
 
   // Receiving: open it from the queue, mark it Not appropriate with an
   // explanation, correct the decision to Accepted, record the outcome.
@@ -93,6 +127,7 @@ test('participant data never reaches an address, browser storage or the console 
   page.once('dialog', (d) => d.accept());
   await page.locator('#respond-submit').click();
   await expect(status(page)).toContainText('Response sent');
+  await expectCleanBrowserState(page, '4. after responding Not appropriate with an explanation');
   await page.locator('#cd-accept').check();
   page.once('dialog', (d) => d.accept());
   await page.locator('#correct-decision-submit').click();
@@ -101,6 +136,7 @@ test('participant data never reaches an address, browser storage or the console 
   page.once('dialog', (d) => d.accept());
   await page.locator('#outcome-submit').click();
   await expect(status(page)).toHaveText('Service outcome recorded: Resulted in service.');
+  await expectCleanBrowserState(page, '5. after the decision correction and the outcome');
 
   // Referrals I sent: the list, then the referral's status page.
   await page.goto('/sent/');
@@ -108,6 +144,7 @@ test('participant data never reaches an address, browser storage or the console 
   await expect(sent).toHaveCount(1);
   await sent.getByRole('link').click();
   await expect(status(page)).toHaveText('Referral loaded.');
+  await expectCleanBrowserState(page, '6. on the sent referral\'s status page');
 
   // Reporting Center and Program Management load their data too.
   for (const path of ['/reporting/', '/program-management/', '/program-management/organization.html', '/']) {
@@ -124,26 +161,7 @@ test('participant data never reaches an address, browser storage or the console 
     expect(new URL(address).search, address).toMatch(/^(\?[A-Za-z]+=\d+(&[A-Za-z]+=\d+)*)?$/);
   }
 
-  // Browser storage: only the text size, and nothing else anywhere.
-  const stored = await page.evaluate(async () => ({
-    local: Object.fromEntries(Object.entries(localStorage)),
-    session: sessionStorage.length,
-    indexedDb: (await indexedDB.databases()).map((db) => db.name),
-    caches: await caches.keys(),
-    workers: (await navigator.serviceWorker.getRegistrations()).length,
-  }));
-  expect(Object.keys(stored.local).every((key) => key === 'qchConnect.textSize'), JSON.stringify(stored.local)).toBe(true);
-  expect(leaks(JSON.stringify(stored.local))).toEqual([]);
-  expect(stored).toMatchObject({ session: 0, indexedDb: [], caches: [], workers: 0 });
-
-  // Cookies, from the browser's own cookie jar, HttpOnly ones included
-  // (document.cookie cannot see those). Their contents never carry
-  // participant data. And this fixed-identity fixture sets none at all;
-  // that empty-jar expectation is about this fixture only, not the Task O
-  // demo, which legitimately uses an HttpOnly session cookie.
-  const cookies = await page.context().cookies();
-  expect(cookies.flatMap((c) => leaks(`${c.name}=${c.value}`).map((what) => `${what} in cookie ${c.name}`))).toEqual([]);
-  expect(cookies.map((c) => `${c.name} (httpOnly: ${c.httpOnly})`), 'the fixed-identity fixture sets no cookies').toEqual([]);
+  await expectCleanBrowserState(page, '7. at the end, after Reporting and Program Management');
 
   // Console: nothing about the participant, on any page.
   expect(consoleLines.flatMap((line) => leaks(line).map((what) => `${what}: ${line}`))).toEqual([]);
