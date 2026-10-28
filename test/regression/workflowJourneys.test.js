@@ -14,6 +14,15 @@
 //               meaning; values follow the field's identity.
 //   Journey 11  Organization changes, slice 14C (#25): new Department and
 //               Program, referrals to it, move it, Department lifecycle.
+//   Journey 13  Program Management -> Find a Program (Task AA): language,
+//               availability, contact and site changes made through
+//               Program Management appear in Find a Program without
+//               changing who is found; missing information stays unknown;
+//               authorization and stale-version refusals; rename, option
+//               and field discontinue, retire and Program discontinue follow
+//               the lifecycle rules; referrals sent earlier, their GPME
+//               evaluation, audit trail and every view of them stay
+//               byte-for-byte the same.
 //
 // Like journeys.test.js, each journey drives the real Express app over
 // HTTP the way the screens do, switching between staff members. The
@@ -68,7 +77,7 @@ const grant = (userId, permission, programId, extra = {}) => ({
 });
 const NO_LIMITS = { ageLimitState: 'NO_RESTRICTION', ageMin: null, ageMax: null, serviceAreaState: 'NO_RESTRICTION', serviceAreaZips: [] };
 
-function organization() {
+function organization(storeOptions = {}) {
   return createMemoryReferralStore({
     departments: [
       { departmentId: D_FAMILY, name: 'Synthetic Family Services', lifecycleStatus: 'ACTIVE' },
@@ -115,14 +124,14 @@ function organization() {
       { reasonId: 2, code: 'PROGRAM_UNAVAILABLE', label: 'Program currently unavailable', displayOrder: 2 },
       { reasonId: 5, code: 'OTHER', label: 'Other', displayOrder: 5 },
     ],
-  });
+  }, storeOptions);
 }
 
 // The integrated app, plus a way to act as one staff member at a time.
 // Identity comes only from resolveIdentity (PRD 3.2); requests are awaited
 // one at a time, so `current` always names the acting user.
-function startApp() {
-  const store = organization();
+function startApp(storeOptions = {}) {
+  const store = organization(storeOptions);
   let current = null;
   const app = createApp({
     affiliationStore: store, referralStore: store, resolveIdentity: () => (current ? { userId: current } : null), nodeEnv: 'test',
@@ -652,5 +661,170 @@ describe('Journey 11: organization changes, slice 14C (#25; PRD 3.6, 4.4, 9.1, 9
       assert.ok(!JSON.stringify(res.body ?? {}).includes('notification'), res.req.path);
     }
     noStore(responses, PM);
+  });
+});
+
+describe('Journey 13: Program Management changes reach Find a Program; referral history does not move (Task AA; PRD 4.1 to 4.4, 6.5, 8.7, 9.1, 9.4, 9.6)', () => {
+  const PM = '/api/program-management';
+  // Employment, ages 19 to 20, ZIP 99918: P11 and P12 plausible, P13 possible.
+  const ANSWERS = { needCategoryIds: [EMPLOYMENT], ageRange: { min: 19, max: 20 }, participantZip: '99918' };
+  const DAY = 24 * 60 * 60 * 1000;
+
+  const shown = (body, programId) => [...body.plausible, ...body.possible].find((p) => p.programId === programId);
+  const infoOf = (body, programId) => shown(body, programId)?.programInformation;
+  const valueOf = (info, label) => info.find((f) => f.label === label)?.value;
+  // What matching decided, without the descriptive information.
+  const decision = (body) => ({
+    plausible: body.plausible.map(({ programInformation, ...rest }) => rest),
+    possible: body.possible.map(({ programInformation, ...rest }) => rest),
+  });
+
+  test('current information, language, availability and contact reach Find a Program; sent referrals stay exactly as they were', async () => {
+    let clock = Date.parse('2026-10-01T12:00:00Z');
+    const { store, as, responses } = startApp({ now: () => new Date(clock) });
+    const worker = as(WORKER);
+    const intake = as(INTAKE);
+    const director = as(DIRECTOR);
+    const director12 = as(DIRECTOR_12);
+    await chooseAffiliation(worker, P_FAMILY);
+    const find = async () => {
+      const res = await worker.post('/api/gpme/match', ANSWERS);
+      assert.equal(res.status, 200);
+      return res.body;
+    };
+    const fieldsOf = async (programId) => (await director.get(`${PM}/programs/${programId}/fields`)).body.fields;
+    const setValue = async (user, programId, fieldId, value) => {
+      const field = (await fieldsOf(programId)).find((f) => f.fieldId === fieldId);
+      return user.put(`${PM}/programs/${programId}/field-values/${fieldId}`, { version: field.applicability.version, value });
+    };
+
+    // Before any change: nothing on file is an empty list, never "available".
+    const baseline = await find();
+    assert.deepEqual(infoOf(baseline, P_ADULT_ED), []);
+
+    // Referrals sent before the changes: one guided to P11, one direct to P12.
+    const guidedSent = await worker.post('/api/referrals', referralTo(P_ADULT_ED, { gpme: ANSWERS }));
+    const directSent = await worker.post('/api/referrals', referralTo(P_YOUTH));
+    assert.deepEqual([guidedSent.status, directSent.status], [201, 201]);
+    const sentIds = [guidedSent.body.referral.referralId, directSent.body.referral.referralId];
+    const history = async () => ({
+      rows: JSON.stringify(store._referrals),
+      evaluations: JSON.stringify(store._gpmeEvaluations),
+      referralAudit: JSON.stringify(store._referralAuditEvents.filter((e) => e.entityType === 'REFERRAL')),
+      senderViews: await Promise.all(sentIds.map(async (id) => (await worker.get(`/api/referrals/${id}`)).body)),
+      receiverView: (await intake.get(`/api/referrals/${sentIds[0]}`)).body,
+      sentList: (await worker.get('/api/referrals/sent')).body,
+    });
+    const before = await history();
+
+    // The Director maintains P11's current information (Program Management).
+    const create = async (body) => {
+      const res = await director.post(`${PM}/programs/${P_ADULT_ED}/fields`, { isRequired: false, ...body });
+      assert.equal(res.status, 201, body.label);
+      return res.body.field;
+    };
+    const languages = await create({ label: 'Languages offered', dataType: 'MULTI_SELECT', displayOrder: 1,
+      options: ['Synthetic English', 'Synthetic Spanish', 'Synthetic Mandarin'] });
+    const availability = await create({ label: 'Current availability', dataType: 'SINGLE_SELECT', displayOrder: 2,
+      options: ['Synthetic open', 'Synthetic limited', 'Synthetic wait list'] });
+    const contact = await create({ label: 'Primary Program contact', dataType: 'TEXT', displayOrder: 3 });
+    const waitList = await create({ label: 'Wait-list information', dataType: 'TEXT', displayOrder: 4 });
+    const [english, spanish] = languages.options.map((o) => o.optionId);
+    const waitListed = availability.options[2];
+    assert.equal((await setValue(director, P_ADULT_ED, languages.fieldId, [english, spanish])).status, 200);
+    assert.equal((await setValue(director, P_ADULT_ED, availability.fieldId, waitListed.optionId)).status, 200);
+    assert.equal((await setValue(director, P_ADULT_ED, contact.fieldId, 'Synthetic intake desk, ext. 000')).status, 200);
+    const program = (await director.get(`${PM}/programs/${P_ADULT_ED}`)).body.program;
+    assert.equal((await director.patch(`${PM}/programs/${P_ADULT_ED}`, { version: program.version, site: 'Synthetic Site B2' })).status, 200);
+
+    // Find a Program shows it. A wait-listed Program is still found, with
+    // the same matching decision; missing information stays unknown.
+    const afterEdits = await find();
+    const info = infoOf(afterEdits, P_ADULT_ED);
+    assert.deepEqual(info.map((f) => f.label), ['Languages offered', 'Current availability', 'Primary Program contact', 'Wait-list information']);
+    assert.equal(valueOf(info, 'Languages offered'), 'Synthetic English, Synthetic Spanish');
+    assert.equal(valueOf(info, 'Current availability'), 'Synthetic wait list');
+    assert.equal(valueOf(info, 'Primary Program contact'), 'Synthetic intake desk, ext. 000');
+    assert.equal(valueOf(info, 'Wait-list information'), null, 'nothing on file stays unknown');
+    assert.equal(shown(afterEdits, P_ADULT_ED).site, 'Synthetic Site B2');
+    assert.deepEqual(infoOf(afterEdits, P_YOUTH), [], 'another Program is not affected');
+    const withoutSite = (d) => JSON.stringify(d).replaceAll('Synthetic Site B2', 'Site B');
+    assert.equal(withoutSite(decision(afterEdits)), withoutSite(decision(baseline)), 'information never changes who is found');
+
+    // Authorization: only P11's Program managers may change P11's information.
+    const snapshot = JSON.stringify(infoOf(afterEdits, P_ADULT_ED));
+    const contactField = (await fieldsOf(P_ADULT_ED)).find((f) => f.fieldId === contact.fieldId);
+    const attempt = { version: contactField.applicability.version, value: 'Synthetic unauthorized text' };
+    for (const [userId, status] of [[DIRECTOR_12, 403], [WORKER, 403], [INTAKE, 403], [LEFT, 403]]) {
+      const res = await as(userId).put(`${PM}/programs/${P_ADULT_ED}/field-values/${contact.fieldId}`, attempt);
+      assert.equal(res.status, status, `user ${userId}`);
+    }
+    assert.equal((await as(null).put(`${PM}/programs/${P_ADULT_ED}/field-values/${contact.fieldId}`, attempt)).status, 401);
+    assert.equal(JSON.stringify(infoOf(await find(), P_ADULT_ED)), snapshot, 'refused changes are not shown');
+
+    // Stale update: a second screen still showing the old version is refused;
+    // Find a Program keeps showing what is saved.
+    assert.equal((await director.put(`${PM}/programs/${P_ADULT_ED}/field-values/${contact.fieldId}`,
+      { version: contactField.applicability.version, value: 'Synthetic front desk' })).status, 200);
+    const stale = await director.put(`${PM}/programs/${P_ADULT_ED}/field-values/${contact.fieldId}`,
+      { version: contactField.applicability.version, value: 'Synthetic old screen text' });
+    assert.equal(stale.status, 409);
+    assert.equal(valueOf(infoOf(await find(), P_ADULT_ED), 'Primary Program contact'), 'Synthetic front desk');
+
+    // Lifecycle (PRD 4.3):
+    // - a rename keeps identity and value;
+    const renamed = await director.patch(`${PM}/fields/${availability.fieldId}`,
+      { version: availability.version, label: 'Availability this cycle' });
+    assert.equal(renamed.status, 200);
+    // - a discontinued option stays where it was selected;
+    assert.equal((await director.post(`${PM}/fields/${availability.fieldId}/options/${waitListed.optionId}/discontinue`,
+      { version: waitListed.version })).status, 200);
+    let current = infoOf(await find(), P_ADULT_ED);
+    assert.equal(valueOf(current, 'Availability this cycle'), 'Synthetic wait list');
+    assert.equal(valueOf(current, 'Current availability'), undefined);
+    // - a discontinued field leaves Find a Program but keeps its value as history;
+    const discontinued = await director.post(`${PM}/fields/${contact.fieldId}/discontinue`, { version: contact.version });
+    assert.equal(discontinued.status, 200);
+    current = infoOf(await find(), P_ADULT_ED);
+    assert.equal(valueOf(current, 'Primary Program contact'), undefined);
+    const kept = (await fieldsOf(P_ADULT_ED)).find((f) => f.fieldId === contact.fieldId);
+    assert.deepEqual([kept.lifecycleStatus, kept.value], ['DISCONTINUED', 'Synthetic front desk']);
+    // - retiring is refused until the review period has passed, then the
+    //   field stays out of Find a Program and its value stays as history.
+    const tooSoon = await as(ORG_ADMIN).post(`${PM}/fields/${contact.fieldId}/retire`, { version: discontinued.body.field.version });
+    assert.equal(tooSoon.body.code, 'RETIRE_NOT_YET');
+    clock += 91 * DAY;
+    const retired = await as(ORG_ADMIN).post(`${PM}/fields/${contact.fieldId}/retire`, { version: discontinued.body.field.version });
+    assert.equal(retired.status, 200);
+    assert.equal(valueOf(infoOf(await find(), P_ADULT_ED), 'Primary Program contact'), undefined);
+    const retiredRow = (await fieldsOf(P_ADULT_ED)).find((f) => f.fieldId === contact.fieldId);
+    assert.deepEqual([retiredRow.lifecycleStatus, retiredRow.value], ['RETIRED', 'Synthetic front desk']);
+
+    // A discontinued Program leaves Find a Program; its referrals remain.
+    const p12 = (await director12.get(`${PM}/programs/${P_YOUTH}`)).body.program;
+    assert.equal((await director12.post(`${PM}/programs/${P_YOUTH}/discontinue`, { version: p12.version })).status, 200);
+    assert.equal(shown(await find(), P_YOUTH), undefined);
+
+    // Every change is audited to the person who made it (PRD 9.6).
+    const actors = new Set(store._referralAuditEvents
+      .filter((e) => e.entityType !== 'REFERRAL' && e.entityType !== 'USER').map((e) => e.actorUserId));
+    assert.deepEqual([...actors].sort((a, b) => a - b), [DIRECTOR, DIRECTOR_12, ORG_ADMIN].sort((a, b) => a - b));
+
+    // History: referrals sent before the changes are byte-for-byte the same,
+    // as are their GPME evaluation (what was shown then), their audit trail,
+    // and what the sender and receiver see.
+    const after = await history();
+    assert.equal(after.rows, before.rows, 'referral records unchanged');
+    assert.equal(after.evaluations, before.evaluations, 'the saved recommendation context is unchanged');
+    assert.equal(after.referralAudit, before.referralAudit, 'no referral audit entries were added');
+    assert.deepEqual(after.senderViews, before.senderViews);
+    assert.deepEqual(after.receiverView, before.receiverView);
+    assert.deepEqual(after.sentList, before.sentList);
+
+    // New referrals use the current information; old ones keep theirs.
+    const later = await worker.post('/api/referrals', referralTo(P_ADULT_ED, { gpme: ANSWERS }));
+    assert.equal(later.status, 201, 'availability information does not block a referral');
+    assert.equal((await worker.post('/api/referrals', referralTo(P_YOUTH))).body.code, 'RECEIVING_PROGRAM_NOT_SELECTABLE');
+    noStore(responses, '/api/');
   });
 });
