@@ -234,7 +234,16 @@ describe('Find a Program screen', () => {
     assert.match(app, /li\.append\(renderProgramInformation\(item\), choose\)/);
     assert.match(GUIDED_MESSAGES.PROGRAM_INFO_REFER_FIRST, /^Send referrals through QCH Connect\./);
     assert.match(GUIDED_MESSAGES.PROGRAM_INFO_REFER_FIRST, /contact only if you cannot find what you need here/);
-    assert.match(GUIDED_MESSAGES.PROGRAM_INFO_NONE, /Confirm with the Program/);
+    // Empty and failed states are neutral and never send staff to the Program contact.
+    assert.equal(GUIDED_MESSAGES.PROGRAM_INFO_NONE, 'No additional Program information is on file.');
+    assert.equal(GUIDED_MESSAGES.PROGRAM_INFO_UNAVAILABLE, 'Current Program information could not be loaded.');
+    for (const text of [GUIDED_MESSAGES.PROGRAM_INFO_NONE, GUIDED_MESSAGES.PROGRAM_INFO_UNAVAILABLE]) {
+      assert.doesNotMatch(text, /contact|availability|Confirm with the Program/i);
+    }
+    // The guidance is appended after the populated/empty/failed branch, so every state shows it.
+    const tail = render.slice(render.lastIndexOf('} else {'));
+    assert.match(tail, /PROGRAM_INFO_REFER_FIRST[\s\S]*box\.append\(referFirst\)/);
+    assert.equal((render.match(/return box;/g) ?? []).length, 1, 'no early return skips the guidance');
     // The chosen Program carries no Program information into the referral.
     const choose = app.slice(app.indexOf('function chooseMatch'), app.indexOf('function chooseMatch') + 300);
     assert.doesNotMatch(choose, /programInformation/);

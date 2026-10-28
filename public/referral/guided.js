@@ -41,10 +41,13 @@ export const GUIDED_MESSAGES = Object.freeze({
   // Current Program information shown with each result (Task X).
   PROGRAM_INFO_HEADING: 'Current Program information:',
   PROGRAM_INFO_NOT_ON_FILE: 'Not on file',
-  PROGRAM_INFO_NONE: 'No current availability or contact information on file. Confirm with the Program.',
-  PROGRAM_INFO_UNAVAILABLE: 'Current Program information could not be loaded. Confirm with the Program.',
-  // Kyle Butler (QCH, Oct 26): refer through QCH Connect; call or email the
-  // Program contact only when staff cannot find what they need in the tool.
+  // Neutral: the Program keeps no additional (flexible) information fields.
+  // It says nothing about availability or contact, which may be unknown.
+  PROGRAM_INFO_NONE: 'No additional Program information is on file.',
+  PROGRAM_INFO_UNAVAILABLE: 'Current Program information could not be loaded.',
+  // Handoff MVP §11 (Program Contact Boundary): refer through QCH Connect;
+  // call or email the Program contact only when staff cannot find what they
+  // need in QCH Connect. Shown with every result, whatever the state.
   PROGRAM_INFO_REFER_FIRST:
     'Send referrals through QCH Connect. Call or email the Program contact only if you cannot find what you need here.',
 });
