@@ -157,8 +157,8 @@ isn't synthetic.
   The requirement is recorded as confirmed by QCH, but two team decisions
   about it are still open: R3 and R4 in
   [requirements-reconciliation-register.md](requirements-reconciliation-register.md).
-- **L5** Known issue #46: at XL text on a phone-width screen, the New
-  Referral entry screen doesn't fit. Present at desktop width.
+- **L5** (Fixed in Task BB: the New Referral entry screen now fits at XL
+  on a phone-width screen. Was issue #46.)
 - **L6** Matching uses need, age range and ZIP only. Results are
   suggestions, not eligibility decisions.
 

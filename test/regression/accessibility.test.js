@@ -221,6 +221,35 @@ describe('text size (PRD 14.5)', () => {
       assert.deepEqual(pxSizes, [':root'], `${name}: only :root may set a px size`);
     }
   });
+
+  // Task BB: a grid column with a rem minimum grows with the text size; at XL
+  // on a phone it was wider than the screen (issue #46, the sent and
+  // received lists). min(..., 100%) keeps it inside the screen.
+  test('no grid column has a size-scaled minimum that can be wider than the screen', () => {
+    for (const { name, css } of stylesheets) {
+      const unsafe = [...css.matchAll(/minmax\(\s*([^,]+?)\s*,/g)].map((m) => m[1])
+        .filter((min) => /\d(\.\d+)?(rem|em|px|ch)\b/.test(min) && !min.startsWith('min('));
+      assert.deepEqual(unsafe, [], `${name}: wrap the minimum in min(<size>, 100%)`);
+    }
+  });
+
+  // Task BB: number boxes were left out of the shared control style, so the
+  // Program matching age range stayed at the browser's default size.
+  test('every kind of text box the pages use is in the shared control style', () => {
+    const used = new Set(pages.flatMap((p) => tags(p.html, 'input').map((a) => attr(a, 'type') ?? 'text'))
+      .filter((type) => !['radio', 'checkbox', 'hidden', 'submit', 'button'].includes(type)));
+    assert.ok(used.has('text'));
+    const shared = stylesheets.find((s) => s.name === path.join('referral', 'referral.css')).css;
+    const ownStyle = { date: path.join('reporting', 'reporting.css') }; // the Reporting Center styles its own date box
+    for (const type of used) {
+      if (ownStyle[type]) {
+        assert.match(stylesheets.find((s) => s.name === ownStyle[type]).css, new RegExp(`input\\[type="${type}"\\][^{]*\\{[^}]*font: inherit`), type);
+        continue;
+      }
+      // A page-wide selector (not one scoped to a single page's container).
+      assert.match(shared, new RegExp(`(^|[,}])\\s*input\\[type="${type}"\\][^{]*\\{[^}]*font: inherit`, 'm'), `input type="${type}" is not in the shared control style`);
+    }
+  });
 });
 
 describe('test tools stay out of the shipped app', () => {

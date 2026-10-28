@@ -110,7 +110,10 @@ h2 { font-size: 1.25rem; margin: 0 0 0.75rem; }
 label, legend { display: block; font-weight: 600; margin-bottom: 0.25rem; }
 .req { color: var(--error); }
 
-input[type="text"], input[type="search"], input[type="tel"], input[type="email"], select, textarea {
+/* Number boxes are included so the S/M/L/XL preference reaches them too
+   (PRD 14.5; Task BB found the matching age boxes stuck at the browser's
+   default size). */
+input[type="text"], input[type="search"], input[type="tel"], input[type="email"], input[type="number"], select, textarea {
   width: 100%;
   padding: 0.5rem 0.625rem;
   border: 1px solid var(--control-border);
@@ -119,6 +122,7 @@ input[type="text"], input[type="search"], input[type="tel"], input[type="email"]
   color: var(--text);
   font: inherit;
 }
+input[type="number"] { max-width: 8rem; }
 textarea { resize: vertical; }
 
 input[aria-invalid="true"], select[aria-invalid="true"], textarea[aria-invalid="true"] {
@@ -210,8 +214,10 @@ h2:focus-visible, .status:focus-visible { outline: 3px solid var(--focus-ring); 
 .status-actions:empty { display: none; }
 
 /* Path choice (PRD 2.1): two equal buttons. The chosen one is shown with a
-   check mark and a thicker border, not color alone. */
-.path-choice { display: grid; grid-template-columns: repeat(auto-fit, minmax(14rem, 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
+   check mark and a thicker border, not color alone. A column is never
+   wider than the screen, so at XL on a phone the buttons stack instead of
+   scrolling sideways (issue #46, Task BB). */
+.path-choice { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); gap: 0.75rem; margin-bottom: 1rem; }
 .path-choice__label { grid-column: 1 / -1; font-weight: 600; margin: 0; }
 .path-btn {
   display: grid; gap: 0.25rem; text-align: left;
@@ -268,7 +274,8 @@ dialog::backdrop { background: rgb(0 0 0 / 0.4); }
 .queue-item { border: 1px solid var(--border); border-radius: 0.5rem; padding: 1rem; }
 .queue-item h3 { margin: 0 0 0.25rem; overflow-wrap: anywhere; }
 .queue-item p { margin: 0.25rem 0; }
-.trio { grid-template-columns: repeat(auto-fit, minmax(10rem, 1fr)); margin: 0.5rem 0; }
+/* Never wider than the list, so XL at 320px stacks instead of scrolling (Task BB). */
+.trio { grid-template-columns: repeat(auto-fit, minmax(min(10rem, 100%), 1fr)); margin: 0.5rem 0; }
 .trio div { align-content: start; }
 .steps { list-style: none; margin: 0; padding: 0; display: grid; gap: 0.75rem; }
 .step { border-left: 0.25rem solid var(--border); padding-left: 0.75rem; }
