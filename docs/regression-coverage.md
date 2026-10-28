@@ -117,8 +117,10 @@ until they have a journey.
   has no S/M/L/XL control. It is a temporary backend status page with one
   link; PRD 13.5 navigation will replace it. Whoever builds that
   navigation should give it the text-size control.
-- **The browser tests run in Chromium only.** Safari and Edge, and a
-  screen reader, are covered by the short manual pass below and by
+- **`npm run test:e2e` runs Chromium only.** Edge, Firefox and WebKit run
+  with `npm run test:e2e:browsers` (results and limits in
+  [browser-verification.md](browser-verification.md)). Real Safari and a
+  screen reader are covered by the short manual pass below and by
   [screen-reader-check.md](screen-reader-check.md).
 
 ## Manual keyboard checklist (PRD 14.2, 14.3, 17.7)

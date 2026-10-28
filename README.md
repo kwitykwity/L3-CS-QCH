@@ -103,8 +103,9 @@ Browser tests (card 17: keyboard, focus, text size, and an axe
 accessibility scan) run separately, because they need a browser:
 
 ```bash
-npx playwright install chromium   # once per machine
-npm run test:e2e
+npx playwright install chromium firefox webkit   # once per machine
+npm run test:e2e                # Chromium
+npm run test:e2e:browsers       # Edge, Chromium, Firefox, WebKit (docs/browser-verification.md)
 ```
 
 ## Notifications (card 15)

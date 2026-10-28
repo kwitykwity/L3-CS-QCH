@@ -60,7 +60,10 @@ describe('every page', () => {
         // tabindex="-1" the next Tab after the skip link went back to the
         // header (heard in the VoiceOver run, docs/screen-reader-check.md A3).
         if (!/class="skip-link"/.test(html)) return;
-        assert.match(html, /<a class="skip-link" href="#main">/);
+        // With Safari's default setting, Tab skips plain links; a link with
+        // tabindex="0" is still a Tab stop, so keyboard users can reach this
+        // skip link (docs/browser-verification.md).
+        assert.match(html, /<a class="skip-link" href="#main" tabindex="0">/);
         const [main] = tags(html, 'main');
         assert.match(main, /\bid="main"/);
         assert.match(main, /\btabindex="-1"/);
@@ -112,7 +115,7 @@ describe('every page', () => {
 
       if (isFormPage(html)) {
         test('form page: skip link, required-field note, and every required field marked for assistive tech (PRD 14.3)', () => {
-          assert.match(html, /<a class="skip-link" href="#main">/);
+          assert.match(html, /<a class="skip-link" href="#main" tabindex="0">/);
           assert.match(html, /id="main"/);
           assert.match(html, /Fields marked <span aria-hidden="true">\*<\/span> are required\./);
           for (const a of [...tags(html, 'input'), ...tags(html, 'select'), ...tags(html, 'textarea')]) {
