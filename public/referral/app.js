@@ -23,8 +23,8 @@ import { interpretAffiliationSave } from './affiliation.js';
 import { SIZES, loadSize, saveSize } from './textSize.js';
 import {
   DESCRIBE_MESSAGES, GUIDED_FIELD_MESSAGES, GUIDED_MESSAGES, firstGuidedError, interpretCategoriesResponse,
-  interpretInterpretResponse, interpretMatchResponse, notCheckedNote, programInformationOf, toMatchRequest,
-  validateDescription, validateGuidedForm,
+  interpretInterpretResponse, interpretMatchResponse, notCheckedNote, programInformationOf, serviceLanguagesText,
+  toMatchRequest, validateDescription, validateGuidedForm,
 } from './guided.js';
 
 const $ = (id) => document.getElementById(id);
@@ -540,7 +540,18 @@ function renderMatchItem(item) {
   choose.textContent = `Choose ${item.name}`;
   choose.addEventListener('click', () => chooseMatch(item));
 
-  li.append(head, whyLabel, why, renderProgramInformation(item), choose);
+  li.append(head, whyLabel, why);
+  // Language of service (Task W): information only, never a reason the
+  // Program was or was not listed. textContent only.
+  const languages = serviceLanguagesText(item.serviceLanguages);
+  if (languages) {
+    const line = document.createElement('p');
+    line.className = 'match__languages';
+    line.textContent = languages;
+    li.append(line);
+  }
+  // Current Program information (Task X), then the referral action.
+  li.append(renderProgramInformation(item), choose);
   return li;
 }
 
@@ -975,6 +986,16 @@ function confirmDiscard() {
 
 function initDiscardDialog() {
   const dialog = $('discard-dialog');
+  // Escape keeps the work. Safari does not focus a button when it is clicked,
+  // so the browser has no opener to return focus to: return it to Cancel here
+  // (docs/browser-verification.md).
+  let escaped = false;
+  dialog.addEventListener('cancel', () => { escaped = true; });
+  dialog.addEventListener('close', () => {
+    if (!escaped) return;
+    escaped = false;
+    $('cancel').focus();
+  });
   $('discard-stay').addEventListener('click', () => {
     dialog.close();
     $('cancel').focus();

@@ -72,6 +72,20 @@ seed has samples. A Program with no rows here has its need "not on file".
 | `service_categories` | `service_category_id`, `name` (unique), `lifecycle_status` | A need category |
 | `program_service_categories` | `program_id`, `service_category_id` (together the key) | Which needs a Program serves |
 
+### service_languages and program_service_languages
+
+Added by 004 (Task W). Languages of service, the same shape as need
+categories. No QCH-provided list exists yet, so production has none; the
+synthetic dev seed has Kyle's three examples (English, Spanish, Chinese) as
+samples only. A Program with no rows here has its languages "not on file",
+never "English only". Matching (rule `gpme-v1`) does not read these tables;
+Find a Program shows the languages to staff.
+
+| Table | Column | Meaning |
+| --- | --- | --- |
+| `service_languages` | `language_id`, `name` (unique), `lifecycle_status` | A language of service |
+| `program_service_languages` | `program_id`, `language_id` (together the key) | Which languages a Program serves in |
+
 ### program_service_area_zips
 
 Renamed from `program_zip_codes` by 003. ZIP codes where a participant

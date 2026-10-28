@@ -29,6 +29,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 | [troubleshooting.md](troubleshooting.md) | Start-up problems, error codes, test problems, what is logged |
 | [operations.md](operations.md) | Monitoring expectations, verification procedures, recovery concepts, known dependencies |
 | [security-regression.md](security-regression.md) | What the security tests prove for every route, what they found, and what to re-run once the production architecture is confirmed (Task F) |
+| [freeze-audit.md](freeze-audit.md) | Is `main` ready for the Nov 2 code freeze? Findings by class and the evidence for each check (Task V) |
 | [verification-evidence.md](verification-evidence.md) | Evidence that the MVP journeys work together, failures found and fixed, and what waits on the QCH environment (Task G) |
 | [ai-interpretation-options.md](ai-interpretation-options.md) | Research only: three ways an open-ended "Find a Program" box could work, compared for pending decision 7 |
 | [requirements-reconciliation-register.md](requirements-reconciliation-register.md) | New QCH and QCH IT evidence since the Oct 14 Final Technical PRD, its status, and what the code does today, for the Oct 30 PRD revision (Task U) |
@@ -44,6 +45,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 | [demo-environment.md](demo-environment.md) | Starting, resetting and safety-checking the synthetic demo for Nov 9 (Task S) |
 | [regression-coverage.md](regression-coverage.md) | Accessibility and end-to-end regression coverage, and the manual keyboard checklist |
 | [screen-reader-check.md](screen-reader-check.md) | VoiceOver script and record sheet: labels, required fields, errors, announcements, dialogs, focus |
+| [browser-verification.md](browser-verification.md) | Browser matrix (team baseline, pending QCH IT), critical journeys run in Edge, Chromium, Firefox and WebKit, and what they found |
 | [demo-rehearsal.md](demo-rehearsal.md) | Demo dress rehearsal: one connected synthetic journey through every feature, its record, and what it found (Task R) |
 
 Elsewhere in the repository:

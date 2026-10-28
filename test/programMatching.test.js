@@ -14,6 +14,9 @@ const changed = {
   needCategoryIds: [2], ageLimitState: 'SET', ageMin: 21, ageMax: 60,
   serviceAreaState: 'SET', serviceAreaZips: ['99902'],
 };
+// Saved facts always include languageIds (Task W). These bodies leave it
+// out, so the Program's languages (none on file here) are kept.
+const NO_LANGUAGES = { languageIds: [] };
 function setup() {
   const grant = (userId, permission, programId = 11, scopeType = 'PROGRAM') => ({
     userId, permission, programId, scopeType, departmentId: null, grantSource: 'IN_APP',
@@ -58,7 +61,7 @@ test('valid matching changes update facts and version with one atomic audit even
   const initial = await service.getMatchingFacts(1, 11);
   const result = await service.updateMatchingFacts(1, 11,
     { version: initial.program.version, ...changed }, { correlationId: 'synthetic-matching-change' });
-  assert.deepEqual(result.facts, changed);
+  assert.deepEqual(result.facts, { ...changed, ...NO_LANGUAGES });
   assert.notEqual(result.program.version, initial.program.version);
   const events = store._referralAuditEvents;
   assert.equal(events.length, 1);
@@ -67,8 +70,8 @@ test('valid matching changes update facts and version with one atomic audit even
   assert.equal(events[0].action, 'UPDATED');
   assert.equal(events[0].actorUserId, 1);
   assert.equal(events[0].correlationId, 'synthetic-matching-change');
-  assert.deepEqual(events[0].before, { matching_facts: original });
-  assert.deepEqual(events[0].after, { matching_facts: changed });
+  assert.deepEqual(events[0].before, { matching_facts: { ...original, ...NO_LANGUAGES } });
+  assert.deepEqual(events[0].after, { matching_facts: { ...changed, ...NO_LANGUAGES } });
   assert.match(events[0].occurredAt, /Z$/);
   const matchable = await store.listMatchablePrograms();
   assert.equal(matchable.find((row) => row.program.programId === 11).program.ageMin, 21);
@@ -106,7 +109,7 @@ test('audit failure rolls matching facts and Program version back together', asy
   await assert.rejects(service.updateMatchingFacts(1, 11, { version, ...changed }));
   assert.equal(state(store), before);
   const retried = await service.updateMatchingFacts(1, 11, { version, ...changed });
-  assert.deepEqual(retried.facts, changed);
+  assert.deepEqual(retried.facts, { ...changed, ...NO_LANGUAGES });
 });
 
 test('two matching writers with one version cannot silently overwrite each other', async () => {
@@ -145,5 +148,5 @@ test('HTTP matching updates are no-store and reject unexpected fields without ec
   const saved = await request(app).put(url).send({ version: read.body.program.version, ...changed });
   assert.equal(saved.status, 200);
   assert.equal(saved.headers['cache-control'], 'no-store');
-  assert.deepEqual(saved.body.facts, changed);
+  assert.deepEqual(saved.body.facts, { ...changed, ...NO_LANGUAGES });
 });

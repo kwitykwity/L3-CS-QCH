@@ -1,7 +1,8 @@
 // Task X: current Program information in Find a Program results.
 // QCH (Kyle) confirmed that limited/wait-listed Programs still appear with
 // that information visible, and that the primary Program contact may be
-// shown while the referral is still sent through QCH Connect first.
+// shown while staff still refer through QCH Connect, calling or emailing
+// the contact only when they cannot find what they need in the tool.
 // All data is SYNTHETIC.
 
 import { test, describe } from 'node:test';
@@ -153,6 +154,67 @@ describe('Find a Program shows current Program information', () => {
   });
 });
 
+describe('language of service (Task W) and current Program information (Task X) together', () => {
+  // Both are added after matching. Neither may change who is found or the
+  // order, and if one cannot be read the other still shows.
+  function both() {
+    const store = createMemoryReferralStore({
+      departments: [{ departmentId: 1, name: 'Synthetic Dept', lifecycleStatus: 'ACTIVE' }],
+      programs: [
+        { programId: 11, departmentId: 1, name: 'Synthetic Pantry', site: null, lifecycleStatus: 'ACTIVE',
+          needCategoryIds: [FOOD], ageLimitState: 'NO_RESTRICTION', serviceAreaState: 'NO_RESTRICTION', languageIds: [2, 1] },
+        { programId: 12, departmentId: 1, name: 'Synthetic Meals', site: null, lifecycleStatus: 'ACTIVE',
+          needCategoryIds: [FOOD], ageLimitState: 'NO_RESTRICTION', serviceAreaState: 'NO_RESTRICTION' },
+      ],
+      needCategories: [{ needCategoryId: FOOD, name: 'Food' }],
+      serviceLanguages: [
+        { languageId: 1, name: 'Synthetic English', lifecycleStatus: 'ACTIVE' },
+        { languageId: 2, name: 'Synthetic Spanish', lifecycleStatus: 'ACTIVE' },
+      ],
+      users: [{ userId: PM, isActive: true }],
+      grants: [{ userId: PM, permission: 'MANAGE_PROGRAM', scopeType: 'PROGRAM', programId: 11, departmentId: null, grantSource: 'IN_APP' }],
+    });
+    return { store, fields: createFieldService({ store }) };
+  }
+  const order = (result) => allItems(result).map((p) => p.programId);
+
+  test('each result carries both, with the same Programs in the same order', async () => {
+    const { store, fields } = both();
+    const plain = await createGpmeService({ store }).match(PM, { needCategoryIds: [FOOD] });
+    const { field } = await fields.createField(PM, 11, { label: 'Wait-list information', dataType: 'TEXT' });
+    await fields.setFieldValue(PM, 11, field.fieldId, { version: field.applicability.version, value: 'Synthetic: wait list open' });
+
+    const result = await createGpmeService({ store }).match(PM, { needCategoryIds: [FOOD] });
+    assert.deepEqual(order(result), order(plain));
+    const pantry = allItems(result).find((p) => p.programId === 11);
+    assert.deepEqual(pantry.serviceLanguages, { status: 'ON_FILE', names: ['Synthetic English', 'Synthetic Spanish'] });
+    assert.deepEqual(pantry.programInformation, [{ label: 'Wait-list information', value: 'Synthetic: wait list open' }]);
+    const meals = allItems(result).find((p) => p.programId === 12);
+    assert.deepEqual(meals.serviceLanguages, { status: 'NOT_ON_FILE', names: [] });
+    assert.deepEqual(meals.programInformation, []);
+  });
+
+  test('if languages cannot be read, Program information still shows; and the other way round', async () => {
+    const { store } = both();
+    const noLanguages = { ...store, listServiceLanguages: async () => { throw new Error('synthetic'); } };
+    const first = await createGpmeService({ store: noLanguages, logFailure: () => {}, logLanguageFailure: () => {} })
+      .match(PM, { needCategoryIds: [FOOD] });
+    assert.equal(first.status, 'RESULTS');
+    for (const p of allItems(first)) {
+      assert.equal(p.serviceLanguages, undefined, 'languages left out, never claimed "not on file"');
+      assert.deepEqual(p.programInformation, []);
+    }
+
+    const noInformation = { ...store, withTransaction: async () => { throw new Error('synthetic'); } };
+    const second = await createGpmeService({ store: noInformation, logFailure: () => {} })
+      .match(PM, { needCategoryIds: [FOOD] });
+    assert.equal(second.status, 'RESULTS');
+    const pantry = allItems(second).find((p) => p.programId === 11);
+    assert.deepEqual(pantry.serviceLanguages.names, ['Synthetic English', 'Synthetic Spanish']);
+    assert.equal(pantry.programInformation, null);
+  });
+});
+
 describe('Find a Program screen', () => {
   test('the browser accepts only well-formed information and treats anything else as not loaded', () => {
     assert.deepEqual(programInformationOf({ programInformation: [{ label: 'Contact', value: 'Desk' }, { label: 'Wait list', value: null }] }),
@@ -168,8 +230,10 @@ describe('Find a Program screen', () => {
     const render = app.slice(app.indexOf('function renderProgramInformation'), app.indexOf('function renderResults'));
     assert.match(render, /textContent/);
     assert.doesNotMatch(render, /innerHTML|insertAdjacentHTML|localStorage|sessionStorage|indexedDB|location|history\.|href/);
-    assert.match(app, /li\.append\(head, whyLabel, why, renderProgramInformation\(item\), choose\)/);
-    assert.match(GUIDED_MESSAGES.PROGRAM_INFO_REFER_FIRST, /through QCH Connect first/);
+    // Program information comes before the Choose button, which stays the referral action.
+    assert.match(app, /li\.append\(renderProgramInformation\(item\), choose\)/);
+    assert.match(GUIDED_MESSAGES.PROGRAM_INFO_REFER_FIRST, /^Send referrals through QCH Connect\./);
+    assert.match(GUIDED_MESSAGES.PROGRAM_INFO_REFER_FIRST, /contact only if you cannot find what you need here/);
     assert.match(GUIDED_MESSAGES.PROGRAM_INFO_NONE, /Confirm with the Program/);
     // The chosen Program carries no Program information into the referral.
     const choose = app.slice(app.indexOf('function chooseMatch'), app.indexOf('function chooseMatch') + 300);

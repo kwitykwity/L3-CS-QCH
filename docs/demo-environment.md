@@ -1,8 +1,8 @@
 # Demo environment and reset (Task S)
 
 **Status: verified on `main` at `36f6e82`, October 26, 2026.** Everything
-below was run, not just read. Two items wait on Task O (demo sign-in,
-Richard): see [What waits on Task O](#what-waits-on-task-o).
+below was run, not just read. The two items that waited on Task O are now
+covered by [Demo sign-in](#demo-sign-in-and-switching-people-task-o).
 
 This is the team-controlled "Plan B" demo from Final Technical PRD 16.4:
 synthetic people, referrals and Programs only, a simulated notification
@@ -101,31 +101,50 @@ also play the receiving Program.
 | Card item | Result | Evidence |
 | --- | --- | --- |
 | Starts from a known synthetic state | Pass | 3 fresh starts compared field by field: identical. `test/demoEnvironment.test.js` |
-| Synthetic referring and receiving identities exist | **Partly.** One user plays both sides | Separate referring and receiving users wait on Task O |
+| Synthetic referring and receiving identities exist | Pass with `npm run dev:demo` | Three separate demo people; see [Demo sign-in](#demo-sign-in-and-switching-people-task-o) |
 | Programs vary enough for Direct Referral and Find a Program | Pass | 6 Programs to choose from; every matching result above. `test/demoEnvironment.test.js` |
 | Safe reset procedure | Pass | [Reset the demo](#reset-the-demo); restart proved to undo a full demo run |
 | Reset cannot run in production | Pass | Demo server refused `production`, `test`, unset, `Development`, `staging`. `test/securityPass.test.js` ("the synthetic dev server refuses every environment except development") |
 | Production rejects demo sign-in | Pass | `npm start` in production: `/health` works; every API answers 401, including with faked `X-User-Id`, `X-Demo-User`, cookie and `Authorization` headers. `test/securityPass.test.js` ("the production server starts with no sign-in fallback") |
 | No production QCH credentials needed | Pass | Started from a fresh copy with only `.env.example`, whose QCH IT values are placeholders no code reads |
 | No real QCH participant or Program Directory data | Pass | No spreadsheet, CSV, PDF or Word file is committed. No real QCH Program or place names, QCH email addresses or New York phone numbers in code or seeds. All emails use `example.org`, `example.test` or `example.invalid` |
-| Screen says "Demo sign-in. Production uses QCH Microsoft sign-in." | **Not yet** | Part of Task O. Today every page says "Development build. Use synthetic data only." |
+| Screen says "Demo sign-in. Production uses QCH Microsoft sign-in." | Pass with `npm run dev:demo` | Top bar on every page and on the sign-in page. `test/demoSignIn.test.js`. `npm run dev:synthetic` still shows "Development build." |
 | Reset and demo journey run more than once | Pass | Reset plus a full demo run, 3 times: same results each time. The demo journey browser tests (`mvpJourney`, `sentReferrals`, `receiving`, 35 tests) passed twice in a row on fresh servers |
 
-## What waits on Task O
+## Demo sign-in and switching people (Task O)
 
-Task O (demo sign-in and switching between people) is in progress. When it
-lands, re-check:
+Run `npm run dev:demo` instead of `npm run dev:synthetic`, then open
+<http://127.0.0.1:3000/demo/>. Nobody is signed in until a person is chosen.
+`npm run dev:synthetic` is unchanged (one fixed developer identity), so the
+browser tests and the starting-state check above still apply to it.
 
-1. **Separate synthetic people** for the referring side and the receiving
-   side, and switching between them during the demo.
-2. **The on-screen label** "Demo sign-in. Production uses QCH Microsoft
-   sign-in." on every page that shows the demo sign-in.
-3. **Production still refuses it.** The demo sign-in must fail closed
-   outside `development`, like the demo server does today. The existing
-   production tests should keep passing unchanged.
-4. **Reset still clears everything**, including who is signed in.
-   `test/demoEnvironment.test.js` should keep passing; add the new people to
-   its starting-state check.
+| Demo person | Can do | Cannot do |
+| --- | --- | --- |
+| Referring Worker (demo), Adult Evening Classes | Send referrals; see the status of referrals they sent | See or answer anyone else's referral |
+| Housing Help Desk Staff (demo) | Receive, answer and record the Service Outcome for Housing Help Desk | Anything for another Program |
+| Older Adult Wellness Center Staff (demo) | Receive, answer and record outcomes for Older Adult Wellness Center only | See a Housing Help Desk referral (shows Program authorization) |
+
+Suggested run: sign in as the Referring Worker, send a referral to Housing
+Help Desk; **Switch person** (top bar) to Housing Help Desk Staff, accept it
+and record the outcome; switch to Older Adult Wellness Center Staff to show
+that the referral is not visible there; switch back to the Referring Worker
+to see the result. To show two people at once, use two browser windows
+(or one private window): each keeps its own sign-in.
+
+- Every page shows "Demo sign-in. Production uses QCH Microsoft sign-in."
+  with who is signed in.
+- Permissions are the normal backend grants for that person. The demo
+  sign-in only says who is calling; it grants nothing and no header, query
+  or body can name a user.
+- **Production rejects it.** The code lives in `scripts/`, which production
+  source cannot import, so `npm start` has no demo route, page or cookie
+  handling. It is created only when `NODE_ENV` is exactly `development`.
+  Proved by `test/demoSignIn.test.js` (including a real production server
+  started with the demo flag set: every demo path answers 404, API 401).
+- **Reset clears who is signed in**: sign-ins live in server memory, so
+  restarting the demo signs everyone out.
+- No passwords or credentials exist. The people are invented and hold
+  receiving rights only.
 
 ## Found while checking (not fixed here)
 

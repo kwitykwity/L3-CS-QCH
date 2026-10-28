@@ -43,8 +43,10 @@ export const GUIDED_MESSAGES = Object.freeze({
   PROGRAM_INFO_NOT_ON_FILE: 'Not on file',
   PROGRAM_INFO_NONE: 'No current availability or contact information on file. Confirm with the Program.',
   PROGRAM_INFO_UNAVAILABLE: 'Current Program information could not be loaded. Confirm with the Program.',
+  // Kyle Butler (QCH, Oct 26): refer through QCH Connect; call or email the
+  // Program contact only when staff cannot find what they need in the tool.
   PROGRAM_INFO_REFER_FIRST:
-    'Send the referral through QCH Connect first. Use any Program contact shown for questions.',
+    'Send referrals through QCH Connect. Call or email the Program contact only if you cannot find what you need here.',
 });
 
 // Current Program information on a match result (Task X): an array of
@@ -283,6 +285,22 @@ export function interpretMatchResponse(response) {
   // 503 UNABLE_TO_MATCH, any other status, or a malformed body: a technical
   // failure, never shown as "no plausible match".
   return unable();
+}
+
+// Language of service on a result (Task W). Information for staff only:
+// matching never uses it. "Not on file" is never shown as English only.
+// Returns null when the server sent no language information (for example
+// the language list could not be read), so the page says nothing rather
+// than guessing.
+export function serviceLanguagesText(serviceLanguages) {
+  if (!serviceLanguages || typeof serviceLanguages !== 'object') return null;
+  const { status, names } = serviceLanguages;
+  if (status === 'NOT_ON_FILE') return 'Languages of service: not on file';
+  if (status === 'ON_FILE' && Array.isArray(names) && names.length > 0
+      && names.every((name) => typeof name === 'string' && name.length > 0)) {
+    return `Languages of service: ${names.join(', ')}`;
+  }
+  return null;
 }
 
 // "N Programs have no need categories on file ..." (PRD 8.10): those

@@ -3,7 +3,8 @@
 // real app with SYNTHETIC data (Final Technical PRD 14, 17.7).
 //
 //   npx playwright install chromium   (once per machine)
-//   npm run test:e2e
+//   npm run test:e2e                  (Chromium)
+//   npm run test:e2e:browsers         (every browser in docs/browser-verification.md)
 //
 // Separate from `npm test` on purpose: it needs a browser and starts its
 // own synthetic dev server. See docs/regression-coverage.md.
@@ -11,6 +12,20 @@
 import { defineConfig, devices } from '@playwright/test';
 
 const PORT = 3217;
+
+// One browser per run (Task: additional-browser verification). Every run
+// starts its own fresh synthetic server, and the specs assume the starting
+// state, so browsers must not share one server. Pick with E2E_BROWSER, or
+// run all of them in turn with: npm run test:e2e:browsers
+//   chromium (default) | firefox | webkit | msedge
+const BROWSERS = {
+  chromium: devices['Desktop Chrome'],
+  firefox: devices['Desktop Firefox'],
+  webkit: devices['Desktop Safari'],
+  msedge: { ...devices['Desktop Edge'], channel: 'msedge' },
+};
+const browser = process.env.E2E_BROWSER ?? 'chromium';
+if (!(browser in BROWSERS)) throw new Error(`E2E_BROWSER must be one of: ${Object.keys(BROWSERS).join(', ')}`);
 
 export default defineConfig({
   testDir: './e2e',
@@ -24,9 +39,9 @@ export default defineConfig({
     baseURL: `http://127.0.0.1:${PORT}`,
     trace: 'retain-on-failure',
     // Optional: point at an already-installed Chromium.
-    launchOptions: process.env.CHROMIUM_PATH ? { executablePath: process.env.CHROMIUM_PATH } : {},
+    launchOptions: process.env.CHROMIUM_PATH && browser === 'chromium' ? { executablePath: process.env.CHROMIUM_PATH } : {},
   },
-  projects: [{ name: 'chromium', use: { ...devices['Desktop Chrome'] } }],
+  projects: [{ name: browser, use: BROWSERS[browser] }],
   webServer: {
     command: 'node scripts/dev-synthetic-server.js',
     url: `http://127.0.0.1:${PORT}/health`,
