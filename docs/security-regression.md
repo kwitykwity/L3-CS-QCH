@@ -29,6 +29,59 @@ problems, three faults were introduced on purpose and then removed:
 | Program edit skipping its permission check | 7 |
 | Program view returning every stored column | 1 |
 
+## Privacy and data-leakage regression (Task DD)
+
+Checks that participant and referral information stays inside the
+referral record (PRD 5.3, 5.4, 5.5, 11.2, 12, 15.3). Two new files sit on
+top of the suites above and do not repeat them:
+
+- `test/regression/privacyRegression.test.js` (`npm test`): the whole app
+  as the synthetic dev server builds it, driven with marked synthetic data
+  through describe the need, matching, GPME-assisted and Direct
+  Referral, Not Appropriate with an explanation, corrections, a failed
+  audit, every report, and notification sending (including a NO_RECIPIENT
+  failure); plus an interpreter that fails while holding the worker's
+  text, and 22 refused or invalid requests that carry the markers.
+- `e2e/privacy.spec.js` (`npm run test:e2e`): one referral carried through
+  every screen in Chromium, recording every request, page address and
+  console message.
+
+| Acceptance item | Where it is checked |
+| --- | --- |
+| No participant data in URLs or query strings | `e2e/privacy.spec.js`: every request and page address; page addresses carry numeric IDs only. Server routes refuse unknown query parameters without echoing them (`securityPass`) |
+| No sensitive data in browser storage | `e2e/privacy.spec.js`: localStorage holds only the text size; sessionStorage, IndexedDB, Cache Storage, service workers and cookies are empty after the whole journey. Also `e2e/gpme.spec.js` for the describe step |
+| Logs and console carry no participant data or free text | `privacyRegression` (every console channel, whole workflow, failures included); `e2e/privacy.spec.js` (browser console and page errors); `securityPass`, `errorHandler`, `notificationWiring` |
+| Notifications stay generic | `privacyRegression` (every email sent in the run); `notifications`, `notificationWiring` |
+| Reporting is aggregate only | `privacyRegression`: every report, two periods, no markers and no referral fields; `securityRegression` |
+| Unauthorized and error responses leak nothing | `privacyRegression` (22 invalid requests, an unknown user, no sign-in); `securityPass`, `securityRegression` |
+| Describe-the-need text stays transient | `privacyRegression` (not echoed, not logged even when the interpreter fails holding it); `gpmeInterpretation`, `e2e/gpme.spec.js` |
+
+**Result: no leaks found, no code changed.** By design, the receiving
+queue shows the need (referral context) to the authorized receivers so they
+can triage; the PRD keeps it out of logs, reports, search and emails, not
+out of the receivers' own queue. The describe step proposes the ZIP it
+read back to the worker; it never echoes the text. Report data comes from
+a store query that returns counts only, so a report cannot carry a name
+unless that query changes.
+
+To check that the new tests catch real leaks, faults were planted and then
+removed. Each one made a test fail:
+
+| Fault planted | Caught by |
+| --- | --- |
+| Interpreter failures logged with the error message | `privacyRegression` |
+| The response route logs its request body | `privacyRegression` |
+| Referral errors echo the request body | `privacyRegression` |
+| The receiving page logs its text to the console | `e2e/privacy.spec.js` |
+| The sent page copies itself into sessionStorage | `e2e/privacy.spec.js` |
+| The sent list puts a name in the page address | `e2e/privacy.spec.js` |
+| The sent list sends a name in a query string | `e2e/privacy.spec.js` |
+
+When the SharePoint store and Azure Functions hosting are built (R19, R20
+in [requirements-reconciliation-register.md](requirements-reconciliation-register.md)),
+re-run both files against them. The Functions host's own logging
+(Application Insights) must be checked then too.
+
 ## Route inventory
 
 49 API routes (30 use POST, PUT or PATCH: 27 change shared data, 3 are self-service or read-only), plus `GET /health` (public, availability only). People used
