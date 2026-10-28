@@ -17,6 +17,12 @@
 //   listNeedCategories()     -> [{ needCategoryId, name, lifecycleStatus }]
 //   listMatchablePrograms()  -> [{ program, department }], both ACTIVE, where
 //       program has the matching facts in src/gpme/programFacts.js
+//   listServiceLanguages()   -> [{ languageId, name, lifecycleStatus }]
+//
+// Language of service (Task W) is added to each result AFTER matching, as
+// information for staff. The engine never sees it, so a language can never
+// remove a Program or change a result (rule gpme-v1). The referral
+// re-check calls the engine directly and is not affected either.
 
 import { errors as affiliationErrors } from '../affiliation/errors.js';
 import { gpmeErrors } from './errors.js';
@@ -35,6 +41,20 @@ function compareText(a, b) {
   return 0;
 }
 
+// What each result says about language of service. Known languages are
+// listed by name; none on file is NOT_ON_FILE (never "English only").
+// Languages are shown whatever their list status, because they are what
+// the Program has on file.
+export function serviceLanguagesOf(program, namesById) {
+  const names = [...new Set(program?.languageIds ?? [])]
+    .filter((id) => namesById.has(id))
+    .map((id) => namesById.get(id))
+    .sort(compareText);
+  return names.length > 0
+    ? { status: 'ON_FILE', names }
+    : { status: 'NOT_ON_FILE', names: [] };
+}
+
 export const INTERPRET_STATUS = Object.freeze({
   INTERPRETED: 'INTERPRETED',
   NOTHING_RECOGNIZED: 'NOTHING_RECOGNIZED',
@@ -46,7 +66,7 @@ export const INTERPRET_STATUS = Object.freeze({
 // proposes criteria; GPME matching below never depends on which one ran.
 export function createGpmeService({
   store, ruleVersion = GPME_RULE_VERSION, logFailure = defaultLogFailure,
-  interpreter = createRuleBasedInterpreter(),
+  interpreter = createRuleBasedInterpreter(), logLanguageFailure = defaultLogLanguageFailure,
 } = {}) {
   if (!store) throw new Error('createGpmeService requires a store');
 
@@ -188,14 +208,41 @@ export function createGpmeService({
         throw gpmeErrors.invalidRequest(['needCategoryIds']);
       }
 
+      let result;
       try {
         candidates = await store.listMatchablePrograms();
-        return matchPrograms(input, { candidates, needCategories, ruleVersion });
+        result = matchPrograms(input, { candidates, needCategories, ruleVersion });
       } catch (err) {
         return unableToMatch(err);
       }
+      return addServiceLanguages(result, candidates);
     },
   };
+
+  // Display only (Task W). If the language list cannot be read, the
+  // results are returned without it rather than failing matching, and
+  // never as "not on file" (that would claim something we did not check).
+  async function addServiceLanguages(result, candidates) {
+    if (result.status !== MATCH_STATUS.RESULTS) return result;
+    let namesById;
+    try {
+      const languages = await store.listServiceLanguages();
+      namesById = new Map(languages.map((row) => [row.languageId, row.name]));
+    } catch (err) {
+      logLanguageFailure(err);
+      return result;
+    }
+    const programs = new Map(candidates.map(({ program }) => [program.programId, program]));
+    const withLanguages = (item) => ({
+      ...item,
+      serviceLanguages: serviceLanguagesOf(programs.get(item.programId), namesById),
+    });
+    return {
+      ...result,
+      plausible: result.plausible.map(withLanguages),
+      possible: result.possible.map(withLanguages),
+    };
+  }
 }
 
 // Error kinds that may appear in logs. Anything else, including a custom
@@ -211,4 +258,8 @@ export function safeErrorKind(err) {
 // request values, any of which could carry participant data (PRD 15.3).
 function defaultLogFailure(err) {
   console.error(`[gpme] matching unavailable (${safeErrorKind(err)})`);
+}
+
+function defaultLogLanguageFailure(err) {
+  console.error(`[gpme] language list unavailable; results sent without languages (${safeErrorKind(err)})`);
 }

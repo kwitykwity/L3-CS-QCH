@@ -103,8 +103,9 @@ Browser tests (card 17: keyboard, focus, text size, and an axe
 accessibility scan) run separately, because they need a browser:
 
 ```bash
-npx playwright install chromium   # once per machine
-npm run test:e2e
+npx playwright install chromium firefox webkit   # once per machine
+npm run test:e2e                # Chromium
+npm run test:e2e:browsers       # Edge, Chromium, Firefox, WebKit (docs/browser-verification.md)
 ```
 
 ## Notifications (card 15)
@@ -254,6 +255,13 @@ follow the GPME Decision Proposal the team approved on Oct 18:
   them as "not on file".
 - Neither GPME route accepts query parameters. Any query string gets a fixed
   `400 UNEXPECTED_FIELD` that does not echo the parameter.
+- **Language of service (Task W)** is not a matching criterion. After
+  matching, each result gets `serviceLanguages`: `{ status: "ON_FILE",
+  names: [...] }` or `{ status: "NOT_ON_FILE", names: [] }` (never "English
+  only"). If the language list cannot be read, results come back without it
+  rather than failing. Program Management keeps a Program's `languageIds`
+  with its matching facts; a save that leaves `languageIds` out keeps the
+  saved languages. Schema: `db/migrations/004_language_of_service.sql`.
 - **Write-path requirement (open, for the production store):** matching facts are validated when a Program is edited
   (`updateProgramMatchingFacts`). A relational production store must change the state
   columns and `program_service_area_zips` rows in one transaction after that
@@ -447,15 +455,20 @@ to provide, the handoff checklist, and dependency licenses.
 
 Built and tested on in-memory stores with synthetic data: Direct
 Referrals, receiving (the received list and referral screens: respond,
-record and correct outcomes, correct decisions; merged in #37), Guided
-Program Matching, Program Management
-(Programs, matching facts, fields, values, Departments), the report APIs
-(Total Referrals, Timing Metrics, Referral activity), permission checks by
-grant, giving and removing permissions (`/permissions/`), and the audit
+record and correct outcomes, correct decisions; merged in #37), Referrals
+I sent (Task L, #49), Guided Program Matching, Program Management
+(Programs, matching facts, fields, values, Departments, current Program
+information; Task C, #44), the report APIs (Total Referrals, Timing
+Metrics, Referral activity) and the Reporting Center screens (Task B, #41;
+Task M), new-referral notifications started after each referral commits
+(Task E, #42; simulated outbox), permission checks by grant, giving and
+removing permissions (Task Y, `/permissions/`), demo sign-in for
+non-production demos (Task O, #60; `npm run dev:demo`), and the audit
 trail. The schema design and migrations are in `db/`.
 
-**Not built yet:** a production data store, Entra sign-in, the Microsoft Graph sender (notifications run on a
-simulated outbox in development),
-reporting screens, and any Azure resources. Some of these wait on QCH IT
-decisions; [`docs/pending-qch-it-decisions.md`](docs/pending-qch-it-decisions.md)
+**Not built yet:** a production data store, Entra sign-in, a way to set
+a Program's notification email, the Microsoft Graph sender (notifications
+run on a simulated outbox in development), and any Azure resources. Some
+of these wait on QCH IT decisions;
+[`docs/pending-qch-it-decisions.md`](docs/pending-qch-it-decisions.md)
 says which. Any data used for demos must be synthetic.

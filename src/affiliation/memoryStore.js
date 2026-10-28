@@ -33,6 +33,12 @@
 //       NOT_ON_FILE. So bad matching data can never stop the store, Program
 //       listing, affiliation, or Direct Referral from working (PRD 8.8).
 //
+// Language of service (Task W, migration 004):
+//   listServiceLanguages()     -> [{ languageId, name, lifecycleStatus }]
+//       dbo.service_languages
+//   Programs carry languageIds (program_service_languages.language_id).
+//       No rows means "not on file". GPME rule gpme-v1 never reads it.
+//
 //   updateProgramMatchingFacts({ programId, ...facts }) -> program | null
 //       The WRITE path for matching facts (Program maintenance). Validates
 //       with findMatchingFactProblems() and throws InvalidMatchingFactsError
@@ -69,6 +75,7 @@ import { checkAuditEvent } from '../referrals/auditRules.js';
 
 const MATCHING_FACT_KEYS = Object.freeze([
   'needCategoryIds', 'ageLimitState', 'ageMin', 'ageMax', 'serviceAreaState', 'serviceAreaZips',
+  'languageIds',
 ]);
 
 // Thrown by updateProgramMatchingFacts. Fixed message, never Program data.
@@ -92,10 +99,12 @@ function withMatchingFacts(program) {
     ageMax: null,
     serviceAreaState: 'NOT_ON_FILE',
     serviceAreaZips: [],
+    languageIds: [],
     ...program,
   };
   row.needCategoryIds = copyList(row.needCategoryIds);
   row.serviceAreaZips = copyList(row.serviceAreaZips);
+  row.languageIds = copyList(row.languageIds);
   return row;
 }
 
@@ -104,11 +113,12 @@ function copyProgram(program) {
     ...program,
     needCategoryIds: copyList(program.needCategoryIds),
     serviceAreaZips: copyList(program.serviceAreaZips),
+    languageIds: copyList(program.languageIds),
   };
 }
 
 export function createMemoryStore(
-  { departments = [], programs = [], users = [], needCategories = [] } = {},
+  { departments = [], programs = [], users = [], needCategories = [], serviceLanguages = [] } = {},
   { now = () => new Date() } = {},
 ) {
   // rowVersion stands in for SQL ROWVERSION on departments too.
@@ -131,7 +141,9 @@ export function createMemoryStore(
     rowVersion: 1,
   }]));
   const needCategoryRows = needCategories.map((c) => ({ lifecycleStatus: 'ACTIVE', ...c }));
+  const languageRows = serviceLanguages.map((l) => ({ lifecycleStatus: 'ACTIVE', ...l }));
   let failMatching = false;
+  let failLanguages = false;
   // rowVersion stands in for SQL ROWVERSION: bumped on every user update.
   const usersById = new Map(users.map((u) => [u.userId, { currentProgramId: null, ...u, rowVersion: 1 }]));
   const auditEvents = [];
@@ -215,6 +227,11 @@ export function createMemoryStore(
       return activeProgramRows();
     },
 
+    async listServiceLanguages() {
+      if (failLanguages) throw new Error('simulated store failure');
+      return languageRows.map((l) => ({ ...l }));
+    },
+
     async updateUserProgramAffiliation({ userId, expectedVersion, fromProgramId, toProgramId, actorUserId, correlationId }) {
       const user = usersById.get(userId);
       if (!user || `v${user.rowVersion}` !== expectedVersion) return null; // stale: nothing written
@@ -266,6 +283,7 @@ export function createMemoryStore(
       user.rowVersion += 1;
     },
     _failMatching(value = true) { failMatching = value; },
+    _failLanguages(value = true) { failLanguages = value; },
     _setProgramDepartment(programId, departmentId) {
       programsById.get(programId).departmentId = departmentId;
     },

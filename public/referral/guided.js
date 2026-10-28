@@ -265,6 +265,22 @@ export function interpretMatchResponse(response) {
   return unable();
 }
 
+// Language of service on a result (Task W). Information for staff only:
+// matching never uses it. "Not on file" is never shown as English only.
+// Returns null when the server sent no language information (for example
+// the language list could not be read), so the page says nothing rather
+// than guessing.
+export function serviceLanguagesText(serviceLanguages) {
+  if (!serviceLanguages || typeof serviceLanguages !== 'object') return null;
+  const { status, names } = serviceLanguages;
+  if (status === 'NOT_ON_FILE') return 'Languages of service: not on file';
+  if (status === 'ON_FILE' && Array.isArray(names) && names.length > 0
+      && names.every((name) => typeof name === 'string' && name.length > 0)) {
+    return `Languages of service: ${names.join(', ')}`;
+  }
+  return null;
+}
+
 // "N Programs have no need categories on file ..." (PRD 8.10): those
 // Programs were not evaluated, so the page says so instead of implying
 // they were found unsuitable.

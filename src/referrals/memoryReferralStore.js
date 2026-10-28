@@ -43,7 +43,7 @@
 //       safe retry.
 //
 // GPME-assisted referrals (card 11):
-//   tx.listNeedCategories(), tx.listMatchablePrograms()
+//   tx.listNeedCategories(), tx.listMatchablePrograms(), tx.listServiceLanguages()
 //       The same reads GPME uses (src/affiliation/memoryStore.js), inside
 //       the referral transaction, so the re-check at submission sees
 //       current Program data. In Azure SQL the receiving Program's row is
@@ -509,6 +509,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       listNeedCategories: base.listNeedCategories,
       listMatchablePrograms: base.listMatchablePrograms,
       listUsers: base.listUsers,
+      listServiceLanguages: base.listServiceLanguages,
 
       // ----- Permission administration (Task Y) -----
       async holdPermissionAdministration() {

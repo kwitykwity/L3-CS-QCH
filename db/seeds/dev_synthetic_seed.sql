@@ -43,6 +43,21 @@ FROM (VALUES
 WHERE NOT EXISTS (SELECT 1 FROM dbo.service_categories s WHERE s.name = v.name);
 GO
 
+/* Languages of service (stored in dbo.service_languages, migration 004).
+   SOURCE: the three examples Kyle Butler (QCH) gave on Oct 26, 2026.
+   SYNTHETIC SAMPLE ONLY, NOT the QCH list. Which languages QCH lists,
+   and whether "Chinese" means Mandarin, Cantonese or both, is an open
+   QCH decision. Runs only after 004. */
+INSERT INTO dbo.service_languages (name)
+SELECT v.name
+FROM (VALUES
+    (N'English'),
+    (N'Spanish'),
+    (N'Chinese')
+) AS v(name)
+WHERE NOT EXISTS (SELECT 1 FROM dbo.service_languages s WHERE s.name = v.name);
+GO
+
 /* Not Appropriate reasons are NOT seeded here. The initial list
    (team-created with Kyle's authorization) is real reference data and
    is loaded by migration 002. */
