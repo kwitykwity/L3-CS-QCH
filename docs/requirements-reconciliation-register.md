@@ -38,10 +38,11 @@ descriptions or memory.
 | QCH IT infrastructure guidance | Oct 22, 2026 | Team copy, not in this repository. The open items it raised are tracked in [pending-qch-it-decisions.md](pending-qch-it-decisions.md) |
 | Midpoint check-in with QCH program staff | Oct 23, 2026 | Team transcript copy, not in this repository. Requests summarized in [ai-interpretation-options.md](ai-interpretation-options.md) and [task-c-program-information.md](task-c-program-information.md) |
 | Kyle Butler (QCH), reply to "QCH Connect: Midpoint Follow-Up and Remaining Questions" | Oct 26, 2026 | Email to the team. Kyle answered the non-technical questions and invited Joelle Tirado (QCH) to add to them |
+| Bassit Saidi (QCH IT), reply-all on the same thread, answering Section 1 | Oct 27, 2026 | Email to the team. Hosting, data store, SharePoint access, archiving, shared mailbox, audit, volume and GPME security. The opening of the archiving answer is missing from the team's copy (screenshots) and needs to be checked against the email |
 
 PRD 22 closed the business-clarification phase "unless genuinely new or
-conflicting business evidence emerges". The Oct 22, Oct 23 and Oct 26
-items below are that kind of evidence, which is why they are reconciled
+conflicting business evidence emerges". The Oct 22, Oct 23, Oct 26 and
+Oct 27 items below are that kind of evidence, which is why they are reconciled
 here instead of being treated as already covered.
 
 ## Summary
@@ -52,7 +53,7 @@ here instead of being treated as already covered.
 | R2 | Show what the app understood, so staff can correct it before matching | CONFIRMED | No. In review as PR #43 |
 | R3 | How the free-text step fits PRD 8.2 | TEAM PRODUCT DECISION (not yet recorded) | Not applicable |
 | R4 | Everyday age words ("teen", "older adult") mapped to age ranges | TEAM PRODUCT DECISION (not yet recorded) | No. In PR #43 |
-| R5 | Approved AI or language-processing boundary | OPEN QCH DECISION | Rules only, no AI |
+| R5 | Approved AI or language-processing boundary | CONFIRMED (Oct 27): no external AI | Yes. Rules only, no AI |
 | R6 | Need is the most important matching factor | CONFIRMED | Yes |
 | R7 | Language of service, more than one per Program | CONFIRMED | No |
 | R8 | Programs that are full or have a wait list still appear, with status shown | CONFIRMED | Partly. Never removed; status not shown in Find a Program |
@@ -66,13 +67,16 @@ here instead of being treated as already covered.
 | R16 | No automatic fallback to Family Support | CONFIRMED | Yes |
 | R17 | Matching improves through updated Program information and rule changes from staff feedback | CONFIRMED | Yes, through Program Management and rule versions |
 | R18 | Missing Program information never treated as "no restriction" | TEAM PRODUCT DECISION (Oct 18, 2026) | Yes |
-| R19 | Production data store: SharePoint Lists or Azure SQL design | OPEN QCH DECISION | In-memory stores only |
-| R20 | Server-side hosting and compute | OPEN QCH DECISION | Runs on any Node host |
-| R21 | SharePoint site and access model | OPEN QCH DECISION | No SharePoint code |
-| R22 | Entra configuration | OPEN QCH DECISION | Not built; production fails closed |
-| R23 | Microsoft Graph and shared mailbox configuration | OPEN QCH DECISION | Simulated outbox only |
+| R19 | Production data store: SharePoint Lists, no separate database | CONFIRMED (Oct 27). Conflicts with PRD 1.3, 1.4, 9 | No. In-memory stores only; the SQL design will not be used |
+| R20 | Hosting: Azure Functions, managed identity, no stored secrets | CONFIRMED (Oct 27). Conflicts with PRD 1.4 | No. Runs on any Node host as one Express app |
+| R21 | Private SharePoint site; app-only access (Sites.Selected) | CONFIRMED (Oct 27) | No SharePoint code |
+| R22 | Entra configuration | OPEN QCH DECISION (QCH IT will coordinate) | Not built; production fails closed |
+| R23 | Shared mailbox: Mail.Send limited to the mailbox (RBAC for Applications) | CONFIRMED (Oct 27) | Simulated outbox only |
 | R24 | Department naming and mapping | OPEN QCH DECISION | Four shortened names in reference data |
-| R25 | Archive, retention and audit policy | OPEN QCH DECISION | Everything kept; nothing purged |
+| R25 | Archive the 500 oldest closed or completed referrals | CONFIRMED (Oct 27); trigger wording to check | No. Nothing is archived |
+| R26 | QCH Connect keeps its own audit history | CONFIRMED (Oct 27) | Yes |
+| R27 | Retention and deletion policy | OPEN QCH DECISION | Everything kept; nothing purged |
+| R28 | Expected annual referral volume | OPEN QCH DECISION (QCH IT deferred to Kyle) | Not applicable |
 
 ## Find a Program and matching
 
@@ -130,12 +134,12 @@ here instead of being treated as already covered.
 | | |
 | --- | --- |
 | PRD | 1.4 (data stays in the QCH-approved Microsoft environment unless QCH IT approves otherwise in writing), 21 (external generative-AI services processing referral data is a non-goal) |
-| Evidence | Earlier guidance: no outside AI services for referral data. Oct 23: program staff asked for AI-assisted matching. Oct 26: Kyle confirmed open-ended search (R1) but answered non-technical questions only, so this is not settled |
-| Impact | Decides whether the interpreter can ever be anything other than rules inside the app. Options are compared in [ai-interpretation-options.md](ai-interpretation-options.md) |
+| Evidence | Earlier guidance: no outside AI services for referral data. Oct 23: program staff asked for AI-assisted matching. Oct 26: Kyle confirmed open-ended search (R1) but answered non-technical questions only. Oct 27: QCH IT confirmed GPME runs entirely within QCH Connect's approved environment, with no external AI processing, and any future change that would send participant or referral information to another service needs QCH IT approval before implementation |
+| Impact | Matches PRD 1.4 and 21, so no PRD change. The interpreter stays rules inside the app. The midpoint request for AI-assisted matching is not approved; it would need QCH IT approval first. Options other than rules-only in [ai-interpretation-options.md](ai-interpretation-options.md) are not approved |
 | Today | Rules only. No AI service, no API key, no outside calls |
-| Status | **OPEN QCH DECISION** (pending decision 7) |
-| Affected | [pending-qch-it-decisions.md](pending-qch-it-decisions.md) decision 7 |
-| Approver | Waiting on QCH IT |
+| Status | **CONFIRMED** |
+| Affected | [pending-qch-it-decisions.md](pending-qch-it-decisions.md) decision 7 (answered) |
+| Approver | Bassit Saidi (QCH IT), Oct 27, 2026 |
 
 ### R6. Need is the most important matching factor
 
@@ -296,54 +300,54 @@ here instead of being treated as already covered.
 ## Production architecture
 
 Each of these is tracked in more detail in
-[pending-qch-it-decisions.md](pending-qch-it-decisions.md). None was
-answered in Kyle's Oct 26 email.
+[pending-qch-it-decisions.md](pending-qch-it-decisions.md). Kyle's Oct 26
+email answered none of them. QCH IT answered most of them on Oct 27.
 
 ### R19. Production data store
 
 | | |
 | --- | --- |
-| PRD | 1.3, 1.4 (Azure SQL Database marked CLIENT CONFIRMED / QCH IT), 9 |
-| Evidence | Raised after the PRD: Task U lists it among the Oct 22 QCH IT guidance items, and SharePoint Lists is now an option. This **conflicts** with a PRD item marked client-confirmed, so the revision has to change 1.3 and 1.4 or keep them once QCH IT decides. Check the wording against the Oct 22 email |
-| Impact | Decides how the store, migrations, backups and reports are built. The app depends on transactions, row versions and uniqueness rules |
-| Today | In-memory stores with synthetic data. The SQL in `db/migrations/` is the team's design, not a confirmed store |
-| Status | **OPEN QCH DECISION** (pending decision 1) |
-| Affected | `db/`, all store contracts |
-| Approver | Waiting on QCH IT |
+| PRD | 1.3 and 1.4 (Azure SQL Database marked CLIENT CONFIRMED / QCH IT), 9.2 (Azure SQL is the authoritative source), 9.3 (transactions), 9.4 (concurrency), 9.5 (constraints) |
+| Evidence | Oct 27: QCH IT said referral data should stay in SharePoint Lists, and the Azure Functions app (R20) may have no separate database. This **conflicts** with PRD 1.3, 1.4 and 9.2, so the revision has to change them |
+| Impact | The SQL design in `db/migrations/` will not be the production store. A SharePoint Lists store still has to give the guarantees the app relies on (PRD 9.3 to 9.5): a change and its audit event saved together or not at all, "someone else changed this" checks, uniqueness (for example one referral per Submission ID), and the held locks the stores use for changes made at the same time. SharePoint Lists do not offer transactions across items or lists the way a database does, so the team needs a design for these before building the store. SharePoint item versions (ETags) are a likely fit for "someone else changed this". The SQL notes in the in-memory stores' header comments will need SharePoint equivalents |
+| Today | In-memory stores with synthetic data behind a store contract. No production store |
+| Status | **CONFIRMED** (SharePoint Lists). How the app keeps its guarantees on SharePoint is team design work still to do |
+| Affected | `db/`, all store contracts (`src/referrals/memoryReferralStore.js`, `src/affiliation/memoryStore.js`), PRD 9 |
+| Approver | Bassit Saidi (QCH IT), Oct 27, 2026 |
 
 ### R20. Server-side hosting and compute
 
 | | |
 | --- | --- |
-| PRD | 1.4 (Azure App Service marked CLIENT CONFIRMED / QCH IT), 3.7, 6.4 |
-| Evidence | Task U lists it among the Oct 22 QCH IT guidance items, which reopened a PRD item marked client-confirmed. Check the wording against the Oct 22 email |
-| Impact | The app is a server application and cannot run as static pages |
-| Today | `npm start` runs on any Node host; Node 24.15.0 pinned for development |
-| Status | **OPEN QCH DECISION** (pending decision 2) |
-| Affected | [deployment.md](deployment.md) |
-| Approver | Waiting on QCH IT |
+| PRD | 1.4 (Azure App Service marked CLIENT CONFIRMED / QCH IT; Key Vault as a supporting service), 3.7, 6.4, 15.2 |
+| Evidence | Oct 27: a lightweight Azure Functions app is acceptable for server-side authorization and business logic, provided it runs in a QCH-owned Azure subscription, uses a managed identity (no stored secrets or keys), and has no separate database. QCH IT will provision the subscription and resource group, and asked the team to send the planned functions, triggers and outbound dependencies so they can scope it. This **conflicts** with PRD 1.4 (App Service) |
+| Impact | Server-side checks stay on the server, as PRD 3.7 and 6.4 require. The Express app has to run inside Azure Functions (wrapped as one function, or split into several). Background work such as the notification retry timer becomes a Functions trigger. Settings that assume a client secret, Key Vault secrets or a database connection change ([qch-it-requirements.md](qch-it-requirements.md), [deployment.md](deployment.md)). The only outbound dependency in the current design is Microsoft Graph (SharePoint and mail) |
+| Today | `npm start` runs one Express app on any Node host; Node 24.15.0 pinned for development |
+| Status | **CONFIRMED** (Azure Functions). The team still owes QCH IT the list of functions, triggers and outbound dependencies |
+| Affected | `src/server.js`, `src/app.js`, [deployment.md](deployment.md), [qch-it-requirements.md](qch-it-requirements.md) |
+| Approver | Bassit Saidi (QCH IT), Oct 27, 2026 |
 
 ### R21. SharePoint site and access model
 
 | | |
 | --- | --- |
 | PRD | 3.3, 3.6, 9.12 (direct data changes are not the normal production path) |
-| Evidence | Follows from R19 |
-| Impact | If staff can open the lists directly, the app's permission and audit rules can be bypassed |
-| Today | No SharePoint code |
-| Status | **OPEN QCH DECISION** (pending decision 3) |
-| Affected | `src/authorization/referralAccess.js` |
-| Approver | Waiting on QCH IT |
+| Evidence | Oct 27: QCH IT will create a dedicated, private SharePoint site for QCH Connect. Approved: an application identity scoped with Sites.Selected to that site only (not tenant-wide Sites.ReadWrite.All). Staff reach referral information only through QCH Connect; direct site access is limited to QCH IT administrators |
+| Impact | Keeps the app as the only way staff change referral data, so the app's permission and audit rules cannot be bypassed. Matches PRD 3.3, 3.6 and 9.12; no PRD change beyond R19 |
+| Today | No SharePoint code. Access rules live in `src/authorization/referralAccess.js` and the services |
+| Status | **CONFIRMED** |
+| Affected | The future SharePoint store (R19) |
+| Approver | Bassit Saidi (QCH IT), Oct 27, 2026 |
 
 ### R22. Entra configuration
 
 | | |
 | --- | --- |
 | PRD | 3.1, 3.2, 22 (Entra group names and access configuration: open implementation dependency) |
-| Evidence | Requested from QCH IT; no configuration received. The policy is settled in the PRD: Entra grants app access, and action permissions live in QCH Connect |
+| Evidence | Requested from QCH IT; no configuration received. The policy is settled in the PRD: Entra grants app access, and action permissions live in QCH Connect. Oct 27: QCH IT will coordinate the Entra app registration and security groups with the team when ready |
 | Impact | Staff sign-in, MFA, and which Entra group grants access to the app |
 | Today | No Entra sign-in. Production passes no identity, so every `/api` route answers 401 |
-| Status | **OPEN QCH DECISION** (pending decision 5) |
+| Status | **OPEN QCH DECISION** (pending decision 5). The configuration, not the policy, is what is open |
 | Affected | `src/app.js` (`resolveIdentity`), [qch-it-requirements.md](qch-it-requirements.md) |
 | Approver | Waiting on QCH IT |
 
@@ -352,12 +356,12 @@ answered in Kyle's Oct 26 email.
 | | |
 | --- | --- |
 | PRD | 11.1 (Graph and a QCH shared mailbox, CLIENT CONFIRMED / QCH IT), 22 (mailbox configuration: open implementation dependency) |
-| Evidence | QCH IT has created the shared mailbox. Sending permission and configuration are still pending |
-| Impact | Production sends no referral emails until this is set up |
+| Evidence | QCH IT has created the shared mailbox. Oct 27: approved the application identity with Mail.Send, restricted to that shared mailbox only through Exchange Online RBAC for Applications. The team must not request tenant-wide mail permissions |
+| Impact | Matches PRD 11.1. The Graph sender can be built for this model: send as the shared mailbox only, using the managed identity (R20). Production still sends nothing until it is built and QCH IT sets up the identity |
 | Today | Notifications run against a simulated outbox that refuses to start outside development and test |
-| Status | **OPEN QCH DECISION** (pending decision 6) |
-| Affected | `src/notifications/` |
-| Approver | Waiting on QCH IT |
+| Status | **CONFIRMED** (the permission model) |
+| Affected | `src/notifications/`, [pending-qch-it-decisions.md](pending-qch-it-decisions.md) decision 6 |
+| Approver | Bassit Saidi (QCH IT), Oct 27, 2026 |
 
 ### R24. Department naming and mapping
 
@@ -371,17 +375,53 @@ answered in Kyle's Oct 26 email.
 | Affected | `db/migrations/002_reference_data.sql` |
 | Approver | Waiting on QCH |
 
-### R25. Archive, retention and audit policy
+### R25. Archive behavior
 
 | | |
 | --- | --- |
-| PRD | 6.5, 9.6, 9.11, 22 (retention and purge: open QCH policy dependency) |
-| Evidence | No answer received. Already open in the PRD |
-| Impact | Decides what reports and referral lists show over time |
-| Today | Nothing is archived or deleted. Referrals cannot be hard-deleted |
-| Status | **OPEN QCH DECISION** (pending decisions 4 and 8) |
+| PRD | 6.5 (committed referrals are never hard-deleted), 9.6, 12 (reports), 22 (retention and purge: open QCH policy dependency) |
+| Evidence | Oct 27, QCH IT: archive the 500 oldest referrals that are closed or completed. Referrals awaiting a response, or otherwise open, are never archived regardless of age. Supporting records, including audit history, follow their parent referral into the archive. Archived referrals stay read-only and available for authorized reporting until QCH adopts a formal retention or deletion policy. The opening of this answer (likely when archiving runs) is missing from the team's copy and must be checked against the email |
+| Impact | New work. It maps onto the existing stages in `src/referrals/stage.js`: "closed or completed" is `COMPLETE` (Not Appropriate, or Accepted with an outcome recorded); `AWAITING_RESPONSE` and `ACCEPTED_OUTCOME_PENDING` are never archived. Reports must still count archived referrals. Archiving moves records, it does not delete them, which fits PRD 6.5; the revision should say so. Questions for QCH: archived referrals are read-only, so outcome and decision corrections stop once a referral is archived; and what starts an archive run |
+| Today | Nothing is archived. No archive code |
+| Status | **CONFIRMED** (the rule). The trigger wording and corrections after archiving still need checking |
+| Affected | The future store (R19), `src/referrals/`, `src/reporting/` |
+| Approver | Bassit Saidi (QCH IT), Oct 27, 2026 |
+
+### R26. QCH Connect keeps its own audit history
+
+| | |
+| --- | --- |
+| PRD | 6.5, 9.6 |
+| Evidence | Oct 27, QCH IT: Microsoft 365 unified audit logging is on for the tenant, so SharePoint activity on the QCH Connect site is captured there. With no retention policy specific to referral data yet, QCH Connect should keep its own audit history of referral actions (who, what, when) |
+| Impact | Matches the PRD; no change. Because the app reaches SharePoint through its own identity (R21), the Microsoft 365 log will show the app, not the staff member, so the app's own audit events are the record of who did what |
+| Today | Audit events are written with each change, and a failed audit rolls the change back (`src/referrals/referralService.js`, `src/referrals/responseService.js`, `src/programs/`) |
+| Status | **CONFIRMED** |
+| Affected | None |
+| Approver | Bassit Saidi (QCH IT), Oct 27, 2026 |
+
+### R27. Retention and deletion policy
+
+| | |
+| --- | --- |
+| PRD | 9.11, 22 (retention and purge: open QCH policy dependency) |
+| Evidence | Oct 27, QCH IT: no retention policy specific to referral data yet. Archived referrals are kept until QCH adopts a formal retention or deletion policy |
+| Impact | The team does not invent a deletion rule (PRD 9.11) |
+| Today | Everything is kept. Referrals cannot be hard-deleted |
+| Status | **OPEN QCH DECISION** (pending decision 8) |
 | Affected | None until decided |
 | Approver | Waiting on QCH |
+
+### R28. Expected annual referral volume
+
+| | |
+| --- | --- |
+| PRD | Not stated as a number |
+| Evidence | Oct 27: QCH IT deferred annual referral volume to Kyle Butler (QCH) |
+| Impact | Sizing for the SharePoint lists and Functions app, and how often the 500-referral archive (R25) would run |
+| Today | Not applicable |
+| Status | **OPEN QCH DECISION** |
+| Affected | R19, R20, R25 |
+| Approver | Waiting on Kyle Butler (QCH) |
 
 ## Keeping this register current
 
