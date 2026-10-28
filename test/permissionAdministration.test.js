@@ -13,7 +13,7 @@ import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { createMemoryReferralStore } from '../src/referrals/memoryReferralStore.js';
 import { createPermissionService } from '../src/permissions/permissionService.js';
-import { GRANTABLE } from '../src/permissions/validatePermissionChange.js';
+import { GRANTABLE, validateRevokeRequest } from '../src/permissions/validatePermissionChange.js';
 
 const ADMIN = 1;            // ADMINISTER_PERMISSIONS, ORG scope
 const ADMIN_TWO = 2;        // ADMINISTER_PERMISSIONS, ORG scope
@@ -430,5 +430,79 @@ describe('Task Y: Permissions screen wording (public/permissions/logic.js)', asy
       { permission: 'MANAGE_PROGRAM', programId: 11 });
     assert.deepEqual(logic.validateAdd({ permission: 'MANAGE_ORGANIZATION', programId: '11' }, grantable).body,
       { permission: 'MANAGE_ORGANIZATION' });
+  });
+});
+
+// Christina's review of PR #63: a revocation must be a deliberate JSON
+// request. Before this fix a non-JSON POST reached the service with no
+// body, validateRevokeRequest(undefined) passed, and the grant was removed
+// and audited. These request types are also what another website can make
+// a browser send, so refusing them closes a cross-site path too.
+describe('Task Y: only JSON requests can change permissions', () => {
+  const UNSUPPORTED = [
+    ['text/plain holding "{}"', (r) => r.set('Content-Type', 'text/plain').send('{}')],
+    ['empty text/plain', (r) => r.set('Content-Type', 'text/plain').send('')],
+    ['a form post', (r) => r.type('form').send('confirm=yes')],
+    ['an empty form post', (r) => r.set('Content-Type', 'application/x-www-form-urlencoded').send('')],
+    ['multipart form data', (r) => r.field('confirm', 'yes')],
+    ['no body and no content type', (r) => r],
+    ['a JSON-looking type that is not JSON (+json)', (r) => r.set('Content-Type', 'application/merge-patch+json').send('{}')],
+  ];
+
+  test('a removal sent as anything but JSON is refused with 415: the grant stays and no audit is written', async () => {
+    const { store } = setup();
+    const app = appAs(store, ADMIN);
+    const grantId = grantIdOf(store, FORMER, 'MANAGE_PROGRAM');
+    const url = `/api/permissions/users/${FORMER}/grants/${grantId}/revoke`;
+    const before = state(store);
+    for (const [label, send] of UNSUPPORTED) {
+      const res = await send(request(app).post(url));
+      assert.equal(res.status, 415, label);
+      assert.equal(res.body.code, 'UNSUPPORTED_MEDIA_TYPE', label);
+      assert.equal(state(store), before, `${label}: nothing changed`);
+    }
+    assert.ok(active(store, FORMER).some((g) => g.grantId === grantId), 'the grant is still active');
+    assert.equal(store._referralAuditEvents.length, 0, 'no audit event');
+
+    // The same request as {} JSON works, so the refusals were about the type.
+    const ok = await request(app).post(url).send({});
+    assert.equal(ok.status, 200);
+    assert.equal(ok.body.status, 'REVOKED');
+    assert.equal(store._referralAuditEvents.length, 1);
+  });
+
+  test('an addition sent as anything but JSON is refused with 415, even when it looks like a valid grant', async () => {
+    const { store } = setup();
+    const app = appAs(store, ADMIN);
+    const before = state(store);
+    const body = JSON.stringify({ permission: 'MANAGE_PROGRAM', programId: 11 });
+    for (const [label, send] of [
+      ['text/plain holding a valid grant', (r) => r.set('Content-Type', 'text/plain').send(body)],
+      ['a form post', (r) => r.type('form').send('permission=MANAGE_PROGRAM&programId=11')],
+      ['multipart form data', (r) => r.field('permission', 'MANAGE_PROGRAM').field('programId', '11')],
+      ['no body', (r) => r],
+    ]) {
+      const res = await send(request(app).post(`/api/permissions/users/${STAFF}/grants`));
+      assert.equal(res.status, 415, label);
+      assert.equal(state(store), before, `${label}: nothing changed`);
+    }
+    assert.equal((await request(app).post(`/api/permissions/users/${STAFF}/grants`).send(JSON.parse(body))).status, 201);
+  });
+
+  test('sign-in is still checked first: a signed-out non-JSON request gets 401 and changes nothing', async () => {
+    const { store } = setup();
+    const app = appAs(store, null, { resolveIdentity: () => null });
+    const before = state(store);
+    const url = `/api/permissions/users/${FORMER}/grants/${grantIdOf(store, FORMER, 'MANAGE_PROGRAM')}/revoke`;
+    assert.equal((await request(app).post(url).set('Content-Type', 'text/plain').send('{}')).status, 401);
+    assert.equal(state(store), before);
+  });
+
+  test('the revoke validator needs exactly an empty JSON object', () => {
+    for (const body of [undefined, null, '', '{}', [], 0, false]) {
+      assert.equal(validateRevokeRequest(body).ok, false, JSON.stringify(body) ?? 'undefined');
+    }
+    assert.deepEqual(validateRevokeRequest({}), { ok: true });
+    assert.equal(validateRevokeRequest({ confirm: true }).unexpectedField, true);
   });
 });

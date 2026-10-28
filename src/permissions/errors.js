@@ -20,6 +20,8 @@ export const permissionErrors = Object.freeze({
     new PermissionError(400, 'INVALID_REQUEST', 'The permission change is not valid.', { fields }),
   unexpectedField: () =>
     new PermissionError(400, 'UNEXPECTED_FIELD', 'The request contains a field that is not allowed.'),
+  unsupportedMediaType: () =>
+    new PermissionError(415, 'UNSUPPORTED_MEDIA_TYPE', 'Send this request as JSON.'),
   notAuthenticated: () =>
     new PermissionError(401, 'NOT_AUTHENTICATED', 'Sign-in is required.'),
   userNotActive: () =>

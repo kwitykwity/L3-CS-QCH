@@ -401,14 +401,28 @@ field).
 - **What can be granted:** the receiving capabilities and `MANAGE_PROGRAM`
   for one Program, and `MANAGE_ORGANIZATION` organization-wide. The server
   picks the scope; each permission has exactly one, so no grant can be
-  saved that the app would then ignore. `ADMINISTER_PERMISSIONS` itself is
-  never granted here: PRD 3.8 sets up administrators through a controlled,
-  documented, QCH-approved process.
-- **Team decisions to confirm with QCH:** nobody changes their own
-  permissions (add or remove); new grants only for active users (removal
-  is always allowed); only grants made here (`IN_APP`) can be removed here,
-  so DEMO and seeded grants are read-only; the screen shows staff names,
-  never email addresses.
+  saved that the app would then ignore.
+- **Required (PRD 3.2, 3.6, 3.8, 9.3, 9.6 and the frozen handoff
+  contract):** only an authorized `ADMINISTER_PERMISSIONS` holder can
+  change permissions, decided on the server; **no self-elevation** (nobody
+  can give themselves more authority); scope boundaries hold; every change
+  is audited in the same transaction; stale or conflicting changes fail
+  safely.
+- **Team implementation restrictions, NOT approved QCH policy:** this
+  build is stricter than the contract requires. Each of these is a team
+  choice awaiting QCH confirmation (R26 in
+  [the reconciliation register](docs/requirements-reconciliation-register.md)),
+  and QCH may loosen any of them:
+  1. **All self-changes are refused**, including removing your own
+     permissions. The contract only requires preventing self-elevation.
+  2. **Administrator rights are managed outside this screen**:
+     `ADMINISTER_PERMISSIONS` is never granted or removed here. This is the
+     team's reading of PRD 3.8 ("a controlled, documented, QCH-approved
+     process"), not a QCH-approved rule for this screen.
+  3. **Only grants made here (`IN_APP`) can be removed here**, so DEMO and
+     seeded grants are read-only.
+  4. New grants only for active users (removal is always allowed).
+  5. The screen shows staff names, never email addresses.
 - **Safety:** one change at a time across the whole screen (a global hold
   taken first), so two administrators cannot deadlock or both add the same
   grant. A duplicate answers 409 `ALREADY_GRANTED` and a removal of a grant

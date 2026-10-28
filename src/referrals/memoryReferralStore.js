@@ -99,29 +99,50 @@
 //       departmentId, grantSource, grantedAt, revokedAt }] from dbo.user_grants
 //       where revoked_at IS NULL. Authorization is decided by the service, not here.
 //
-// Permission administration (Task Y, PRD 3.8). All inside withTransaction:
+// Permission administration (Task Y, PRD 3.8). All inside withTransaction.
+// The CONTRACT below is what any store must guarantee; the service and the
+// tests in test/permissionAdministration.test.js depend on it.
 //   tx.holdPermissionAdministration()
-//       Serializes permission changes across the whole application: one
-//       grant or revoke transaction at a time. Call it FIRST, before any
-//       locking read, so two administrators editing each other cannot
-//       deadlock. In SQL: sp_getapplock @Resource = 'permission-administration',
-//       @LockMode = 'Exclusive', @LockOwner = 'Transaction'.
-//   tx.listUsers()       dbo.users (no locking read needed: the hold above
-//       plus tx.getUser on the target cover the rows that matter)
+//       One grant or revoke at a time across the whole application. Called
+//       FIRST, before reading anything, so two administrators editing each
+//       other cannot deadlock and cannot both add the same grant.
+//   tx.listUsers()       the users the screen may show (no lock needed: the
+//       hold above plus tx.getUser on the target cover what matters)
 //   tx.insertGrant({ userId, permission, scopeType, programId, departmentId,
 //       grantSource }) -> { grantId, ..., grantedAt, revokedAt: null }
-//       INSERT dbo.user_grants; granted_at from the database default.
 //   tx.revokeGrant({ grantId, userId }) -> { ...grant, revokedAt } | null
-//       UPDATE dbo.user_grants SET revoked_at = SYSUTCDATETIME()
-//         WHERE grant_id = @grantId AND user_id = @userId AND revoked_at IS NULL;
-//       0 rows -> null (already revoked or not this user's), nothing written.
-//   Both apply only when the transaction commits, after waiting for every
-//   other transaction that has read that user's grants (a receiving
-//   response, for example), and together with the audit event: if the
-//   audit write fails, no grant changes. A unique filtered index on active
-//   grants (user, permission, scope, Program, Department WHERE revoked_at
-//   IS NULL) is recommended for the SQL store; the service already refuses
-//   duplicates under the hold above.
+//       Sets revokedAt only if that grant belongs to that user and is still
+//       active; otherwise null (already revoked or not this user's), and
+//       nothing is written.
+//   Both take effect only when the transaction commits, together with the
+//   audit event: if the audit write fails, no grant changes. A revocation
+//   also waits for (or is re-checked by) any receiving action already
+//   using that user's grants, so it applies to the next action.
+//
+// This in-memory store meets the contract with in-process locks and a
+// staged commit. Planned production store (QCH IT, Oct 27): SharePoint
+// Lists on a dedicated site, written only by the Azure Functions app's
+// managed identity (Sites.Selected), with no separate database. SharePoint
+// Lists have no database transactions or held locks, so how that store
+// keeps each guarantee is team design work still to confirm (register R19),
+// not built. Likely building blocks, to be confirmed:
+//   - the hold: one coordination item in the site, claimed with a
+//     conditional update (If-Match on its ETag) and released after; a
+//     failed claim is retried or answered as "try again";
+//   - revokeGrant: a conditional update of the grant item (If-Match on its
+//     ETag); a precondition failure means "0 rows" (GRANT_CHANGED);
+//   - duplicates: there is no filtered unique index, so the hold above
+//     (the service checks for an active match under it) is what prevents
+//     a second identical grant;
+//   - grant change + audit together: not atomic in SharePoint, so the
+//     store needs an ordered write with an undo if the second write fails,
+//     and a check that finds any half-finished change. Until that design
+//     exists, the all-or-nothing guarantee is proven only on this store;
+//   - in-flight receiving actions: re-read the actor's grants just before
+//     the receiving action's own conditional write.
+// The server-side authorization, scope checks, audit and concurrency
+// behavior stay in the service either way; only how the store provides
+// them changes.
 //   getReferralById(referralId) -> referral row | null
 //   listReferralsByReceivingPrograms(programIds, { stage, limit, after })
 //   listReferralsByCreator(userId, { stage, limit, after })
@@ -860,7 +881,8 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     },
   });
 
-  // grantId stands in for dbo.user_grants.grant_id (IDENTITY).
+  // grantId: a stable ID the store assigns to each grant (in SharePoint, the
+  // list item ID).
   const grants = (seed.grants ?? []).map((g, index) => ({
     revokedAt: null, grantedAt: null, ...g, grantId: g.grantId ?? index + 1,
   }));

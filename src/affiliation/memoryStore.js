@@ -13,7 +13,7 @@
 //       row changes (dbo.programs.row_version). Callers only compare it.
 //   getDepartment(departmentId)-> { departmentId, name, lifecycleStatus, version } | null
 //   listUsers()                -> [{ userId, displayName, isActive, ... }]
-//       dbo.users, for permission administration (Task Y). Callers choose
+//       every user, for permission administration (Task Y). Callers choose
 //       what to return; email is never sent to the browser.
 //   listActivePrograms()       -> [{ program, department }] where BOTH are ACTIVE
 //

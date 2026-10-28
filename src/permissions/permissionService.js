@@ -13,16 +13,24 @@
 // target user is the resource named in the URL, never a claim about who
 // is asking.
 //
-// Rules:
-// - Nobody changes their own permissions, either way (no self-elevation,
-//   and no locking yourself out by accident). Another administrator must.
+// Rules REQUIRED by the PRD and the frozen handoff contract:
+// - The administrator check above, on the server, inside the transaction.
+// - No self-elevation: nobody can grant themselves anything.
 // - Only the GRANTABLE permissions, each in its one honored scope
-//   (validatePermissionChange.js). ADMINISTER_PERMISSIONS is not granted
-//   or revoked here (PRD 3.8: a controlled, QCH-approved process).
-// - New grants go only to active users. Revoking works for inactive users
-//   too, so access can be cleaned up.
+//   (validatePermissionChange.js), so scope boundaries hold.
 // - A Program-scope grant needs a Program that exists and is not RETIRED.
 // - New grants are always grantSource IN_APP.
+//
+// TEAM IMPLEMENTATION RESTRICTIONS: stricter than required, NOT approved
+// QCH policy. Pending QCH confirmation (reconciliation register R26); QCH
+// may loosen them, so keep each one easy to change:
+// - All self-changes are refused, removals too (the contract only
+//   requires blocking self-elevation). See selfChange below.
+// - ADMINISTER_PERMISSIONS is not granted or revoked on this screen (team
+//   reading of PRD 3.8). See GRANTABLE and isRevocable.
+// - Only IN_APP grants are removable here. See isRevocable.
+// - New grants go only to active users; revoking works for inactive users
+//   too, so access can be cleaned up.
 //
 // Every change (PRD 9.3, 9.6, 13.4): one transaction. Hold permission
 // administration first (one change at a time, no deadlocks), check the
@@ -171,6 +179,7 @@ export function createPermissionService({ store, allowDemoGrants = false }) {
     return store.withTransaction(async (tx) => {
       await tx.holdPermissionAdministration();
       await authorizeAdmin(tx, actorId);
+      // REQUIRED: no self-elevation (PRD 3.8, frozen handoff contract).
       if (targetId === actorId) throw permissionErrors.selfChange();
 
       const target = await loadTarget(tx, targetId);
@@ -214,6 +223,8 @@ export function createPermissionService({ store, allowDemoGrants = false }) {
     return store.withTransaction(async (tx) => {
       await tx.holdPermissionAdministration();
       await authorizeAdmin(tx, actorId);
+      // TEAM RESTRICTION, not approved QCH policy (register R26): removing
+      // your own permissions is not self-elevation; refused only by team choice.
       if (targetId === actorId) throw permissionErrors.selfChange();
 
       const target = await loadTarget(tx, targetId);

@@ -49,6 +49,10 @@ Things to know:
 
 - You cannot change your own permissions. Ask another administrator.
 - Administrator rights are not given here; they are set up outside the app.
+- Those two rules, and the one below about permissions this screen cannot
+  remove, are **current team restrictions, not approved QCH policy**. QCH
+  may confirm or loosen them (see README, "Permission administration").
+  What is required is that nobody can give themselves more authority.
 - Staff who are not active cannot get new permissions, but you can still
   remove theirs.
 - Permissions marked "Managed outside this screen" or "Demo data; not

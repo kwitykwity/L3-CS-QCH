@@ -9,8 +9,10 @@
 // would silently do nothing cannot be created.
 //
 // Not grantable here, on purpose:
-// - ADMINISTER_PERMISSIONS: PRD 3.8, administrators are established by "a
-//   controlled, documented, QCH-approved process", not by each other.
+// - ADMINISTER_PERMISSIONS: TEAM RESTRICTION, not approved QCH policy
+//   (register R26). The team reads PRD 3.8 ("a controlled, documented,
+//   QCH-approved process") as administrators being set up outside this
+//   screen; QCH has not approved that rule for this screen.
 // - VIEW_CREATED_REFERRAL: derived from being the referral's creator.
 // - VIEW_UNDERLYING_REFERRAL: no feature reads it.
 // - CREATE_REFERRAL, VIEW_AGGREGATE_REPORTING: every user with app access.
@@ -62,17 +64,20 @@ export function validateGrantRequest(body) {
   return { ok: true, value: { permission: body.permission, scopeType: 'ORG', programId: null } };
 }
 
-// Revoke body: empty. Anything else is refused.
+// Revoke body: exactly an empty JSON object, {}. A missing body (undefined,
+// which is what a non-JSON request leaves behind), null, or anything else
+// is refused, so a revocation is always a deliberate JSON request. The
+// route also refuses non-JSON requests with 415 before getting here.
 export function validateRevokeRequest(body) {
-  if (body === undefined || body === null) return { ok: true };
   if (!isPlainObject(body)) return { ok: false, fields: [] };
   if (Object.keys(body).length > 0) return { ok: false, unexpectedField: true };
   return { ok: true };
 }
 
 // Grants that can be removed here: IN_APP grants of a grantable permission.
-// DEMO grants (non-production seed) and ADMINISTER_PERMISSIONS are shown
-// read-only.
+// DEMO grants (non-production seed), seeded grants and
+// ADMINISTER_PERMISSIONS are shown read-only. TEAM RESTRICTION, not
+// approved QCH policy (register R26).
 export function isRevocable(grant) {
   return grant.grantSource === 'IN_APP' && Object.hasOwn(GRANTABLE, grant.permission);
 }

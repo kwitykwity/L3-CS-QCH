@@ -73,6 +73,7 @@ here instead of being treated as already covered.
 | R23 | Microsoft Graph and shared mailbox configuration | OPEN QCH DECISION | Simulated outbox only |
 | R24 | Department naming and mapping | OPEN QCH DECISION | Four shortened names in reference data |
 | R25 | Archive, retention and audit policy | OPEN QCH DECISION | Everything kept; nothing purged |
+| R26 | Permission administration restrictions beyond "no self-elevation" | TEAM PRODUCT DECISION (not yet recorded) | In PR #63, not on `main` |
 
 ## Find a Program and matching
 
@@ -381,6 +382,20 @@ answered in Kyle's Oct 26 email.
 | Today | Nothing is archived or deleted. Referrals cannot be hard-deleted |
 | Status | **OPEN QCH DECISION** (pending decisions 4 and 8) |
 | Affected | None until decided |
+| Approver | Waiting on QCH |
+
+## Permission administration
+
+### R26. Permission administration restrictions beyond "no self-elevation"
+
+| | |
+| --- | --- |
+| PRD | 3.6, 3.8; frozen handoff contract (requires preventing self-elevation, and cautions against treating stronger restrictions as QCH policy without approval) |
+| Evidence | No QCH evidence for these specific rules. Required, and kept: only an authorized `ADMINISTER_PERMISSIONS` holder can change permissions, on the server, and nobody can grant themselves more authority |
+| Impact | The Permissions screen (Task Y, PR #63) is stricter than required: (1) all self-changes are refused, including removing your own permissions; (2) `ADMINISTER_PERMISSIONS` is managed outside the screen (team reading of PRD 3.8); (3) only grants made on the screen (`IN_APP`) can be removed there; (4) new grants only for active users; (5) staff names shown, never email addresses |
+| Today | Not on `main` until PR #63 merges. Each rule is one check: `selfChange` in `src/permissions/permissionService.js`, `GRANTABLE` and `isRevocable` in `src/permissions/validatePermissionChange.js` |
+| Status | **TEAM PRODUCT DECISION** (not yet recorded). Not approved QCH policy; ask QCH to confirm or loosen each |
+| Affected | `src/permissions/`, `public/permissions/`, README "Permission administration" |
 | Approver | Waiting on QCH |
 
 ## Keeping this register current

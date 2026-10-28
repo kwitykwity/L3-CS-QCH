@@ -10,10 +10,18 @@
 //              programId, programName, programSite, grantSource, grantedAt, revocable }] }
 //   POST /users/:userId/grants                    { permission, programId? }
 //        201 { status: "GRANTED", grant, grants }
-//   POST /users/:userId/grants/:grantId/revoke     (empty body)
+//   POST /users/:userId/grants/:grantId/revoke     {} (an empty JSON object)
 //        200 { status: "REVOKED", grants }
 //
-//   400 INVALID_REQUEST | UNEXPECTED_FIELD   401 NOT_AUTHENTICATED
+// Both POST routes take JSON only (Content-Type: application/json). Any
+// other request type (a form post, multipart, text/plain, or no body at
+// all) is refused with 415 before the body is read, so it can never add or
+// remove a permission or write an audit event. This also means another
+// website cannot make a browser send a change: a cross-site form can only
+// send those other types, and a cross-site JSON request needs a CORS
+// preflight this app never grants.
+//
+//   400 INVALID_REQUEST | UNEXPECTED_FIELD   401 NOT_AUTHENTICATED   415 UNSUPPORTED_MEDIA_TYPE
 //   403 USER_NOT_ACTIVE | NOT_AUTHORIZED | SELF_CHANGE_NOT_ALLOWED | NOT_REVOCABLE
 //   404 USER_NOT_FOUND
 //   409 TARGET_NOT_ACTIVE | ALREADY_GRANTED | GRANT_CHANGED (with `current`)
@@ -56,6 +64,13 @@ export function createPermissionRouter({ store, resolveIdentity, allowDemoGrants
     req.userId = identity.userId;
     // Non-sensitive ID linking this request to its audit event (PRD 10.6).
     req.correlationId = randomUUID();
+    next();
+  });
+
+  // JSON only for changes (see the header). Checked after sign-in, so a
+  // signed-out caller still gets 401, and before any body is parsed.
+  router.use((req, res, next) => {
+    if (req.method === 'POST' && !req.is('application/json')) return next(permissionErrors.unsupportedMediaType());
     next();
   });
 
