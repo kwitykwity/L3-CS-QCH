@@ -33,6 +33,21 @@ import { DEMO_PERSONAS } from '../scripts/demoPersonas.js';
 const MATCHING = { needCategoryIds: [3], ageRange: { min: 20, max: 25 } };
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
+// Paths in a parsed API response that look like a participant age or age range:
+// a key beginning with "age", or an object holding numeric min and max. Walks the
+// structure, so it does not depend on how the JSON text happens to be formatted.
+export function ageFieldPaths(value, at = '') {
+  if (value === null || typeof value !== 'object') return [];
+  const found = [];
+  if (!Array.isArray(value) && typeof value.min === 'number' && typeof value.max === 'number') found.push(at || '(root)');
+  for (const [key, child] of Object.entries(value)) {
+    const here = at ? at + '.' + key : key;
+    if (/^age/i.test(key)) found.push(here);
+    found.push(...ageFieldPaths(child, here));
+  }
+  return found;
+}
+
 async function startDemo(extraEnv = {}) {
   const port = String(35400 + Math.floor(Math.random() * 400));
   const child = spawn(process.execPath, ['scripts/dev-synthetic-server.js'], {
@@ -130,13 +145,26 @@ async function runFullJourney(base) {
     Object.fromEntries([a, b, c].map((id) => [id, details[id].source])),
     { [a]: 'GPME_ASSISTED', [b]: 'DIRECT', [c]: 'DIRECT' },
   );
-  // The age range used for matching is not kept on the referral (Handoff PRD 5.4).
-  assert.deepEqual(Object.keys(details[a]).filter((k) => /^age/i.test(k)), [], 'no age or age range on the referral');
-  assert.ok(!/"(min|max)":(25|35)/.test(JSON.stringify(details[a])), 'the age range is not echoed back');
+  // API response only: the referral as the server returns it carries no age or
+  // age range (Handoff PRD 5.4). What is stored is a separate question, checked
+  // by test/regression/workflowJourneys.test.js (the stored evidence), not here.
+  assert.deepEqual(ageFieldPaths(details[a]), [], 'no age or age range in the referral response');
 
   const { summary } = await json(await fetch(`${base}/api/reports/referral-activity?period=MONTHLY`));
   return summary;
 }
+
+describe('Task FF age check on the referral response', () => {
+  test('ageFieldPaths finds a planted age or age range, wherever it sits and however the JSON is formatted', () => {
+    const clean = { referralId: 'R1', source: 'GPME_ASSISTED', program: { programId: 4 }, history: [{ value: 'ACCEPTED' }] };
+    assert.deepEqual(ageFieldPaths(clean), []);
+    assert.deepEqual(ageFieldPaths({ ...clean, ageRange: { min: 25, max: 35 } }).sort(), ['ageRange', 'ageRange']);
+    assert.deepEqual(ageFieldPaths({ ...clean, participantRange: { min: 25, max: 35 } }), ['participantRange']);
+    assert.deepEqual(ageFieldPaths({ ...clean, history: [{ range: { min: 1, max: 2 } }] }), ['history.0.range']);
+    assert.deepEqual(ageFieldPaths({ ...clean, program: { age: 30 } }), ['program.age']);
+    assert.deepEqual(ageFieldPaths({ ...clean, ageMin: 25 }), ['ageMin']);
+  });
+});
 
 describe('Task FF demo journeys repeat from a reset', () => {
   test('the full journey (guided and Direct referrals, corrections, a failed notification) gives the same result on every fresh start', async () => {

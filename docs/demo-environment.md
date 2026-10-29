@@ -198,9 +198,9 @@ Program-information fields.
 Classes its seven synthetic examples. `docs/demo-runbook.md` does not use that
 flag yet, so its journey does not show them.
 
-Not covered, and not changed here: the Program-information fields are visible
-in Program Management only, because the Find a Program display of them
-(Task X) is not on `main`. The runbook still says demo sign-in is not on
+Not covered, and not changed here: the Find a Program display of the
+Program-information fields (Task X, #64) has merged to `main`; this runbook and
+the demo checks do not exercise it. The runbook still says demo sign-in is not on
 `main`; Task O has since merged (Task T owns that text).
 
 ## Found while checking (not fixed here)
