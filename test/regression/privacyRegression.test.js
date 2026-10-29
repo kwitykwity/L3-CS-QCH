@@ -1,5 +1,6 @@
 // Trello Task DD: privacy / data-leakage final regression, server side
-// (Final Technical PRD 5.3, 5.4, 5.5, 11.2, 12, 15.3).
+// (Frozen Handoff PRD 5.4, 21, 25, 28, 34, 35; Handoff MVP 6, 21, 24, 25;
+// acceptance gates 8, 29, 30, 31).
 //
 // Runs the whole application the way the synthetic dev server builds it
 // (store, GPME, notifications on the simulated outbox) and drives every
@@ -36,8 +37,8 @@ import { createSimulatedOutboxSender } from '../../src/notifications/simulatedOu
 import { DEV_RECEIVING_PROGRAM_ID, DEV_USER_ID, syntheticSeed } from '../../scripts/syntheticSeed.js';
 
 // Participant data that must be kept out of logs, aggregate reports,
-// notifications, URLs, browser storage and unauthorized responses (PRD 5.4,
-// 5.5). Authorized referral views legitimately show it.
+// notifications, URLs, browser storage and unauthorized responses (Frozen
+// Handoff PRD 34; Handoff MVP 25). Authorized referral views legitimately show it.
 const MARK = Object.freeze({
   name: 'Synthetic Person DDLEAKNAME',
   email: 'ddleak.contact@example.test',

@@ -1,5 +1,6 @@
 // Trello Task DD: privacy / data-leakage final regression, browser side
-// (Final Technical PRD 5.3, 5.4, 5.5).
+// (Frozen Handoff PRD 5.4, 34; Handoff MVP 6, 25; acceptance gates 8, 30;
+// Current Handoff Wireframes screens 2 and 7).
 //
 // One referral is carried through every screen with marked SYNTHETIC
 // participant data: Find a Program (describe the need, match), the
@@ -76,7 +77,7 @@ async function expectCleanBrowserState(page, stage) {
   expect(cookies.map((c) => `${c.name} (httpOnly: ${c.httpOnly})`), `${stage}: the fixed-identity fixture sets no cookies`).toEqual([]);
 }
 
-test('participant data stays out of addresses, browser storage, cookies and the console (PRD 5.5)', async ({ page }) => {
+test('participant data stays out of addresses, browser storage, cookies and the console (Handoff PRD 34; MVP 25)', async ({ page }) => {
   test.setTimeout(90000);
   const requests = [];
   const addresses = [];
@@ -108,7 +109,8 @@ test('participant data stays out of addresses, browser storage, cookies and the 
   await page.locator('#referralContext').fill(MARK.context);
   await page.locator('#participantZip').fill('99577');
   await page.locator('#notes').fill(MARK.notes);
-  // Active-form data may live in memory (PRD 5.5), never in storage.
+  // Active-form data may live in memory, never in storage (data
+  // minimization, Handoff PRD 34).
   await expectCleanBrowserState(page, '2. details form filled in, before sending');
   await page.locator('#send').click();
   await expect(status(page)).toContainText('Referral received');

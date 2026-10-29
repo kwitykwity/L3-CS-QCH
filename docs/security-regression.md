@@ -33,7 +33,22 @@ problems, three faults were introduced on purpose and then removed:
 
 Checks that participant and referral information is kept out of logs,
 aggregate reports, notifications, URLs, browser storage and unauthorized
-responses (PRD 5.3, 5.4, 5.5, 11.2, 12, 15.3). Authorized referral views
+responses. Governing requirements, from the frozen handoff documents:
+
+- Frozen Handoff PRD 34 (data minimization; no participant information in
+  application logs, aggregate reports or notification content; secure error
+  handling), 25 (reporting stays aggregate), 21 (notification after the
+  referral is saved), 5.4 and 28 (age is a temporary matching input, never
+  persisted), 35 (synthetic data only outside QCH production).
+- Handoff MVP 25 (Privacy and Security), 24 (Reporting), 21
+  (Notifications), 6 (Participant Age Input); acceptance gates 8, 29, 30
+  and 31.
+- Current Handoff Wireframes: screen 2 ("Age is used only for program
+  matching and will not be saved on the referral"), screen 7 ("Collect only
+  necessary pre-intake information"), screen 14 (aggregate-only reports,
+  synthetic data banner).
+
+Authorized referral views
 (the creator, and the receiving Program's permitted staff) legitimately
 show it, and these tests do not treat that as a leak. Two new files sit on
 top of the suites above and do not repeat them:
@@ -54,7 +69,7 @@ top of the suites above and do not repeat them:
 | --- | --- |
 | No participant data in URLs or query strings | `e2e/privacy.spec.js`: every request and page address; page addresses carry numeric IDs only. Server routes refuse unknown query parameters without echoing them (`securityPass`) |
 | No sensitive data in browser storage | `e2e/privacy.spec.js`: checked at seven points during the journey, each while that sensitive page is open (after matching, with the details form filled in, after sending, after the Not appropriate response, after the correction and outcome, on the sent referral's page, and at the end). localStorage holds only the text size; sessionStorage, IndexedDB, Cache Storage and service workers are empty at every point. A leak that is cleaned up before the end (planted: copied into sessionStorage, removed on leaving the page) fails at the step where it happens. Also `e2e/gpme.spec.js` for the describe step |
-| No participant data in cookies | `e2e/privacy.spec.js` reads the browser's own cookie jar (`page.context().cookies()`), so HttpOnly cookies, which `document.cookie` cannot see, are checked too, at the same seven points: no cookie name or value carries a marker. **Scope:** the e2e fixture is the fixed-identity dev server, which sets no cookies, so that test also expects an empty jar. That expectation does not apply to the Task O demo (`npm run dev:demo`), which legitimately uses an HttpOnly session cookie. `privacyRegression` covers the demo: every `Set-Cookie` through sign-in, a referral, a Not Appropriate response, switching person and sign-out is only `qch_demo_session` with a random 32-character token (or the sign-out clear), and carries no marker. Production cookies wait on Entra sign-in (decision 5) |
+| No participant data in cookies | `e2e/privacy.spec.js` reads the browser's own cookie jar (`page.context().cookies()`), so HttpOnly cookies, which `document.cookie` cannot see, are checked too, at the same seven points: no cookie name or value carries a marker. **Scope:** the e2e fixture is the fixed-identity dev server, which sets no cookies, so that test also expects an empty jar. That expectation does not apply to the Task O demo (`npm run dev:demo`), which legitimately uses an HttpOnly session cookie. `privacyRegression` covers the demo: every `Set-Cookie` through sign-in, a referral, a Not Appropriate response, switching person and sign-out is only `qch_demo_session` with a random 32-character token (or the sign-out clear), and carries no marker. Production cookies wait on Entra sign-in, a QCH IT production dependency (Frozen Handoff PRD 22 and 37 item 3; Handoff MVP 22 and 31 item 3) |
 | Logs and console carry no participant data or free text | `privacyRegression` (every console channel, whole workflow, failures included); `e2e/privacy.spec.js` (browser console and page errors); `securityPass`, `errorHandler`, `notificationWiring` |
 | Notifications stay generic | `privacyRegression` (every email sent in the run); `notifications`, `notificationWiring` |
 | Reporting is aggregate only | `privacyRegression`: every report, two periods, no markers and no referral fields; `securityRegression` |
@@ -63,8 +78,9 @@ top of the suites above and do not repeat them:
 
 **Result: no leaks found, no code changed.** By design, the receiving
 queue shows the need (referral context) to the authorized receivers so they
-can triage; the PRD keeps it out of logs, reports, search and emails, not
-out of the receivers' own queue. The describe step proposes the ZIP it
+can triage; Frozen Handoff PRD 34 keeps participant information out of
+logs, aggregate reports and notification content, not out of the
+authorized receivers' own queue. The describe step proposes the ZIP it
 read back to the worker; it never echoes the text. Report data comes from
 a store query that returns counts only, so a report cannot carry a name
 unless that query changes.
