@@ -41,7 +41,7 @@ changes no requirement.
 | R1 | Open-ended "describe the need" | HPRD 4.1, 5.1; MVP 4.1, 5 | Incorporated |
 | R2 | Show what was understood before matching | HPRD 5.2; MVP 5 | Incorporated |
 | R3 | How the free-text step fits PRD 8.2 | HPRD 3.1, 3.2, 5, 7, 15, 28; MVP 5, 15, 26, 29 | **Superseded.** The open "team decision, not yet recorded" is settled: the interpreter is advisory and replaceable, the employee confirms before matching, discovery inputs are not persisted, no external AI |
-| R4 | Everyday age words mapped to age ranges | HPRD 5.3; MVP 6 | **Superseded. Conflicts.** This row records a proposal that "teen" means 13 to 19 and "older adult" means 60 and up. HPRD 5.3: the system must not silently convert an exact age into an invented age range; the employee may enter an exact age or a range. (The merged interpreter proposes no age from such words: `test/gpmeInterpretation.test.js`, "no age range is assumed from everyday wording") |
+| R4 | Everyday age words mapped to age ranges | HPRD 5.2, 5.3; MVP 5, 6 | **Not restated.** The historical proposal (an interpreter that proposes 13 to 19 for "teen" and 60 and up for "older adult") is not established by the frozen contract: no frozen document adopts or rejects it. HPRD 5.3 addresses converting an **exact age** into an invented range; it does not say whether the interpreter may propose a range from ambiguous age words. HPRD 5.2 lets the interpreter propose structured information that the employee accepts, corrects or removes before matching. **Open interpretation question:** may the interpreter propose an age range from words such as "teen" or "older adult", shown for the employee to confirm, and if so which ranges does QCH approve? Until answered, nothing here adds that behavior. The merged interpreter proposes no age from such words (`test/gpmeInterpretation.test.js`, "no age range is assumed from everyday wording") |
 | R5 | Approved AI or language-processing boundary | HPRD 7; MVP 26 | **Superseded.** Recorded here as an open QCH decision; the Handoff PRD settles it: no external AI in the MVP, and any future external processing needs QCH approval, QCH IT approval, security and privacy review, approved data handling and explicit authorization |
 | R6 | Need is the most important matching factor | HPRD 6.2 (only approved, explicit, versioned criteria) | Not restated |
 | R7 | Language of service, more than one per Program | HPRD 6.3, 8, 10; MVP 8 | Incorporated (shown; unknown is "not on file", never English; non-exclusionary; not a GPME input; a future language rule needs approval) |
@@ -180,7 +180,9 @@ here instead of being treated as already covered.
 
 ### R4. Everyday age words mapped to age ranges
 
-> Superseded October 28, 2026, and conflicts with HPRD 5.3 (no invented age range). Historical only.
+> Historical only. Not established by the frozen contract (October 28, 2026), and not in conflict with it:
+> HPRD 5.3 covers an exact age, not ranges proposed from ambiguous words. The open interpretation
+> question is in the R4 row of "Where each item ended up".
 
 | | |
 | --- | --- |
