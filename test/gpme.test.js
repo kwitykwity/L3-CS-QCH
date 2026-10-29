@@ -469,7 +469,7 @@ describe('GPME explanations and edges', () => {
     // serviceLanguages: language of service for staff (Task W, Kyle Oct 26).
     // Added after matching; it is not a matching input or explanation.
     assert.deepEqual(Object.keys(result.plausible[0]).sort(),
-      ['departmentId', 'departmentName', 'explanations', 'name', 'programId', 'serviceLanguages', 'site']);
+      ['departmentId', 'departmentName', 'explanations', 'name', 'programId', 'programInformation', 'serviceLanguages', 'site']);
     assert.deepEqual(Object.keys(result).sort(),
       ['notCheckedForNeedCount', 'plausible', 'possible', 'ruleVersion', 'status']);
   });
