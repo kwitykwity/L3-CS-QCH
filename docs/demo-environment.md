@@ -1,8 +1,10 @@
 # Demo environment and reset (Task S)
 
-**Status: verified on `main` at `36f6e82`, October 26, 2026.** Everything
-below was run, not just read. The two items that waited on Task O are now
-covered by [Demo sign-in](#demo-sign-in-and-switching-people-task-o).
+**Status: verified on `main` at `36f6e82`, October 26, 2026, and again
+with the Task O demo people at `cd22455`, October 28, 2026** (fresh clone,
+`npm run dev:demo`, the suggested run below three times with a Ctrl+C
+reset between runs: identical every time). Everything below was run, not
+just read.
 
 This is the team-controlled "Plan B" demo from Final Technical PRD 16.4:
 synthetic people, referrals and Programs only, a simulated notification
@@ -30,8 +32,11 @@ wait list, contact, extra locations) to Adult Evening Classes.
 ## Reset the demo
 
 1. In the terminal running the server, press `Ctrl+C`.
-2. Run `npm run dev:synthetic` again.
-3. Reload the browser.
+2. Run the same command again: `npm run dev:demo` for the demo with demo
+   people (the usual presentation), or `npm run dev:synthetic` for the
+   single developer identity.
+3. Reload the browser. With `dev:demo`, everyone is signed out: choose a
+   demo person again.
 
 Everything a demo run created or changed is gone, and the app is back to
 the starting state below. This works because all demo data lives in the
