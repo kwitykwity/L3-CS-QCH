@@ -14,18 +14,26 @@
 // Model 2, one shared listing: one Program keeps its locations in a
 // Program Management field QCH creates itself (here a multi-select field
 // called "Locations"), with no code change (Handoff PRD 12). It stays one
-// Program for referrals, and its locations never change what GPME
-// suggests (Handoff MVP 10: Program information shown after matching must
-// not silently change the GPME result; location is not an approved
-// matching criterion).
+// Program for referrals. Find a Program returns the locations with each
+// result, through /api/gpme/match, as current Program information (Task X,
+// merged in #64), and an edit shows up there at once.
+//
+// What is NOT a matching input: the informational Locations field.
+// Adding or changing it never changes which Programs GPME suggests
+// (Handoff MVP 10: Program information shown with results must not
+// silently change the GPME result). This says nothing about location in
+// general: separate listings are matched on their own matching facts, such
+// as age and service area, like any Program.
 //
 // Both models run in the same organization at once, set up by the people
 // allowed to do it, over HTTP the way the screens do.
 //
-// Showing a shared listing's locations to staff in Find a Program is open
-// PR #64 (Task X), which displays every current Program information field;
-// on main the information reaches GPME's internal read model only. This
-// file checks that read model, which #64 builds on.
+// Still outstanding, not covered here: the location-management screens in
+// the Current Handoff Wireframes (screen 5 "Location(s)", screen 15
+// Locations tab, screen 17 "Multi-Location Program" with Primary/Satellite
+// type and status per location). Today QCH records locations through a
+// Program field instead; whether the wireframe screens are expected is not
+// verified by this file.
 //
 // The data store is the in-memory store (Handoff PRD 27). All data is
 // SYNTHETIC (Handoff PRD 35).
@@ -36,7 +44,6 @@ import { randomUUID } from 'node:crypto';
 import request from 'supertest';
 import { createApp } from '../../src/app.js';
 import { createMemoryReferralStore } from '../../src/referrals/memoryReferralStore.js';
-import { createGpmeService } from '../../src/gpme/gpmeService.js';
 
 const WORKER = 100;         // sends referrals from Program 10
 const QUEENS_STAFF = 200;   // receives for the Queens listing
@@ -169,6 +176,26 @@ async function chooseAffiliation(user, programId) {
 
 const ids = (items) => items.map((p) => p.programId).sort((a, b) => a - b);
 
+// The shared listing's result from Find a Program, through the real
+// /api/gpme/match route. It must answer 200 with the Program listed.
+async function sharedResult(worker) {
+  const res = await worker.post('/api/gpme/match', { needCategoryIds: [FAMILY] });
+  assert.equal(res.status, 200, JSON.stringify(res.body));
+  assert.equal(res.body.status, 'RESULTS');
+  const item = [...res.body.plausible, ...res.body.possible].find((p) => p.programId === P_SHARED);
+  assert.ok(item, 'the shared listing is in the results');
+  assert.ok(Array.isArray(item.programInformation), 'Program information is returned with the result');
+  return item;
+}
+
+// The Locations value shown with a result (multi-select values are joined
+// with ", " by Task X's display rule).
+function locationsShown(item) {
+  const entry = item.programInformation.find((f) => f.label === 'Locations');
+  assert.ok(entry, 'the Locations field is in the returned Program information');
+  return entry.value;
+}
+
 describe('Task II: a Program at more than one location, either way QCH chooses (Handoff PRD 13; MVP 14; gate 20)', () => {
   test('separate listings: one Program name at two sites is two distinct, choosable Programs', async () => {
     const ctx = startApp();
@@ -241,22 +268,19 @@ describe('Task II: a Program at more than one location, either way QCH chooses (
     const chosen = locations.value.map((id) => locations.options.find((o) => o.optionId === id).label);
     assert.deepEqual(chosen, LOCATIONS);
 
-    // The current Program information that Find a Program reads includes
-    // every location, in order (PR #64 displays this to staff).
-    const information = await createGpmeService({ store: ctx.store, logFailure: () => {} }).listCurrentProgramInformation(WORKER);
-    const shared = information.find((p) => p.programId === P_SHARED);
-    assert.equal(shared.site, 'Synthetic Main Site, Queens', 'the primary site is still the Program\'s site');
-    const field = shared.fields.find((f) => f.label === 'Locations');
-    assert.deepEqual(field.value.map((id) => field.options.find((o) => o.optionId === id).label), LOCATIONS);
+    // Find a Program returns every location, in order, with the result.
+    const result = await sharedResult(ctx.as(WORKER));
+    assert.equal(result.site, 'Synthetic Main Site, Queens', 'the primary site is still the Program\'s site');
+    assert.deepEqual(locationsShown(result), LOCATIONS.join(', '));
   });
 
-  test('one shared listing: it stays one Program, and its locations never change what GPME suggests', async () => {
+  test('one shared listing: it stays one Program, and the informational Locations field never changes what GPME suggests', async () => {
     const ctx = startApp();
     const worker = ctx.as(WORKER);
     await chooseAffiliation(worker, P_REFERRING);
     // What GPME suggests: which Programs, in which group, in what order, and
-    // why. Program information displayed beside a result (PR #64) is
-    // descriptive and is left out on purpose.
+    // why. The Program information returned beside each result (Task X) is
+    // descriptive and is compared separately, below.
     const suggestions = (body) => ({
       status: body.status,
       ...Object.fromEntries(['plausible', 'possible'].map((group) => [group,
@@ -267,8 +291,10 @@ describe('Task II: a Program at more than one location, either way QCH chooses (
     const before = await search();
     await addSharedLocations(ctx);
     const after = await search();
-    assert.deepEqual(after, before, 'adding locations changed what GPME suggests');
+    assert.deepEqual(after, before, 'adding the Locations field changed what GPME suggests');
     assert.deepEqual(ids(after.plausible), [P_SHARED]);
+    // Only the information shown with the result changed.
+    assert.equal(locationsShown(await sharedResult(worker)), LOCATIONS.join(', '));
 
     // Listed once in Direct Referral, and every referral goes to that one Program.
     const offered = (await worker.get('/api/programs')).body.programs.filter((p) => p.programId === P_SHARED);
@@ -294,6 +320,7 @@ describe('Task II: a Program at more than one location, either way QCH chooses (
       assert.equal((await worker.post('/api/referrals', referralTo(programId))).status, 201);
     }
     const before = JSON.parse(JSON.stringify(ctx.store._referrals));
+    assert.equal(locationsShown(await sharedResult(worker)), LOCATIONS.join(', '), 'all three locations before the change');
 
     // QCH closes the Elmhurst satellite on the shared listing...
     const director = ctx.as(DIRECTOR);
@@ -309,7 +336,9 @@ describe('Task II: a Program at more than one location, either way QCH chooses (
     const moved = await director.patch(`${PM}/programs/${jacksonHeights}`, { version: jh.version, site: 'Synthetic Satellite, Corona' });
     assert.equal(moved.status, 200, JSON.stringify(moved.body));
 
-    // Old referrals are exactly as they were (Handoff PRD 10, 12).
+    // Find a Program shows the change at once, through /api/gpme/match...
+    assert.equal(locationsShown(await sharedResult(worker)), LOCATIONS.slice(0, 2).join(', '));
+    // ...and old referrals are exactly as they were (Handoff PRD 10, 12).
     assert.deepEqual(JSON.parse(JSON.stringify(ctx.store._referrals)), before);
     // New choices show the current information.
     const site = (await worker.get('/api/programs')).body.programs.find((p) => p.programId === jacksonHeights).site;
