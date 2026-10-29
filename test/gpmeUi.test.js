@@ -233,6 +233,17 @@ describe('page structure', () => {
     assert.match(html, /id="matchZip"[^>]*aria-describedby="matchZip-hint matchZip-error"/);
   });
 
+  test('participant age opens on Exact age, as in the Current Handoff Wireframes (screen 2; Handoff PRD 5.3)', () => {
+    assert.match(html, /id="ageMode-exact"[^>]*\bchecked\b/);
+    assert.doesNotMatch(html, /id="ageMode-range"[^>]*\bchecked\b/);
+    assert.match(html, /<div class="range" id="ageExact-group">/, 'the Exact age box is shown');
+    assert.match(html, /<div class="range" id="ageRange-group" hidden>/, 'the range boxes start hidden');
+    assert.match(html, /<label for="ageExact">/);
+    // The wording says this is the participant's age and that it is not saved,
+    // keeping it apart from the Program age limits shown with results.
+    assert.match(html, /Age is used only to find Programs and is not saved with the referral/);
+  });
+
   test('the guided outcome is announced; Try again and Direct Referral are offered', () => {
     assert.match(html, /id="match-message"[^>]*role="status"[^>]*aria-live="polite"/);
     for (const id of ['match-retry', 'match-edit', 'match-direct', 'send-direct']) assert.match(html, new RegExp(`id="${id}"`), id);

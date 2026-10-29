@@ -188,7 +188,9 @@ export const GUIDED_FIELD_ORDER = Object.freeze(['needs', 'ageRange', 'matchZip'
 
 // values: { needCategoryIds: number[], ageMode?: 'exact' | 'range',
 //           ageExact?: string, ageMin: string, ageMax: string, matchZip: string }
-// ageMode defaults to 'range'. Only the boxes for the chosen mode count.
+// The screen always passes ageMode; Exact age is the screen's default
+// (Current Handoff Wireframes, screen 2). A caller that passes no ageMode
+// is read as a range. Only the boxes for the chosen mode count.
 // Returns { field: message } for each problem; {} when the answers can be sent.
 export function validateGuidedForm(values) {
   const errors = {};

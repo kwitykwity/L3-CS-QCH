@@ -38,6 +38,7 @@ const need = (page, name) => page.getByLabel(name, { exact: true });
 async function answerEducationEmployment(page) {
   await need(page, 'Education (sample)').check();
   await need(page, 'Employment (sample)').check();
+  await page.locator('#ageMode-range').check(); // Exact age is the default (wireframe screen 2)
   await page.locator('#ageMin').fill('19');
   await page.locator('#ageMax').fill('30');
 }
@@ -186,6 +187,7 @@ test.describe('matching, explanations and selection (PRD 8.1, 8.4, 8.6)', () => 
     expect(await page.locator('#needs-error').evaluate((el) => getComputedStyle(el, '::before').content)).toContain('Error');
 
     await need(page, 'Housing (sample)').check();
+    await page.locator('#ageMode-range').check(); // Exact age is the default (wireframe screen 2)
     await page.locator('#ageMin').fill('20');
     await findPrograms(page);
     await expect(page.locator('#ageRange-error')).toBeVisible();
@@ -289,6 +291,7 @@ test.describe('no plausible match is a result, not a failure (PRD 8.5)', () => {
   test('says so plainly, keeps the answers, offers Change answers and Direct Referral, never Try again', async ({ page }) => {
     await openGuided(page);
     await need(page, 'Childcare (sample)').check();
+    await page.locator('#ageMode-range').check(); // Exact age is the default (wireframe screen 2)
     await page.locator('#ageMin').fill('40');
     await page.locator('#ageMax').fill('45');
     await findPrograms(page);
@@ -590,6 +593,11 @@ test.describe('keyboard and accessibility of the guided journey (PRD 14.2, 14.3,
     await page.keyboard.press('Space');
     await expect(need(page, 'Education (sample)')).toBeChecked();
     await expect(need(page, 'Employment (sample)')).toBeChecked();
+    // Exact age is selected first (wireframe screen 2); the arrow key picks
+    // Age range without the mouse.
+    await tabTo(page, 'ageMode-exact');
+    await page.keyboard.press('ArrowRight');
+    await expect(page.locator('#ageMode-range')).toBeChecked();
     await tabTo(page, 'ageMin');
     await page.keyboard.type('19');
     await page.keyboard.press('Enter');
@@ -641,6 +649,7 @@ test.describe('keyboard and accessibility of the guided journey (PRD 14.2, 14.3,
       await expect(page.locator('#match-results')).toBeVisible();
       await expectNoAxeViolations(page, `results (${colorScheme})`);
 
+      await page.locator('#ageMode-range').check(); // Exact age is the default (wireframe screen 2)
       await page.locator('#ageMin').fill('40');
       await page.locator('#ageMax').fill('45');
       await page.locator('input[name="need"]').evaluateAll((boxes) => boxes.forEach((b) => { b.checked = false; }));
@@ -876,6 +885,7 @@ test.describe('PR 59 three-state contract and age review', () => {
 
     // Matching happens only after the employee supplies and confirms answers.
     await need(page, 'Childcare (sample)').check();
+    await page.locator('#ageMode-range').check(); // Exact age is the default (wireframe screen 2)
     await page.locator('#ageMin').fill('40');
     await page.locator('#ageMax').fill('45');
     await findPrograms(page);

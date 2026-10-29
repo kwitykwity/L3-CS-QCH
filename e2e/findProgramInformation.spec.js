@@ -49,6 +49,7 @@ async function search(page, base) {
   await page.locator('#path-guided').click();
   await page.getByLabel('Education (sample)', { exact: true }).check();
   await page.getByLabel('Employment (sample)', { exact: true }).check();
+  await page.locator('#ageMode-range').check(); // Exact age is the default (wireframe screen 2)
   await page.locator('#ageMin').fill('19');
   await page.locator('#ageMax').fill('30');
   await page.locator('#find-programs').click();

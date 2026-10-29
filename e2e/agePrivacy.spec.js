@@ -7,6 +7,11 @@
 // at submit), then leaves no trace: not in the saved referral, not on the
 // Sent or Received screens, not in the URL or browser storage.
 //
+// Participant age is not Program eligibility. A Program's own age limits
+// (for example "Serves ages 18 to 64") describe the Program and may be
+// shown and kept; what must never be kept or shown later is the age the
+// employee entered for the participant.
+//
 // The HTTP half, which compares every kept record with and without an age,
 // is test/regression/agePrivacy.test.js.
 //
@@ -74,12 +79,15 @@ const hasNumber = (text, n) => new RegExp(`(?<![\\d.:-])${n}(?![\\d.:-])`).test(
 async function chooseAgeAndSend(page, { mode, name }) {
   await page.getByLabel('Housing (sample)', { exact: true }).check();
   if (mode === 'exact') {
-    await page.locator('#ageMode-exact').check();
+    // Exact age is the default (Current Handoff Wireframes, screen 2).
+    await expect(page.locator('#ageMode-exact')).toBeChecked();
     await expect(page.locator('#ageExact')).toBeVisible();
     await expect(page.locator('#ageRange-group')).toBeHidden();
     await page.locator('#ageExact').fill(String(EXACT_AGE));
   } else {
-    await expect(page.locator('#ageMode-range')).toBeChecked();
+    await page.locator('#ageMode-range').check();
+    await expect(page.locator('#ageRange-group')).toBeVisible();
+    await expect(page.locator('#ageExact-group')).toBeHidden();
     await page.locator('#ageMin').fill(String(RANGE.min));
     await page.locator('#ageMax').fill(String(RANGE.max));
   }
@@ -122,7 +130,7 @@ for (const mode of ['exact', 'range']) {
     await expect(page.locator('#ageExact')).toHaveValue('');
     await expect(page.locator('#ageMin')).toHaveValue('');
     await expect(page.locator('#ageMax')).toHaveValue('');
-    await expect(page.locator('#ageMode-range')).toBeChecked();
+    await expect(page.locator('#ageMode-exact')).toBeChecked(); // back to the default
     const stored = await page.evaluate(() => JSON.stringify([{ ...localStorage }, { ...sessionStorage }, document.cookie]));
     for (const n of ages) expect(hasNumber(stored, n), `age ${n} in browser storage`).toBe(false);
     for (const url of urls) {
@@ -161,14 +169,20 @@ test('the age choice works by keyboard, keeps work when switching, and passes th
   await openGuided(page);
   await page.getByLabel('Housing (sample)', { exact: true }).check();
 
-  // Age range is the default; switching to Exact age shows one labelled box.
-  await expect(page.locator('#ageMode-range')).toBeChecked();
-  await expect(page.locator('#ageExact-group')).toBeHidden();
-  await page.locator('#ageMode-range').focus();
-  await page.keyboard.press('ArrowLeft');
+  // Exact age is the default (Current Handoff Wireframes, screen 2): one
+  // labelled box. The arrow keys switch to Age range and back.
   await expect(page.locator('#ageMode-exact')).toBeChecked();
   await expect(page.locator('#ageExact')).toBeVisible();
   await expect(page.getByLabel('Age', { exact: true })).toBeVisible();
+  await expect(page.locator('#ageRange-group')).toBeHidden();
+  await page.locator('#ageMode-exact').focus();
+  await page.keyboard.press('ArrowRight');
+  await expect(page.locator('#ageMode-range')).toBeChecked();
+  await expect(page.locator('#ageRange-group')).toBeVisible();
+  await expect(page.locator('#ageExact-group')).toBeHidden();
+  await page.keyboard.press('ArrowLeft');
+  await expect(page.locator('#ageMode-exact')).toBeChecked();
+  await expect(page.locator('#ageExact')).toBeVisible();
 
   // A bad exact age is explained, and focus goes to the exact box.
   await page.locator('#ageExact').fill('130');
