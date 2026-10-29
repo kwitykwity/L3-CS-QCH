@@ -1,15 +1,22 @@
-// Trello Task FF: demo data and reset verification (Final Technical PRD
-// 15.5, 16.1, 16.2, 16.4, 17.4).
+// Trello Task FF: demo data and reset verification (Handoff PRD 35 and 36;
+// Handoff MVP 25 and 32, gates 31 and 34).
 //
 // test/demoEnvironment.test.js already proves the plain starting state and
 // that a restart undoes a basic run. This file covers what that one does not:
-//   - a fuller demo journey (corrections, a failed notification, reporting)
+//   - a fuller demo journey (a GPME-assisted referral from Find a Program,
+//     Direct referrals, corrections, a failed notification, reporting)
 //     gives the same result on every fresh start;
-//   - the completed Program-information fields and languages of service
-//     reset to the same state, in both demo modes (one fixed person, and
-//     demo sign-in);
-//   - the repository holds no real QCH data and the demo identities are
-//     clearly marked as demo data.
+//   - Program information and languages of service are edited, and a restart
+//     puts them back (one fixed synthetic person);
+//   - under demo sign-in, work done by signed-in demo people (a referral and
+//     a response) and the sign-ins themselves are gone after a restart;
+//   - the specific safeguards against real data: invented names, reserved
+//     example domains, no SSN-shaped values, no Program Directory file.
+//
+// Not covered here: editing Program information or languages while signed in
+// as a demo person. The demo people hold no Program-management rights, so
+// that edit is refused; the demo sign-in test proves the refusal, not a reset
+// of an edit. Edits and their reset are proved in the one-person mode.
 //
 // SYNTHETIC data only. See docs/demo-environment.md.
 
@@ -23,6 +30,7 @@ import { randomUUID } from 'node:crypto';
 import { syntheticSeed } from '../scripts/syntheticSeed.js';
 import { DEMO_PERSONAS } from '../scripts/demoPersonas.js';
 
+const MATCHING = { needCategoryIds: [3], ageRange: { min: 20, max: 25 } };
 const ROOT = path.join(path.dirname(fileURLToPath(import.meta.url)), '..');
 
 async function startDemo(extraEnv = {}) {
@@ -47,16 +55,33 @@ async function stopDemo({ child }) {
   await new Promise((resolve) => { child.once('exit', resolve); child.kill(); });
 }
 
+// Waits, up to a limit, for the server's notification log to satisfy a check.
+// Notifications are sent after the referral is saved, so their log lines can
+// arrive after the HTTP response.
+async function waitForLog(demo, check, timeoutMs = 5000) {
+  const deadline = Date.now() + timeoutMs;
+  const lines = () => demo.output.text.split('\n').filter((l) => l.includes('[notification]'));
+  while (Date.now() < deadline) {
+    if (check(lines())) return lines();
+    await new Promise((resolve) => setTimeout(resolve, 50));
+  }
+  assert.fail(`notification log did not settle within ${timeoutMs} ms:\n${lines().join('\n')}`);
+}
+
 const json = async (res) => { assert.ok(res.ok, `${res.url} -> ${res.status}`); return res.json(); };
 const send = (base, method, url, body) => fetch(`${base}${url}`, {
   method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body),
 });
 const post = async (base, url, body) => json(await send(base, 'POST', url, body));
 
-async function createReferral(base, receivingProgramId, participantName) {
+// `gpme` makes it a GPME-assisted referral: the matching answers the worker
+// gave Find a Program travel with the referral, and the server re-runs the
+// match to confirm the Program was among the results.
+async function createReferral(base, receivingProgramId, participantName, gpme) {
   const created = await post(base, '/api/referrals', {
     submissionId: randomUUID(), receivingProgramId, participantName,
     contactMethod: 'NOT_AVAILABLE', referralContext: 'Synthetic need for the demo verification',
+    ...(gpme ? { gpme } : {}),
   });
   return created.referral.referralId;
 }
@@ -70,44 +95,65 @@ async function runFullJourney(base) {
   const affiliation = await json(await fetch(`${base}/api/me/affiliation`));
   await json(await send(base, 'PUT', '/api/me/affiliation', { programId: 1, version: affiliation.version }));
 
-  // Find a Program, then a referral to the Program it found.
-  const match = await post(base, '/api/gpme/match', { needCategoryIds: [3], ageRange: { min: 20, max: 25 } });
+  // Find a Program, then a GPME-assisted referral to the Program it listed first.
+  const match = await post(base, '/api/gpme/match', MATCHING);
   assert.equal(match.plausible[0].name, 'Adult Evening Classes (sample)');
   assert.equal(match.possible[0].name, 'Job Readiness Workshop (sample)');
 
-  // A: accepted, resulted in service, then the outcome is corrected.
-  const a = await createReferral(base, 4, 'Synthetic Person A');
+  // A: GPME-assisted. The worker runs Find a Program for a Housing need, and
+  // the referral goes to the Program it listed (Housing Help Desk, the one
+  // Program this demo person receives for). Accepted, resulted in service,
+  // then the outcome is corrected.
+  const housing = { needCategoryIds: [4], ageRange: { min: 25, max: 35 } };
+  const housingMatch = await post(base, '/api/gpme/match', housing);
+  const listed = [...housingMatch.plausible, ...housingMatch.possible].find((p) => p.programId === 4);
+  assert.ok(listed, 'Find a Program lists Housing Help Desk for a Housing need');
+  const a = await createReferral(base, listed.programId, 'Synthetic Person A', housing);
   await post(base, `/api/referrals/${a}/response`, { decision: 'ACCEPTED' });
   await post(base, `/api/referrals/${a}/outcome`, { outcome: 'RESULTED_IN_SERVICE' });
   await post(base, `/api/referrals/${a}/outcome/correction`, { outcome: 'DID_NOT_RESULT_IN_SERVICE', version: await version(base, a) });
 
-  // B: not appropriate, then the decision is corrected to accepted.
+  // B: Direct (no matching): not appropriate, then the decision is corrected to accepted.
   const b = await createReferral(base, 4, 'Synthetic Person B');
   await post(base, `/api/referrals/${b}/response`, { decision: 'NOT_APPROPRIATE', reasonId: 1 });
   await post(base, `/api/referrals/${b}/response/correction`, { decision: 'ACCEPTED', version: await version(base, b) });
 
-  // C: to the Program with no notification address. Still saved.
+  // C: Direct, to the Program with no notification address. Still saved.
   const c = await createReferral(base, 5, 'Synthetic Person C');
   const sent = await json(await fetch(`${base}/api/referrals/sent`));
   assert.deepEqual(sent.referrals.map((r) => r.referralId).sort(), [a, b, c].sort());
+
+  // Both entry paths are what they claim: A is GPME_ASSISTED, B and C DIRECT.
+  const details = {};
+  for (const id of [a, b, c]) details[id] = (await json(await fetch(`${base}/api/referrals/${id}`))).referral;
+  assert.deepEqual(
+    Object.fromEntries([a, b, c].map((id) => [id, details[id].source])),
+    { [a]: 'GPME_ASSISTED', [b]: 'DIRECT', [c]: 'DIRECT' },
+  );
+  // The age range used for matching is not kept on the referral (Handoff PRD 5.4).
+  assert.deepEqual(Object.keys(details[a]).filter((k) => /^age/i.test(k)), [], 'no age or age range on the referral');
+  assert.ok(!/"(min|max)":(25|35)/.test(JSON.stringify(details[a])), 'the age range is not echoed back');
 
   const { summary } = await json(await fetch(`${base}/api/reports/referral-activity?period=MONTHLY`));
   return summary;
 }
 
 describe('Task FF demo journeys repeat from a reset', () => {
-  test('the full journey, with corrections and a failed notification, gives the same result on every fresh start', async () => {
+  test('the full journey (guided and Direct referrals, corrections, a failed notification) gives the same result on every fresh start', async () => {
     const results = [];
     for (let run = 0; run < 2; run += 1) {
       const demo = await startDemo();
       try {
         const summary = await runFullJourney(demo.base);
-        // Notifications: the simulated outbox reports one SENT per Program
-        // with an address, and a FAILED NO_RECIPIENT for Program 5 on
-        // purpose. Referral C still exists (checked in runFullJourney).
-        const lines = demo.output.text.split('\n').filter((l) => l.includes('[notification]'));
-        assert.equal(lines.filter((l) => l.includes('outcome=SENT')).length, 2, lines.join('\n'));
-        assert.equal(lines.filter((l) => l.includes('outcome=FAILED') && l.includes('category=NO_RECIPIENT')).length, 1, lines.join('\n'));
+        // Notifications: the simulated outbox reports a SENT for A (Program 4)
+        // and B (Program 4), and a FAILED NO_RECIPIENT for C (Program 5, no
+        // address, on purpose). C still exists (checked in runFullJourney).
+        // They are sent after the referral is saved, so wait, with a limit.
+        const isSent = (l) => l.includes('outcome=SENT');
+        const isNoRecipient = (l) => l.includes('outcome=FAILED') && l.includes('category=NO_RECIPIENT');
+        const lines = await waitForLog(demo, (ls) => ls.filter(isSent).length >= 2 && ls.filter(isNoRecipient).length >= 1);
+        assert.equal(lines.filter(isSent).length, 2, lines.join('\n'));
+        assert.equal(lines.filter(isNoRecipient).length, 1, lines.join('\n'));
         // No participant details reach the log.
         assert.ok(!/Synthetic Person|Synthetic need/.test(demo.output.text));
         results.push(summary);
@@ -124,50 +170,109 @@ describe('Task FF demo journeys repeat from a reset', () => {
     assert.deepEqual(counts(results[1]), counts(results[0]));
   });
 
-  test('Program information, languages of service and both demo modes reset to the same state', async () => {
-    for (const extraEnv of [
-      { QCH_TASK_C_SYNTHETIC_DEMO: 'true' },
-      { QCH_TASK_C_SYNTHETIC_DEMO: 'true', QCH_DEMO_SIGN_IN: 'true' },
-    ]) {
-      const views = [];
-      for (let run = 0; run < 2; run += 1) {
-        const demo = await startDemo(extraEnv);
-        try {
-          // Changing the Program information during a run must not survive a reset.
-          if (extraEnv.QCH_DEMO_SIGN_IN) {
-            // Nobody is signed in until a demo person is chosen, so there
-            // is no view to compare; prove that instead.
-            assert.equal((await fetch(`${demo.base}/api/program-management/programs/3/fields`)).status, 401);
-            views.push(null);
-            continue;
-          }
-          const before = await json(await fetch(`${demo.base}/api/program-management/programs/3/fields`));
-          const first = before.fields[0];
-          const edited = await send(demo.base, 'PUT', `/api/program-management/programs/3/field-values/${first.fieldId}`, {
-            version: first.applicability.version, value: 'Synthetic edit that a reset must undo',
-          });
-          assert.ok(edited.ok, `the edit itself must succeed: ${edited.status}`);
-          const after = await json(await fetch(`${demo.base}/api/program-management/programs/3/fields`));
-          assert.equal(after.fields[0].value, 'Synthetic edit that a reset must undo');
-          views.push(before);
-        } finally {
-          await stopDemo(demo);
-        }
-      }
-      // Run 2 starts from the same state run 1 started from, even though
-      // run 1 edited the Program information before stopping.
-      assert.deepEqual(views[1], views[0], JSON.stringify(extraEnv));
-      if (!extraEnv.QCH_DEMO_SIGN_IN) {
-        const labels = views[0].fields.map((f) => f.label);
-        assert.deepEqual(labels, [
-          'Current Program information', 'Current availability', 'Wait-list information', 'Estimated wait time',
-          'Additional locations', 'Primary Program contact', 'Enrollment and cycle information',
-        ]);
-        assert.ok(views[0].fields.every((f) => /synthetic/i.test(f.value)), 'every example value says it is synthetic');
+  test('Program information and languages of service, edited during a run, are back to the same state after a restart', async () => {
+    const views = [];
+    for (let run = 0; run < 2; run += 1) {
+      const demo = await startDemo({ QCH_TASK_C_SYNTHETIC_DEMO: 'true' });
+      try {
+        const languagesOf = async () => (await post(demo.base, '/api/gpme/match', MATCHING)).plausible[0].serviceLanguages;
+        const before = {
+          fields: await json(await fetch(`${demo.base}/api/program-management/programs/3/fields`)),
+          languages: await languagesOf(),
+        };
+        assert.deepEqual(before.languages, { status: 'ON_FILE', names: ['Chinese', 'English', 'Spanish'] });
+
+        // Edit Program information.
+        const first = before.fields.fields[0];
+        const edited = await send(demo.base, 'PUT', `/api/program-management/programs/3/field-values/${first.fieldId}`, {
+          version: first.applicability.version, value: 'Synthetic edit that a reset must undo',
+        });
+        assert.ok(edited.ok, `the Program-information edit must succeed: ${edited.status}`);
+        const after = await json(await fetch(`${demo.base}/api/program-management/programs/3/fields`));
+        assert.equal(after.fields[0].value, 'Synthetic edit that a reset must undo');
+
+        // Edit languages of service: Adult Evening Classes drops Spanish and Chinese.
+        const facts = await json(await fetch(`${demo.base}/api/program-management/programs/3/matching-facts`));
+        const changed = await send(demo.base, 'PUT', '/api/program-management/programs/3/matching-facts', {
+          ...facts.facts, version: facts.program.version, languageIds: [1],
+        });
+        assert.ok(changed.ok, `the language edit must succeed: ${changed.status}`);
+        assert.deepEqual(await languagesOf(), { status: 'ON_FILE', names: ['English'] }, 'the edit is visible during the run');
+        views.push(before);
+      } finally {
+        await stopDemo(demo);
       }
     }
+    // Run 2 starts from the state run 1 started from, although run 1 edited
+    // both the Program information and the languages before it stopped.
+    assert.deepEqual(views[1], views[0]);
+    assert.deepEqual(views[0].fields.fields.map((f) => f.label), [
+      'Current Program information', 'Current availability', 'Wait-list information', 'Estimated wait time',
+      'Additional locations', 'Primary Program contact', 'Enrollment and cycle information',
+    ]);
+    assert.ok(views[0].fields.fields.every((f) => /synthetic/i.test(f.value)), 'every example value says it is synthetic');
   });
 
+  test('demo sign-in: work done by signed-in demo people, and the sign-ins, are gone after a restart', async () => {
+    const env = { QCH_TASK_C_SYNTHETIC_DEMO: 'true', QCH_DEMO_SIGN_IN: 'true' };
+    const signIn = async (base, person) => {
+      const res = await send(base, 'POST', '/demo/api/sign-in', { person });
+      assert.equal(res.status, 200, `signing in as ${person}`);
+      return res.headers.get('set-cookie').split(';')[0];
+    };
+    const as = (base, cookie) => (method, url, body) => fetch(`${base}${url}`, {
+      method, headers: { 'Content-Type': 'application/json', Cookie: cookie },
+      ...(body === undefined ? {} : { body: JSON.stringify(body) }),
+    });
+    // What each demo person sees right after signing in.
+    const startingViews = async (base) => {
+      const referrer = as(base, await signIn(base, 'referring-worker'));
+      const receiver = as(base, await signIn(base, 'housing-receiver'));
+      return {
+        sent: await json(await referrer('GET', '/api/referrals/sent')),
+        queue: await json(await receiver('GET', '/api/referrals/received?programId=4')),
+      };
+    };
+
+    const first = await startDemo(env);
+    let staleCookie;
+    let startingView;
+    try {
+      // Nobody is signed in until a demo person is chosen.
+      assert.equal((await fetch(`${first.base}/api/referrals/sent`)).status, 401);
+      startingView = await startingViews(first.base);
+      assert.deepEqual(startingView.sent.referrals, []);
+      assert.deepEqual(startingView.queue.referrals, []);
+
+      // Authorized demo work: the referring worker sends a referral, the
+      // Housing receiver answers it.
+      staleCookie = await signIn(first.base, 'referring-worker');
+      const referrer = as(first.base, staleCookie);
+      const receiver = as(first.base, await signIn(first.base, 'housing-receiver'));
+      const created = await json(await referrer('POST', '/api/referrals', {
+        submissionId: randomUUID(), receivingProgramId: 4, participantName: 'Synthetic Person D',
+        contactMethod: 'NOT_AVAILABLE', referralContext: 'Synthetic need for the demo verification',
+      }));
+      const id = created.referral.referralId;
+      assert.equal((await receiver('POST', `/api/referrals/${id}/response`, { decision: 'ACCEPTED' })).status, 200);
+      assert.match(JSON.stringify(await json(await referrer('GET', '/api/referrals/sent'))), /ACCEPTED/);
+      // The demo people hold no Program-management rights. The refusal is what
+      // is proved here, so a language edit is not part of this mode.
+      assert.equal((await referrer('GET', '/api/program-management/programs/3/matching-facts')).status, 403);
+    } finally {
+      await stopDemo(first);
+    }
+
+    const second = await startDemo(env);
+    try {
+      // The old sign-in no longer works: sign-ins lived in the stopped server.
+      assert.equal((await as(second.base, staleCookie)('GET', '/api/referrals/sent')).status, 401);
+      // Signing in again shows the same starting views as the first start.
+      assert.deepEqual(await startingViews(second.base), startingView);
+    } finally {
+      await stopDemo(second);
+    }
+  });
   test('Find a Program shows languages of service, including "not on file"', async () => {
     const demo = await startDemo();
     try {
@@ -180,13 +285,31 @@ describe('Task FF demo journeys repeat from a reset', () => {
   });
 });
 
-describe('Task FF no real data, and demo data is labelled', () => {
+describe('Task FF safeguards against real data, and demo data is labelled', () => {
   const tracked = execFileSync('git', ['ls-files'], { cwd: ROOT, encoding: 'utf8' }).split('\n').filter(Boolean);
+  const isImage = (f) => /\.(png|jpe?g|gif|ico|webp|woff2?)$/i.test(f);
 
-  test('no spreadsheet, CSV, PDF, Word or database file, and no Program Directory file, is committed', () => {
-    const forbidden = tracked.filter((f) => /\.(xlsx?|csv|tsv|pdf|docx?|db|sqlite3?|bak|bacpac)$/i.test(f)
-      || /program[ _-]?directory/i.test(path.basename(f)) || f.startsWith('data/private/'));
+  // Handoff PRD 35 prohibits real participant/referral information in the
+  // repository, tests, screenshots and demos, and the internal QCH Program
+  // Directory in a public repository. File types are not themselves banned.
+  // These tests check specific prohibited content. They do not prove that no
+  // real data exists anywhere: they are safeguards, not an inspection of
+  // every value in every file.
+  test('no Program Directory file or private-data folder is committed (by name; other files are not searched for Directory content)', () => {
+    const forbidden = tracked.filter((f) => /program[ _-]?directory/i.test(path.basename(f)) || f.startsWith('data/private/'));
     assert.deepEqual(forbidden, []);
+  });
+
+  test('no tracked text file holds a valid-looking Social Security Number', () => {
+    const found = [];
+    for (const f of tracked.filter((name) => !isImage(name) && !/package-lock\.json$/.test(name))) {
+      let text;
+      try { text = readFileSync(path.join(ROOT, f), 'utf8'); } catch { continue; }
+      if (text.includes('\u0000')) continue; // binary
+      // Valid-looking only: area 000, 666 and 9xx, group 00 and serial 0000 are never issued, so a marker such as 000-00-0000 is not a real SSN.
+      if (/(?<![\d-])(?!000|666|9\d\d)\d{3}-(?!00)\d{2}-(?!0000)\d{4}(?![\d-])/.test(text)) found.push(f);
+    }
+    assert.deepEqual(found, []);
   });
 
   test('every email address in the demo code and seeds is on a reserved example domain', () => {
@@ -195,7 +318,8 @@ describe('Task FF no real data, and demo data is labelled', () => {
     for (const f of files) {
       const text = readFileSync(path.join(ROOT, f), 'utf8');
       for (const m of text.matchAll(/[\w.+-]+@([\w-]+(?:\.[\w-]+)+)/g)) {
-        if (!/(^|\.)(example\.(org|test|invalid|com)|invalid|test)$/i.test(m[1])) bad.push(`${f}: ${m[0]}`);
+        const reserved = /(^|\.)(example\.(org|test|invalid|com)|invalid|test)$/i.test(m[1]);
+        if (!reserved) bad.push(`${f}: ${m[0]}`);
       }
     }
     assert.deepEqual(bad, []);

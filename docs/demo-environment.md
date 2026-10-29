@@ -148,23 +148,44 @@ to see the result. To show two people at once, use two browser windows
 
 ## Demo data and reset verification (Task FF)
 
-Checked on `main` at `cd22455`, October 28, 2026, with
-`test/demoVerification.test.js` (plus the existing `test/demoEnvironment.test.js`).
+Requirements: Handoff PRD 35 (development and demo data) and 36 (testing and
+verification); Handoff MVP 25 and acceptance gates 31 (synthetic-data
+separation) and 34 (stable synthetic demonstration environment). Evidence is
+`test/demoVerification.test.js` plus the existing `test/demoEnvironment.test.js`
+and `test/demoSignIn.test.js`. The tested commit and results are reported in
+the pull request, since a commit cannot name its own hash.
 
-| Acceptance item | Result | Evidence |
+| Claim | Status | What the tests actually do |
 | --- | --- | --- |
-| Reset is deterministic | Pass | The full journey (Find a Program, Direct Referral, response, outcome, a response correction, an outcome correction, a failed notification, Reporting) run on two fresh starts gives identical counts. A Program-information edit made in one run is gone in the next, in both `dev:synthetic` and `dev:demo` modes |
-| No real participant data | Pass | Every name is invented and marked "(sample)" or "(demo)"; participant names used in tests are "Synthetic Person". The server log carries IDs and outcomes only, never names or need text |
-| No private Program Directory data committed | Pass | Test fails if any spreadsheet, CSV, PDF, Word, database or "Program Directory" file is tracked by git, or if an email in `scripts/` or `db/seeds/` is not on a reserved example domain |
-| Required journeys repeat | Pass | Same results on a second fresh start |
-| Demo data is clearly demo | Pass | Names marked; ZIPs are `999xx`; demo people end "(demo)" |
-| Failures are recoverable without database work | Pass | There is no database. Stop the server and start it again; see [Reset the demo](#reset-the-demo) |
+| The full journey repeats the same result on every fresh start | Verified | Two fresh starts each run: Find a Program (a Housing match), a **GPME-assisted** referral created from that match (checked: `source` is `GPME_ASSISTED`), two **Direct** referrals (`source` is `DIRECT`), a response, an outcome, a response correction, an outcome correction, a failed notification and Reporting. Reporting counts are identical on both starts. The test waits, up to a 5-second limit, for the simulated outbox log lines before checking them |
+| Program information resets | Verified (one-person mode) | Adult Evening Classes' first Program-information field is edited; after a restart it is back to its original synthetic value |
+| Languages of service reset | Verified (one-person mode) | Adult Evening Classes is changed from English, Spanish and Chinese to English only (visible in Find a Program during the run); after a restart it is back to all three. Programs with no language on file still show "not on file" |
+| Demo sign-in work and sign-ins reset | Verified | Signed in as the referring worker and the Housing receiver: a referral is sent and answered. After a restart the old sign-in is refused (401), and signing in again shows the same empty starting views as the first start |
+| Program information or languages edited **while signed in as a demo person** reset | **Not verified** | The demo people hold no Program-management rights, so that edit is refused (checked: 403). Edits and their reset are proved in one-person mode only |
+| Age and age range are not kept on a referral | Partly verified | A GPME-assisted referral made from a match that used an age range: the age range is absent from the referral as returned by the referral detail API. This does not inspect stored data directly; see the age tests elsewhere in the suite |
+| No real participant data in the repository, tests, screenshots or demos (PRD 35) | **Safeguards only; not a full inspection** | See the next table |
+| Failures are recoverable without database work | Verified by design | There is no database in demo mode. Stop the server and start it again; see [Reset the demo](#reset-the-demo) |
+
+Safeguards against real data, and what each does and does not show:
+
+| Safeguard | Evidence | Limit |
+| --- | --- | --- |
+| Demo names are invented and marked | Test: every sample Department, Program and need category says "(sample)"; every demo person ends "(demo)"; participant names in these tests are "Synthetic Person" | Covers the seed and demo personas, not every string in the repository |
+| No participant details in the server log | Test: after the journey, the log holds no participant name or need text | Covers the demo server's output for this journey |
+| Example addresses only | Test: every email address in `scripts/` and `db/seeds/` is on a reserved example domain | Does not search other folders |
+| ZIP codes are not real | Test: every seed ZIP is `999xx` | Seed ZIPs only |
+| No valid-looking Social Security Number in any tracked text file | Test (ignores images and the lock file; ignores never-issued markers such as `000-00-0000`) | Pattern match: it cannot recognise other kinds of personal data |
+| The internal QCH Program Directory is not committed (PRD 35) | Test: no tracked file is named like a Program Directory and nothing is under `data/private/` | **By file name only.** It does not read other files for Directory content, so a renamed copy would not be caught. The Directory must also stay out of the repository by review |
+
+File types are not themselves prohibited. Spreadsheets, PDFs, CSV or Word files
+may be committed if they hold no real participant or referral information and
+are not the internal Program Directory. Reviewers should check any such file.
 
 Features the demo can show: Find a Program with languages of service
-("not on file" for Programs 2 and 5), Direct Referral, Program Management,
-response and outcome correction, Reporting, notification SENT and FAILED
-(Program 5 has no address on purpose), and the completed Program-information
-fields.
+("not on file" for Programs 2 and 5), Direct Referral, GPME-assisted referral,
+Program Management, response and outcome correction, Reporting, notification
+SENT and FAILED (Program 5 has no address on purpose), and the completed
+Program-information fields.
 
 **The completed Program-information fields are off by default.** Start with
 `QCH_TASK_C_SYNTHETIC_DEMO=true npm run dev:synthetic` (or
