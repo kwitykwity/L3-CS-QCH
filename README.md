@@ -394,33 +394,51 @@ field).
 | `POST` | `/users/:userId/grants` | `{ permission, programId? }` (201) |
 | `POST` | `/users/:userId/grants/:grantId/revoke` | `{}` |
 
-- **Who (PRD 3.6, 3.8):** an active user with `ADMINISTER_PERMISSIONS` as
-  an ORG-scope grant. A PROGRAM-scope copy doesn't count. DEMO grants count
-  only when demo grants are on (development and test). Checked inside the
-  transaction, so an administrator who just lost the right is refused.
+- **Who:** an active user with `ADMINISTER_PERMISSIONS` as an
+  organization-scope grant, checked on the server inside the transaction,
+  so an administrator who just lost the right is refused. DEMO grants count
+  only when demo grants are on (development and test).
 - **What can be granted:** the receiving capabilities and `MANAGE_PROGRAM`
   for one Program, and `MANAGE_ORGANIZATION` organization-wide. The server
   picks the scope; each permission has exactly one, so no grant can be
   saved that the app would then ignore.
-- **Required (PRD 3.2, 3.6, 3.8, 9.3, 9.6 and the frozen handoff
-  contract):** only an authorized `ADMINISTER_PERMISSIONS` holder can
-  change permissions, decided on the server; **no self-elevation** (nobody
-  can give themselves more authority); scope boundaries hold; every change
-  is audited in the same transaction; stale or conflicting changes fail
-  safely.
-- **Team implementation restrictions, NOT approved QCH policy:** this
-  build is stricter than the contract requires. Each of these is a team
-  choice awaiting QCH confirmation, and QCH may loosen any of them:
-  1. **All self-changes are refused**, including removing your own
-     permissions. The contract only requires preventing self-elevation.
-  2. **Administrator rights are managed outside this screen**:
-     `ADMINISTER_PERMISSIONS` is never granted or removed here. This is the
-     team's reading of PRD 3.8 ("a controlled, documented, QCH-approved
-     process"), not a QCH-approved rule for this screen.
-  3. **Only grants made here (`IN_APP`) can be removed here**, so DEMO and
-     seeded grants are read-only.
-  4. New grants only for active users (removal is always allowed).
-  5. The screen shows staff names, never email addresses.
+
+**Assessment against the frozen documents (October 29, 2026).** Governing
+text: Frozen Handoff PRD 23 and 24, Handoff MVP 22 and 23, acceptance gates
+27 and 28, Current Handoff Wireframes screen 16. PRD 24 lists what every
+permission change must do (server-side authorization, validate the target
+user, validate relevant Program scope, preserve least privilege, create
+audit evidence, prevent self-elevation) and adds: "Implementation-specific
+restrictions beyond these requirements must not be treated as QCH policy
+unless QCH approves them." Each rule in this build:
+
+| Rule | Governing requirement | Result |
+| --- | --- | --- |
+| Only an `ADMINISTER_PERMISSIONS` holder can change permissions, decided on the server | PRD 23 ("administrative permission management must itself require authorized administrative capability"), 24; MVP 22, 23 | Required. Kept |
+| Nobody can add a permission to themselves | PRD 23, 24 (prevent self-elevation); MVP 22, 23; wireframe 16 ("cannot be used for self-elevation") | Required. Kept |
+| Nobody can remove their own permissions | None. Removing is not elevation | **Removed.** Unsupported; you can now remove your own permissions. Your own administrator capability still cannot be removed here (row below) |
+| Every add and removal is audited in the same transaction; a failed audit changes nothing | PRD 24 (create audit evidence), 26 | Required. Kept |
+| Each permission has one honored scope; the browser never chooses it; a Program grant needs an existing, not retired Program | PRD 24 (validate relevant Program scope); MVP 22 (no trust in browser-supplied authorization claims) | Required. Kept |
+| JSON-only changes (415 otherwise), empty-object revoke body | PRD 34 (security; secure error handling) | Security protection. Kept |
+| Errors do not reveal whether a user exists to a non-administrator; staff names shown, never email addresses | PRD 34 (secure error handling, data minimization) | Supported. Kept |
+| Duplicate grant (`ALREADY_GRANTED`) and already-removed grant (`GRANT_CHANGED`) are refused with the current list | PRD 24, 26 (accurate audit evidence) | Supported (integrity). Kept |
+| DEMO grants are read-only here; new grants are always `IN_APP` | PRD 22 and MVP 22 (demo identity stays distinguishable from production), PRD 34 (environment separation) | Supported. Kept. DEMO grants exist only in development and test; seeded synthetic grants are `IN_APP` and can be removed |
+| Only an organization-scope administrator capability counts | PRD 24 (least privilege). The documents define no Program- or Department-limited administrator | Supported (fail closed). Kept. **Open question Q2** |
+| New grants only for active users; removal works for anyone | PRD 24 (validate the target user), read with least privilege | Supported by interpretation. Kept. **Open question Q3** |
+| `ADMINISTER_PERMISSIONS` is not granted or removed on this screen | **Unclear.** PRD 24: administrators manage "appropriate" permissions, without saying whether that includes the administrator capability. Initial production users and permissions are a QCH IT production dependency (PRD 37 item 6; MVP 31 item 7). Wireframe 16 shows an Administrator role in the list, but not how it is assigned | **Not built pending open question Q1.** Not QCH policy |
+
+**Open questions for QCH (not policy until answered):**
+
+1. **Q1.** May authorized administrators give or remove the administrator
+   capability itself on the Permissions screen, or is it assigned only
+   through QCH's own process (for example, the production user and group
+   configuration)? If on the screen, should the app stop the last
+   administrator from being removed?
+2. **Q2.** Are all permission administrators organization-wide, or may an
+   administrator be limited to certain Programs or Departments?
+3. **Q3.** Should new permissions be allowed for a staff account that is not
+   active yet (for example, to prepare access before someone starts)?
+
 - **Safety:** one change at a time across the whole screen (a global hold
   taken first), so two administrators cannot deadlock or both add the same
   grant. A duplicate answers 409 `ALREADY_GRANTED` and a removal of a grant

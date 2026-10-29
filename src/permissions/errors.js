@@ -28,8 +28,8 @@ export const permissionErrors = Object.freeze({
     new PermissionError(403, 'USER_NOT_ACTIVE', 'This account does not have access.'),
   notAuthorized: () =>
     new PermissionError(403, 'NOT_AUTHORIZED', 'You do not have permission to administer permissions.'),
-  selfChange: () =>
-    new PermissionError(403, 'SELF_CHANGE_NOT_ALLOWED', 'You cannot change your own permissions. Ask another administrator.'),
+  selfElevation: () =>
+    new PermissionError(403, 'SELF_ELEVATION_NOT_ALLOWED', 'You cannot add permissions to yourself. Ask another administrator.'),
   notRevocable: (current) =>
     new PermissionError(403, 'NOT_REVOCABLE', 'This permission is not managed here.', { current }),
   userNotFound: () =>

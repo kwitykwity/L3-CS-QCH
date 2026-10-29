@@ -1,38 +1,49 @@
-// Permission administration (Trello Task Y; Final Technical PRD 3.2, 3.3,
-// 3.6, 3.8, 9.3, 9.6, 10.5, 13.4).
+// Permission administration (Trello Task Y).
 //
-// Who (PRD 3.6, 3.8): ADMINISTER_PERMISSIONS as an active ORG-scope grant,
-// read inside the transaction. The PRD describes "designated QCH
-// administrators" and never a Program- or Department-only administrator,
-// so other scopes count for nothing (fail closed), like every other
-// capability in src/authorization/referralAccess.js. No other capability
-// (MANAGE_PROGRAM, MANAGE_ORGANIZATION, receiving rights, an affiliation)
-// lets anyone change permissions (PRD 3.8).
+// Governing requirements: Frozen Handoff PRD 23 (Authorization) and 24
+// (Permission Administration); Handoff MVP 22, 23; acceptance gates 27 and
+// 28; Current Handoff Wireframes screen 16. Permission changes must be
+// authorized server-side, validate the target user, validate Program scope,
+// preserve least privilege, prevent self-elevation and create audit
+// evidence. "Implementation-specific restrictions beyond these requirements
+// must not be treated as QCH policy unless QCH approves them" (PRD 24).
 //
-// The acting user comes only from server-side identity (PRD 3.2). The
-// target user is the resource named in the URL, never a claim about who
-// is asking.
+// Each rule below names what governs it. Rules with an OPEN QUESTION keep
+// the narrower behavior only because the frozen documents do not define the
+// wider one; they are not QCH policy. The questions are listed in the README
+// ("Permission administration").
 //
-// Rules REQUIRED by the PRD and the frozen handoff contract:
-// - The administrator check above, on the server, inside the transaction.
-// - No self-elevation: nobody can grant themselves anything.
-// - Only the GRANTABLE permissions, each in its one honored scope
-//   (validatePermissionChange.js), so scope boundaries hold.
-// - A Program-scope grant needs a Program that exists and is not RETIRED.
-// - New grants are always grantSource IN_APP.
+// - Administrator check: ADMINISTER_PERMISSIONS, read inside the
+//   transaction, from server-side identity. PRD 23 ("administrative
+//   permission management must itself require authorized administrative
+//   capability"), 24, MVP 22, 23.
+// - Only an ORGANIZATION-scope ADMINISTER_PERMISSIONS counts. The documents
+//   describe "authorized QCH administrators" and define no Program- or
+//   Department-limited administrator, so a scoped copy grants nothing
+//   (least privilege, PRD 24). OPEN QUESTION Q2.
+// - No self-elevation: nobody can ADD a permission to themselves. PRD 23,
+//   24; MVP 22, 23; wireframe 16. Removing your own permission is allowed:
+//   it is not elevation and nothing in the documents forbids it.
+// - Target user must exist (PRD 24 "validate the target user"); new grants
+//   only for ACTIVE users (same rule, read with least privilege), while
+//   removal works for inactive users so access can be cleaned up. OPEN
+//   QUESTION Q3 on the active-only reading.
+// - Program scope: each permission has one scope the app honors; a
+//   Program-scope grant needs a Program that exists and is not RETIRED. PRD
+//   24 "validate relevant Program scope"; MVP 22 "no trust in
+//   browser-supplied authorization claims" (the browser never picks the
+//   scope).
+// - New grants are always IN_APP; DEMO grants are read-only here. Demo
+//   access is set by the demo seed and reset, and is ignored outside
+//   development and test (PRD 22 and MVP 22: development/demo identity stays
+//   distinguishable from production; PRD 34 environment separation).
+// - ADMINISTER_PERMISSIONS itself is not granted or removed on this screen.
+//   PRD 24 says administrators manage "appropriate" permissions and does not
+//   say whether that includes the administrator capability; production
+//   users, groups and permissions are a QCH IT production dependency (PRD 37
+//   item 6, MVP 31 item 7). Not built pending OPEN QUESTION Q1; not QCH policy.
 //
-// TEAM IMPLEMENTATION RESTRICTIONS: stricter than required, NOT approved
-// QCH policy. Pending QCH confirmation (README, "Permission administration"); QCH
-// may loosen them, so keep each one easy to change:
-// - All self-changes are refused, removals too (the contract only
-//   requires blocking self-elevation). See selfChange below.
-// - ADMINISTER_PERMISSIONS is not granted or revoked on this screen (team
-//   reading of PRD 3.8). See GRANTABLE and isRevocable.
-// - Only IN_APP grants are removable here. See isRevocable.
-// - New grants go only to active users; revoking works for inactive users
-//   too, so access can be cleaned up.
-//
-// Every change (PRD 9.3, 9.6, 13.4): one transaction. Hold permission
+// Every change (audit evidence: Handoff PRD 24, 26): one transaction. Hold permission
 // administration first (one change at a time, no deadlocks), check the
 // administrator, then the target, then the current grants; refuse a
 // duplicate (ALREADY_GRANTED) or a grant already gone (GRANT_CHANGED),
@@ -96,7 +107,7 @@ export function createPermissionService({ store, allowDemoGrants = false }) {
     return index;
   }
 
-  // What the screen shows for one grant (PRD 10.5: no other user data).
+  // What the screen shows for one grant (data minimization, Handoff PRD 34).
   function toGrantView(grant, programs) {
     const program = grant.programId != null ? programs.get(grant.programId) ?? null : null;
     return {
@@ -163,7 +174,10 @@ export function createPermissionService({ store, allowDemoGrants = false }) {
       const programs = await programIndex(tx);
       return {
         user: toUserView(target, actorId),
-        canChange: target.userId !== actorId,
+        // Adding to yourself would be self-elevation (Handoff PRD 23, 24).
+        // Removing your own permissions is allowed: it cannot raise anyone's
+        // authority.
+        canAdd: target.userId !== actorId,
         grants: await currentGrants(tx, target.userId, programs),
       };
     });
@@ -179,8 +193,8 @@ export function createPermissionService({ store, allowDemoGrants = false }) {
     return store.withTransaction(async (tx) => {
       await tx.holdPermissionAdministration();
       await authorizeAdmin(tx, actorId);
-      // REQUIRED: no self-elevation (PRD 3.8, frozen handoff contract).
-      if (targetId === actorId) throw permissionErrors.selfChange();
+      // REQUIRED: no self-elevation (Handoff PRD 23, 24; MVP 22, 23).
+      if (targetId === actorId) throw permissionErrors.selfElevation();
 
       const target = await loadTarget(tx, targetId);
       if (!target.isActive) throw permissionErrors.targetNotActive();
@@ -223,9 +237,10 @@ export function createPermissionService({ store, allowDemoGrants = false }) {
     return store.withTransaction(async (tx) => {
       await tx.holdPermissionAdministration();
       await authorizeAdmin(tx, actorId);
-      // TEAM RESTRICTION, not approved QCH policy (pending QCH confirmation): removing
-      // your own permissions is not self-elevation; refused only by team choice.
-      if (targetId === actorId) throw permissionErrors.selfChange();
+      // Removing your own permission is allowed: it is not self-elevation,
+      // and the frozen documents require only that (Handoff PRD 24; MVP 23).
+      // The administrator capability itself is not removable here (see
+      // isRevocable), so nobody can remove their own administrator rights.
 
       const target = await loadTarget(tx, targetId);
       const programs = await programIndex(tx);

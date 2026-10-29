@@ -60,7 +60,7 @@ and an active user with no grants.
 | `POST .../fields/:fieldId/retire` | `MANAGE_ORGANIZATION` (ORG), 90 days after discontinuing | Program manager, Department/Org-scope manager, DEMO org admin, permission admin, receiver, no grants |
 | `POST .../departments`; `PATCH .../departments/:id`; `POST .../departments/:id/discontinue`, `/reactivate` | `MANAGE_ORGANIZATION` (ORG) | Same |
 | `POST .../programs`; `POST .../programs/:id/move` | `MANAGE_ORGANIZATION` (ORG) | Same |
-| `POST /api/permissions/users/:userId/grants`, `.../grants/:grantId/revoke` | `ADMINISTER_PERMISSIONS` (ORG). Never for themselves: required for additions (no self-elevation); for removals it is a team restriction, not approved QCH policy | Referrer, receiver, Program manager, Department/Org-scope manager, org admin, DEMO org admin, no grants |
+| `POST /api/permissions/users/:userId/grants`, `.../grants/:grantId/revoke` | `ADMINISTER_PERMISSIONS` (ORG). Never to add to themselves (no self-elevation, Frozen Handoff PRD 23, 24); removing their own permissions is allowed | Referrer, receiver, Program manager, Department/Org-scope manager, org admin, DEMO org admin, no grants |
 
 ### Routes that read data
 

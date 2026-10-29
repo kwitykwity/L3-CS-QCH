@@ -12,7 +12,7 @@ import {
 
 const $ = (id) => document.getElementById(id);
 let overview = null;   // { users, programs, grantable }
-let person = null;     // { user, canChange, grants }
+let person = null;     // { user, canAdd, grants }
 let busy = false;
 
 let storage;
@@ -112,7 +112,7 @@ function renderGrants(grants) {
       note.className = 'grant__note muted';
       note.textContent = reason;
       item.append(note);
-    } else if (person.canChange) {
+    } else {
       const remove = document.createElement('button');
       remove.type = 'button';
       remove.className = 'btn btn--secondary';
@@ -132,10 +132,10 @@ function renderPerson(data) {
   person = { ...data };
   $('person-panel').hidden = false;
   $('person-heading').textContent = personHeading(data.user);
-  const note = !data.canChange ? MESSAGES.SELF : (!data.user.isActive ? MESSAGES.INACTIVE : null);
+  const note = !data.canAdd ? MESSAGES.SELF : (!data.user.isActive ? MESSAGES.INACTIVE : null);
   $('person-note').hidden = !note;
   $('person-note').textContent = note ?? '';
-  $('add-form').hidden = !data.canChange || !data.user.isActive;
+  $('add-form').hidden = !data.canAdd || !data.user.isActive;
   addError(null);
   renderGrants(data.grants);
 }
