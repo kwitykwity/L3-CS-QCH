@@ -20,23 +20,30 @@ pull request), **Not started**.
 
 ## What QCH receives, and what it does not
 
-[prd-traceability.md](prd-traceability.md) maps every PRD requirement to its
-code, its test and a status. In short, as of `main` at `cd22455`:
+[prd-traceability.md](prd-traceability.md) audits `main` at `cd22455` against
+the frozen Handoff PRD, the Handoff MVP (its 36 acceptance gates) and the
+Current Handoff Wireframes, using the MVP 33 classifications. In short:
 
 - **A working application on synthetic data**, with its tests: both referral
   paths, receiving response and outcome, corrections and audit, Program
   Management, Guided Program Matching, aggregate reporting, simulated
   notifications, and a demo environment. It has only ever run on in-memory
-  stores, never in QCH's environment.
-- **Waiting on QCH or QCH IT** (not engineering defects): the production data
-  store, Entra sign-in, hosting, the Microsoft Graph sender and shared
-  mailbox, monitoring, Department names, retention, any AI service, and the
-  tested backup and restore. See
-  [pending-qch-it-decisions.md](pending-qch-it-decisions.md).
-- **Unfinished application work that needs no QCH answer**: the list under
-  "What needs work" in [prd-traceability.md](prd-traceability.md). Until each
-  item is built or has a recorded deferral, it is not a handoff gap plan
-  item (PRD 19.6: a gap plan never waives an explicit requirement).
+  stores, never in QCH's environment. Most gates are `VERIFIED` for that
+  environment only; the page lists the limits.
+- **Production dependencies** (QCH or QCH IT provides these; they are not
+  Capstone failures and not completed Capstone infrastructure): SharePoint Lists
+  in a private site, Azure Functions with managed identity, Graph
+  `Sites.Selected`, the shared mailbox and Exchange RBAC, Entra sign-in,
+  production users and permissions, the Program Directory, the Department
+  taxonomy, a retention policy, a browser baseline, and the hosting decision.
+  PRD 27 to 30 confirm the architecture; provisioning and production
+  verification are still to do. See [pending-qch-it-decisions.md](pending-qch-it-decisions.md).
+- **Not delivered:** an external AI service. It is excluded from the MVP (PRD 7,
+  MVP 26), so it is not a pending item.
+- **Gates not yet met on `main`:** items in open pull requests (an open pull
+  request is not an approved deferral) and the `TRUE-GAP` rows in
+  [prd-traceability.md](prd-traceability.md). Until each is merged and its
+  evidence run, or has a recorded decision, it is not a handoff gap-plan item.
 
 ## Deliverables (PRD 19.2)
 
