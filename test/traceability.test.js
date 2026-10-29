@@ -184,16 +184,26 @@ describe('Task GG handoff traceability page: coverage of the frozen documents', 
     assert.deepEqual(missing, [], 'Handoff MVP sections with no row');
   });
 
-  test('every wireframe 1 to 21 is listed', () => {
-    const section = PAGE.split('## Wireframes (v1.6)')[1].split('\n## ')[0];
-    const listed = new Set();
+  test('every wireframe 1 to 21 is mapped, with each column filled and a UX status', () => {
+    const section = PAGE.split('## UX mapping from the wireframe specification (v1.6)')[1].split('\n## ')[0];
+    const mapped = new Map();
     for (const line of section.split('\n')) {
       const m = /^\|\s*(\d+)\s*\|/.exec(line);
-      if (m) listed.add(Number(m[1]));
+      if (m) mapped.set(Number(m[1]), line.split('|').slice(1, -1).map((c) => c.trim()));
     }
     const missing = [];
-    for (let n = 1; n <= 21; n += 1) if (!listed.has(n)) missing.push(n);
+    for (let n = 1; n <= 21; n += 1) if (!mapped.has(n)) missing.push(n);
     assert.deepEqual(missing, []);
+    for (const [n, cells] of mapped) {
+      assert.equal(cells.length, 7, `wireframe ${n} must fill all seven columns`);
+      assert.ok(cells.every((c) => c.length > 0), `wireframe ${n} has an empty column`);
+      assert.match(cells[6], /^`(MATCHES|PARTIAL|DIFFERENT|NOT BUILT|OPEN PR|NOT ASSESSED)`/, `wireframe ${n} needs a UX status`);
+    }
+  });
+
+  test('the wireframe experiences are not dismissed as "not classified" or "not required"', () => {
+    const section = PAGE.split('## UX mapping from the wireframe specification (v1.6)')[1].split('\n## ')[0];
+    assert.ok(!/not classified|No PRD or MVP requirement, so/i.test(section));
   });
 
   test('every ID is unique', () => {
@@ -306,5 +316,107 @@ describe('Task GG handoff traceability page: evidence record', () => {
       }
     }
     assert.deepEqual([...new Set(missing)], []);
+  });
+});
+
+describe('Task GG handoff traceability page: historical audit apart from current status', () => {
+  const CURRENT = (PAGE.split('\n## Current integrated status')[1] ?? '').split('\n## ')[0];
+
+  // | Row | audit status | current status | why | evidence | limits |
+  function changedRows() {
+    const out = [];
+    for (const line of CURRENT.split('\n')) {
+      if (!line.startsWith('|')) continue;
+      const cells = line.split('|').slice(1, -1).map((c) => c.trim());
+      if (cells.length !== 6 || !/^[GP]-\d+$/.test(cells[0])) continue;
+      out.push({
+        id: cells[0], from: cells[1].replace(/`/g, ''), to: cells[2].replace(/`/g, ''), evidence: cells[4],
+      });
+    }
+    return out;
+  }
+
+  test('the audit tables are labelled as of cd22455 and the current status is a separate section', () => {
+    assert.match(PAGE, /## Summary \(as of `cd22455`\)/);
+    assert.match(PAGE, /## MVP acceptance gates as of `cd22455`/);
+    assert.match(PAGE, /\n## Current integrated status\r?\n/);
+    assert.match(PAGE, /\n## Revisions made to the audit\r?\n/);
+    assert.ok(CURRENT.length > 200, 'the current status section is empty');
+  });
+
+  test('each changed row starts from its audit status, ends somewhere different, and says why', () => {
+    const changed = changedRows();
+    assert.ok(changed.length > 0);
+    for (const { id, from, to } of changed) {
+      const row = ROWS.find((r) => r.id === id);
+      assert.ok(row, `${id} is not an audit row`);
+      assert.equal(row.status, from, `${id}: the audit table says ${row.status}, the current table says it was ${from}`);
+      assert.ok(STATUSES.includes(to) && to !== from, `${id}: current status must be a different valid status`);
+    }
+  });
+
+  test('the current counts follow from the audit counts and the changed rows', () => {
+    const counts = Object.fromEntries(STATUSES.map((s) => [s, ROWS.filter((r) => r.status === s).length]));
+    const expected = { ...counts };
+    for (const { from, to } of changedRows()) { expected[from] -= 1; expected[to] += 1; }
+    for (const status of STATUSES) {
+      const m = new RegExp(`\\|\\s*\`${status}\`\\s*\\|\\s*(\\d+)\\s*\\|\\s*(\\d+)\\s*\\|`).exec(CURRENT);
+      assert.ok(m, `the current counts table is missing ${status}`);
+      assert.equal(Number(m[1]), counts[status], `${status}: audit column says ${m[1]}, the rows have ${counts[status]}`);
+      assert.equal(Number(m[2]), expected[status], `${status}: current column says ${m[2]}, the changes give ${expected[status]}`);
+    }
+  });
+
+  test('a row that becomes VERIFIED now cites a behavioral test or spec that exists', () => {
+    for (const { id, to, evidence } of changedRows().filter((c) => c.to === 'VERIFIED')) {
+      const cited = citedPaths(evidence).filter((p) => /^(test|e2e)\//.test(p) && !STRUCTURAL.has(p));
+      assert.ok(cited.length > 0, `${id}: becomes ${to} without a behavioral test`);
+      for (const p of cited) assert.ok(/\b(test|it)(\.\w+)?\(/.test(read(p)), `${id}: ${p} has no tests`);
+    }
+  });
+
+  test('gate 32 is VERIFIED only by the behavioral network check, never by the source scan alone', () => {
+    const g32 = GATE_ROWS.find((r) => r.id === 'G-32');
+    assert.notEqual(g32.status, 'VERIFIED', 'at cd22455 its only evidence was a static scan');
+    const move = changedRows().find((c) => c.id === 'G-32');
+    assert.ok(move && move.to === 'VERIFIED');
+    const title = 'no outbound call is made while a description is interpreted';
+    assert.ok(move.evidence.includes(title), 'the current row must cite the behavioral test by name');
+    assert.ok(read('test/gpmeInterpretation.test.js').includes(title), 'the behavioral test must exist');
+  });
+});
+
+describe('Task GG handoff traceability page: corrected conclusions and uncertainties', () => {
+  const UNCERTAIN = (PAGE.split('\n## Remaining uncertainties')[1] ?? '').split('\n## ')[0];
+
+  test('uncertainties are recorded as questions, apart from the requirement rows', () => {
+    const ids = [...UNCERTAIN.matchAll(/^\|\s*(U-\d+)\s*\|/gm)].map((m) => m[1]);
+    assert.deepEqual(ids, ['U-1', 'U-2', 'U-3', 'U-4', 'U-5', 'U-6']);
+    for (const cited of new Set(PAGE.match(/\bU-\d+\b/g))) assert.ok(ids.includes(cited), `${cited} is cited but not recorded`);
+    for (const row of ROWS) assert.ok(!/^U-/.test(row.id), 'an uncertainty must not be a classified row');
+  });
+
+  test('an in-application notification-recipient setting is not a requirement row or a gap', () => {
+    assert.ok(!ROWS.some((r) => /notification (recipient|address)|set in the application/i.test(r.requirement)));
+    assert.match(UNCERTAIN, /U-1[^\n]*notification address/i);
+  });
+
+  test('archival and multiple locations are not declared TRUE-GAP', () => {
+    assert.notEqual(ROWS.find((r) => r.id === 'P-31').status, 'TRUE-GAP');
+    assert.notEqual(GATE_ROWS.find((r) => r.id === 'G-20').status, 'TRUE-GAP');
+  });
+
+  test('a TRUE-GAP is not a production process the frozen text assigns to QCH IT', () => {
+    // G-35 and G-36 are documentation deliverables of this team, so they stay.
+    for (const row of ROWS.filter((r) => r.status === 'TRUE-GAP' && !/documentation gate/i.test(r.evidence))) {
+      assert.ok(!/PRD (27|31)\b|MVP (28|30)\b/.test(row.source), `${row.id} is a production process, not a Capstone gap`);
+    }
+  });
+
+  test('a "team restriction" label is never treated as proof of compliance', () => {
+    assert.ok(!/as PRD 24 requires/i.test(PAGE));
+    const g28 = GATE_ROWS.find((r) => r.id === 'G-28');
+    assert.notEqual(g28.status, 'OPEN-PR-MATCHES');
+    assert.match(g28.limits, /label is not compliance/i);
   });
 });
