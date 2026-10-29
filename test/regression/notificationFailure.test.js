@@ -98,8 +98,21 @@ function setup({ mode = 'up', onSend = null } = {}) {
   const logger = Object.fromEntries(['info', 'warn', 'error'].map((level) => [level, (line) => logLines.push({ level, line })]));
   const real = createNotificationService({ store: store.notificationStore, sender, logger, now });
   const runs = [];
+  const beforeNotifications = new Map();
   const notifier = {
-    notifyReferralCommitted(args) { const run = real.notifyReferralCommitted(args); runs.push(run); return run; },
+    notifyReferralCommitted(args) {
+      // Capture committed state before any notification work starts.
+      if (!beforeNotifications.has(args.referralId)) {
+        beforeNotifications.set(args.referralId, JSON.stringify([
+          store._referrals.find((r) => r.referralId === args.referralId),
+          store._referralAuditEvents.filter((e) =>
+            e.entityType === 'REFERRAL' && e.entityId === args.referralId),
+        ]));
+      }
+      const run = real.notifyReferralCommitted(args);
+      runs.push(run);
+      return run;
+    },
     retryPendingDeliveries: (options) => real.retryPendingDeliveries(options),
   };
 
@@ -129,7 +142,7 @@ function setup({ mode = 'up', onSend = null } = {}) {
   const auditOf = (referralId) => store._referralAuditEvents
     .filter((e) => e.entityType === 'REFERRAL' && e.entityId === referralId);
   const linesFor = (referralId) => logLines.filter((l) => new RegExp(`\\breferral=${referralId}\\b`).test(l.line));
-  return { store, sender, outbox, logLines, as, settle, retryLater, delivery, referralRow, auditOf, linesFor, now };
+  return { store, sender, outbox, logLines, as, settle, retryLater, delivery, referralRow, auditOf, linesFor, now, beforeNotifications };
 }
 
 const draft = (receivingProgramId) => ({
@@ -190,8 +203,17 @@ describe('Task NN: a notification failure never changes the referral (PRD §21)'
       await t.settle(1);
 
       // As saved, and every retry pass later: never rolled back, deleted or updated.
-      const saved = JSON.stringify([t.referralRow(id), t.auditOf(id)]);
-      for (let i = 0; i < 4; i += 1) await t.retryLater();
+      const saved = t.beforeNotifications.get(id);
+      assert.ok(saved, 'committed state captured before notification');
+      const assertUnchanged = () => assert.equal(
+        JSON.stringify([t.referralRow(id), t.auditOf(id)]), saved,
+        'the referral and audit match their state before notification',
+      );
+      assertUnchanged();
+      for (let i = 0; i < 4; i += 1) {
+        await t.retryLater();
+        assertUnchanged();
+      }
       assert.equal(JSON.stringify([t.referralRow(id), t.auditOf(id)]), saved, 'the referral and its audit did not change');
       assert.equal(t.store._referrals.length, 1);
       assert.equal(t.referralRow(id).rowVersion, 1, 'never updated');
@@ -225,6 +247,12 @@ describe('Task NN: a notification failure never changes the referral (PRD §21)'
     const id = sent.body.referral.referralId;
     await t.settle(1);
 
+    assert.ok(t.beforeNotifications.has(id));
+    assert.equal(
+      JSON.stringify([t.referralRow(id), t.auditOf(id)]),
+      t.beforeNotifications.get(id),
+      'delivery-store failure leaves the committed referral and audit unchanged',
+    );
     assert.equal(t.referralRow(id).rowVersion, 1);
     assert.deepEqual(t.auditOf(id).map((e) => e.action), ['CREATED']);
     const logged = t.linesFor(id).map((l) => [l.level, fieldsOf(l.line).event, fieldsOf(l.line).error]);
