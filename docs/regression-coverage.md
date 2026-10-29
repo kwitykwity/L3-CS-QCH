@@ -150,9 +150,15 @@ Four defects were found and fixed, each with a regression test:
 
 Not changed: the skip link sits off screen until it is focused, and the
 Reporting Center's data tables scroll inside their own focusable region,
-which WCAG allows for data tables. The start page has no S/M/L/XL control
-(no form; it is the temporary start page), so it is checked for reflow and
-axe at its own size.
+which WCAG allows for data tables. The start page is the one explicit
+exception to the text-size checks (`NO_SIZE_CONTROL` in
+`e2e/accessibilityFinal.spec.js`): it has no form and is the temporary start
+page, so it is checked for reflow and axe at its own size, and the test
+asserts it has no size control so the exception cannot outlive its reason.
+Every other swept screen must show all four S/M/L/XL controls before it is
+tested; a screen that loses them fails rather than being skipped (checked by
+removing the Reporting Center's controls: the earlier version passed, this
+one fails).
 
 **Pending, not verified here:** the Permissions screen (PR #63, not on
 `main`). Add it to `screens()` in `e2e/accessibilityFinal.spec.js` when #63

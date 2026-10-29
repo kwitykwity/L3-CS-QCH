@@ -26,9 +26,14 @@
 // Not swept here:
 //   - The Permissions screen is PENDING PR #63 (not on main). Add it to
 //     screens() when #63 merges; until then it is not verified by this file.
-//   - The start page ("/") has no S/M/L/XL control (it has no form and is
-//     the temporary start page, docs/architecture.md), so it is checked for
-//     reflow and axe at its own size only.
+//   - The start page ("/") is the ONE explicit exception to the text-size
+//     checks (NO_SIZE_CONTROL below): it has no form and is the temporary
+//     start page (docs/architecture.md), so it has no S/M/L/XL control and
+//     is checked for reflow and axe at its own size only. The test asserts
+//     it really has no size control, so adding one forces this exception to
+//     be removed on purpose. Every other screen must show all four size
+//     controls before it is tested; a screen that loses them fails, it is
+//     never skipped.
 // SYNTHETIC data only.
 
 import { test, expect } from '@playwright/test';
@@ -157,7 +162,25 @@ async function open(page, [, path, act, ready]) {
   await ready(page);
 }
 
-const hasSizeControl = (page) => page.locator('[data-size="XL"]').count();
+// The only screens allowed to have no S/M/L/XL control, by name, with the
+// reason above. Any other screen without the controls is a failure.
+const NO_SIZE_CONTROL = new Set(['Start page']);
+
+// Before a screen's text-size checks: the four size controls must be there
+// (Frozen Handoff PRD 33: text size applies consistently to relevant
+// controls and workflows). For an explicit exception, assert the opposite,
+// so the exception cannot outlive its reason. Returns whether to run the
+// text-size checks.
+async function expectSizeControls(page, name) {
+  if (NO_SIZE_CONTROL.has(name)) {
+    await expect(page.locator('[data-size]'), `${name} is an explicit exception and must have no size control`).toHaveCount(0);
+    return false;
+  }
+  for (const size of Object.keys(SIZES)) {
+    await expect(page.locator(`[data-size="${size}"]`), `${name}: the ${size} text-size control is missing`).toHaveCount(1);
+  }
+  return true;
+}
 
 // What sticks out past the right edge, ignoring the skip link (off screen
 // until focused) and data tables (they scroll inside their own region).
@@ -186,7 +209,7 @@ test('every screen, populated: S/M/L/XL are exact, and XL does not scroll sidewa
     for (const screen of screens(data)) {
       const [name] = screen;
       await open(page, screen);
-      if (await hasSizeControl(page)) {
+      if (await expectSizeControls(page, name)) {
         for (const [size, px] of Object.entries(SIZES)) {
           await page.locator(`[data-size="${size}"]`).click();
           expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize), `${name} at ${size}`).toBe(`${px}px`);
@@ -209,7 +232,7 @@ test('every screen, populated: the text size reaches every form control, includi
   for (const screen of screens(data)) {
     const [name] = screen;
     await open(page, screen);
-    if (!(await hasSizeControl(page))) continue; // the start page: no controls, no size control
+    if (!(await expectSizeControls(page, name))) continue; // explicit exception only (NO_SIZE_CONTROL)
     await page.locator('[data-size="S"]').click();
     const small = await controlSizes();
     await page.locator('[data-size="XL"]').click();
@@ -246,7 +269,7 @@ for (const colorScheme of ['light', 'dark']) {
     for (const screen of screens(data)) {
       const [name] = screen;
       await open(page, screen);
-      if (await hasSizeControl(page)) {
+      if (await expectSizeControls(page, name)) {
         expect(await page.evaluate(() => getComputedStyle(document.documentElement).fontSize), name).toBe('24px');
       }
       await expectNoAxeViolations(page, `${name}, XL, 320px, ${colorScheme}`);
