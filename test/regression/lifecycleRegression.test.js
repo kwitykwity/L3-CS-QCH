@@ -24,10 +24,24 @@
 //     accepted as new destinations
 //   - senders and receiving staff still see every old referral, linked to
 //     the same Program and Department IDs
-//   - a referral still waiting stays Awaiting Response, is not rerouted,
-//     and its Program's staff can still answer it (PRD 17)
+//   - a referral still waiting stays Awaiting Response and is not rerouted
+//     (Handoff PRD 17)
 //   - reports still count history under the same Program and Department
 //   - reactivation brings a Program back without touching history
+//
+// Existing behavior, NOT QCH policy: after its Program is discontinued,
+// that Program's receiving staff can still answer a referral already
+// waiting for it, because receiving access follows staff grants, not the
+// Program's status. The frozen documents do not say whether that should
+// happen; it is an open question for QCH. The test records what the code
+// does so a change is visible, not that QCH approved it.
+//
+// Scope of the retirement evidence: QCH Connect has no retirement workflow
+// on main. RETIRED is injected through the store's test hook
+// (_setProgramStatus), so these tests verify how the app treats an
+// ALREADY-retired Program (not offered, not matched, not accepted, cannot be
+// reactivated, history kept). They do not verify an authorized retirement
+// workflow: who may retire a Program, when, or with what audit.
 //
 // Journeys 7 and 11 (journeys.test.js, workflowJourneys.test.js) already
 // cover one Program discontinued and reactivated, and a Program moved
@@ -184,8 +198,9 @@ async function sendHistory({ store, as }) {
 }
 
 // The organization changes, all through the app, by the people allowed to
-// make them. The retirement uses the store's status hook: QCH Connect has
-// no retire screen, and RETIRED is the final state Programs reach.
+// make them, except the retirement: QCH Connect has no retirement workflow,
+// so RETIRED is injected through the store's test hook. Nothing here shows
+// who may retire a Program; see the header.
 async function changeOrganization({ store, as }) {
   const director = as(DIRECTOR);
   const admin = as(ORG_ADMIN);
@@ -274,8 +289,25 @@ describe('Task JJ: Departments and Programs change; history stays (Handoff PRD 1
   test('discontinued and retired Programs are not offered, matched or accepted as new destinations', async () => {
     const ctx = startApp();
     await sendHistory(ctx);
-    await changeOrganization(ctx);
     const worker = as(ctx, WORKER);
+
+    // Find a Program BEFORE the changes: each search must answer 200 with a
+    // business result, and lists the Programs about to be discontinued or
+    // retired. Missing result arrays fail here; they never count as empty.
+    const search = async (needCategoryIds) => {
+      const res = await worker.post('/api/gpme/match', { needCategoryIds });
+      assert.equal(res.status, 200, `match ${needCategoryIds}: ${JSON.stringify(res.body)}`);
+      assert.ok(Array.isArray(res.body.plausible) && Array.isArray(res.body.possible),
+        `match ${needCategoryIds}: result arrays present`);
+      return {
+        status: res.body.status,
+        listed: [...res.body.plausible, ...res.body.possible].map((p) => p.programId).sort((a, b) => a - b),
+      };
+    };
+    assert.deepEqual(await search([EDUCATION]), { status: 'RESULTS', listed: [P_FAMILY, P_ADULT_ED, P_YOUTH_ARTS] });
+    assert.deepEqual(await search([EMPLOYMENT]), { status: 'RESULTS', listed: [P_YOUTH_JOBS, P_PILOT] });
+
+    await changeOrganization(ctx);
 
     // The worker's own Program was discontinued: they must choose again
     // before sending, and cannot choose a discontinued Program.
@@ -289,14 +321,14 @@ describe('Task JJ: Departments and Programs change; history stays (Handoff PRD 1
     const offered = (await worker.get('/api/programs')).body.programs.map((p) => p.programId);
     assert.deepEqual(offered, [P_ADULT_ED]);
 
-    // Find a Program: never suggests them, even for the needs they served.
-    for (const needCategoryIds of [[EDUCATION], [EMPLOYMENT], [EDUCATION, EMPLOYMENT]]) {
-      const res = await worker.post('/api/gpme/match', { needCategoryIds });
-      const listed = [...(res.body.plausible ?? []), ...(res.body.possible ?? [])].map((p) => p.programId);
-      for (const gone of [P_FAMILY, P_YOUTH_JOBS, P_YOUTH_ARTS, P_PILOT]) {
-        assert.ok(!listed.includes(gone), `Program ${gone} suggested for ${needCategoryIds}`);
-      }
-    }
+    // Find a Program AFTER the changes: the same searches still succeed
+    // (200, a business result), the active Program is still found, and the
+    // discontinued and retired Programs are gone. Employment's only
+    // Programs are now discontinued or retired, so that search is a
+    // legitimate "no plausible match", not a failure.
+    assert.deepEqual(await search([EDUCATION]), { status: 'RESULTS', listed: [P_ADULT_ED] });
+    assert.deepEqual(await search([EMPLOYMENT]), { status: 'NO_PLAUSIBLE_MATCH', listed: [] });
+    assert.deepEqual(await search([EDUCATION, EMPLOYMENT]), { status: 'RESULTS', listed: [P_ADULT_ED] });
 
     // Sending to them anyway is refused, by either path, and nothing is saved.
     for (const programId of [P_FAMILY, P_YOUTH_JOBS, P_YOUTH_ARTS, P_PILOT]) {
@@ -312,7 +344,8 @@ describe('Task JJ: Departments and Programs change; history stays (Handoff PRD 1
     assert.equal(fresh.status, 201);
     assert.equal(fresh.body.referral.referringProgramId, P_ADULT_ED);
 
-    // A retired Program cannot be brought back or changed.
+    // An already-retired Program (set through the store hook) cannot be
+    // brought back.
     const director = as(ctx, DIRECTOR);
     const retired = await director.get(`${PM}/programs/${P_PILOT}`);
     assert.equal(retired.status, 200, 'a retired Program can still be looked at');
@@ -365,7 +398,7 @@ describe('Task JJ: Departments and Programs change; history stays (Handoff PRD 1
     );
   });
 
-  test('a referral still waiting is not rerouted or closed, and its Program can still answer it (Handoff PRD 17)', async () => {
+  test('a referral still waiting is not rerouted or closed (Handoff PRD 17); existing behavior lets its Program still answer it', async () => {
     const ctx = startApp();
     const { ids } = await sendHistory(ctx);
     await changeOrganization(ctx);
@@ -377,8 +410,10 @@ describe('Task JJ: Departments and Programs change; history stays (Handoff PRD 1
       'discontinuing the Program did not reroute, answer or close the referral',
     );
 
-    // Current behavior: receiving access follows the staff member's grants,
-    // not the Program's status, so the referral can still be finished.
+    // Existing behavior, NOT QCH policy (see the header): receiving access
+    // follows the staff member's grants, not the Program's status, so the
+    // referral can still be answered and finished. The frozen documents do
+    // not say whether this should be allowed; it is an open question for QCH.
     const youth = as(ctx, YOUTH_STAFF);
     const answered = await youth.post(`/api/referrals/${ids.waiting}/response`, { decision: 'ACCEPTED' });
     assert.equal(answered.status, 200, JSON.stringify(answered.body));
