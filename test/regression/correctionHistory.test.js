@@ -26,7 +26,7 @@
 //   3. history is append-only: earlier records are byte-for-byte unchanged
 //      after later corrections, and refused corrections add nothing;
 //   4. every earlier reason and explanation can still be found, and the
-//      current referral can be rebuilt from the history alone;
+//      decision, reason ID, explanation presence, and service outcome are reconstructed from history;
 //   5. first-response and first-service times are never rewritten.
 //
 // Tests only: no product code changed. In-memory store; SYNTHETIC data.
@@ -215,7 +215,7 @@ describe('Task OO: correction history is complete, chained and append-only (PRD 
       .filter((r) => r !== undefined && r !== null), [REASON_CRITERIA, REASON_CRITERIA, REASON_UNAVAILABLE, REASON_UNAVAILABLE, REASON_CRITERIA]);
     assert.ok(!audit.includes(PARTICIPANT), 'history holds no participant name (PRD §26, §34)');
 
-    // The current referral can be rebuilt from history alone.
+    // Reconstruct decision, reason ID, explanation presence, and service outcome.
     assert.deepEqual(
       [row().decision, row().notAppropriateReasonId, Boolean(row().notAppropriateExplanation), row().serviceOutcome],
       [last.DECISION.decision, last.DECISION.not_appropriate_reason_id, last.DECISION.has_explanation, last.SERVICE_OUTCOME.service_outcome],
