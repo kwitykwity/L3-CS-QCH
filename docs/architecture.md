@@ -90,7 +90,7 @@ server; the pages only hide buttons the server says are not available.
 | `UPDATE_RECEIVED_REFERRAL` | Program | Correct a decision (Accepted / Not Appropriate, reason, explanation) |
 | `MANAGE_PROGRAM` | Program | Maintain that Program's information, lifecycle, matching facts, fields and values |
 | `MANAGE_ORGANIZATION` | Organization | Create and move Programs, manage Departments, retire fields |
-| `ADMINISTER_PERMISSIONS` | Organization | Give and remove the other permissions above on the Permissions screen. Required: no self-elevation. Team restrictions, not approved QCH policy: no change to one's own permissions at all, and this permission itself is managed outside the screen (team reading of PRD 3.8) |
+| `ADMINISTER_PERMISSIONS` | Organization | Give and remove the other permissions above on the Permissions screen. Required (Frozen Handoff PRD 23, 24): server-side check, no self-elevation (nobody adds to themselves), Program scope validated, audited. Removing your own permissions is allowed. This permission itself is not managed on the screen: not built pending open question Q1 (README, "Permission administration"), not QCH policy |
 | `VIEW_UNDERLYING_REFERRAL` | | Defined in the schema; no feature uses it yet |
 
 A person who cannot view a referral gets the same 404 as for a referral

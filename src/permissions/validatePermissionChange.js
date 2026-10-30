@@ -1,18 +1,18 @@
 // What a designated administrator may grant in QCH Connect, and request
-// validation (Trello Task Y; Final Technical PRD 3.6, 3.8, 10.3).
+// validation (Trello Task Y; Frozen Handoff PRD 23, 24; Handoff MVP 22, 23).
 //
-// GRANTABLE is the PRD 3.6 list for ADMINISTER_PERMISSIONS ("assigns or
-// revokes application-level receiving-Program and Program-management
-// permissions") plus MANAGE_ORGANIZATION ("Assigned by designated QCH
-// administrators"). Each has exactly ONE scope: the scope the application
-// actually honors (src/authorization/referralAccess.js). So a grant that
-// would silently do nothing cannot be created.
+// GRANTABLE is the set of permissions the application actually enforces
+// per Program (the receiving capabilities and MANAGE_PROGRAM) plus
+// MANAGE_ORGANIZATION. Each has exactly ONE scope: the scope the
+// application honors (src/authorization/referralAccess.js), so a grant that
+// would silently do nothing cannot be created (PRD 24 "validate relevant
+// Program scope"; least privilege).
 //
 // Not grantable here, on purpose:
-// - ADMINISTER_PERMISSIONS: TEAM RESTRICTION, not approved QCH policy
-//   (pending QCH confirmation). The team reads PRD 3.8 ("a controlled, documented,
-//   QCH-approved process") as administrators being set up outside this
-//   screen; QCH has not approved that rule for this screen.
+// - ADMINISTER_PERMISSIONS: not built here, pending OPEN QUESTION Q1 (README,
+//   "Permission administration"). PRD 24 does not say whether the
+//   "appropriate" permissions administrators manage include the
+//   administrator capability. This is an unbuilt option, not QCH policy.
 // - VIEW_CREATED_REFERRAL: derived from being the referral's creator.
 // - VIEW_UNDERLYING_REFERRAL: no feature reads it.
 // - CREATE_REFERRAL, VIEW_AGGREGATE_REPORTING: every user with app access.
@@ -75,9 +75,9 @@ export function validateRevokeRequest(body) {
 }
 
 // Grants that can be removed here: IN_APP grants of a grantable permission.
-// DEMO grants (non-production seed), seeded grants and
-// ADMINISTER_PERMISSIONS are shown read-only. TEAM RESTRICTION, not
-// approved QCH policy (pending QCH confirmation).
+// Read-only: DEMO grants (demo seed only, ignored outside development and
+// test; environment separation, PRD 22, 34) and ADMINISTER_PERMISSIONS
+// (OPEN QUESTION Q1). Seeded synthetic grants are IN_APP and can be removed.
 export function isRevocable(grant) {
   return grant.grantSource === 'IN_APP' && Object.hasOwn(GRANTABLE, grant.permission);
 }

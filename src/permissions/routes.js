@@ -6,7 +6,7 @@
 //              programs: [{ programId, name, site, departmentName, lifecycleStatus }],
 //              grantable: [{ permission, label, scopeType }] }
 //   GET  /users/:userId/grants
-//        200 { user, canChange, grants: [{ grantId, permission, label, scopeType,
+//        200 { user, canAdd, grants: [{ grantId, permission, label, scopeType,
 //              programId, programName, programSite, grantSource, grantedAt, revocable }] }
 //   POST /users/:userId/grants                    { permission, programId? }
 //        201 { status: "GRANTED", grant, grants }
@@ -22,7 +22,7 @@
 // preflight this app never grants.
 //
 //   400 INVALID_REQUEST | UNEXPECTED_FIELD   401 NOT_AUTHENTICATED   415 UNSUPPORTED_MEDIA_TYPE
-//   403 USER_NOT_ACTIVE | NOT_AUTHORIZED | SELF_CHANGE_NOT_ALLOWED | NOT_REVOCABLE
+//   403 USER_NOT_ACTIVE | NOT_AUTHORIZED | SELF_ELEVATION_NOT_ALLOWED | NOT_REVOCABLE
 //   404 USER_NOT_FOUND
 //   409 TARGET_NOT_ACTIVE | ALREADY_GRANTED | GRANT_CHANGED (with `current`)
 //

@@ -195,18 +195,43 @@ describe('Task Y: unauthorized users cannot change permissions', () => {
 });
 
 describe('Task Y: identity and self-elevation', () => {
-  test('nobody can change their own permissions, either way', async () => {
+  test('nobody can ADD a permission to themselves (no self-elevation, Handoff PRD 23, 24)', async () => {
     const { store, service } = setup();
     const before = state(store);
-    await refused(service.grant(ADMIN, ADMIN, { permission: 'MANAGE_ORGANIZATION' }), 'SELF_CHANGE_NOT_ALLOWED');
-    await refused(service.revoke(ADMIN, ADMIN, grantIdOf(store, ADMIN, 'ADMINISTER_PERMISSIONS'), {}), 'SELF_CHANGE_NOT_ALLOWED');
-    assert.equal(state(store), before);
+    for (const body of [{ permission: 'MANAGE_ORGANIZATION' }, { permission: 'MANAGE_PROGRAM', programId: 11 }]) {
+      await refused(service.grant(ADMIN, ADMIN, body), 'SELF_ELEVATION_NOT_ALLOWED');
+    }
+    assert.equal(state(store), before, 'a refused self-grant writes nothing');
     const view = await service.getUserGrants(ADMIN, ADMIN);
-    assert.equal(view.canChange, false);
+    assert.equal(view.canAdd, false);
     assert.equal(view.user.isYou, true);
+    // Over HTTP too: identity comes from the server, never the body.
+    const res = await request(appAs(store, ADMIN)).post(`/api/permissions/users/${ADMIN}/grants`)
+      .send({ permission: 'MANAGE_ORGANIZATION' });
+    assert.deepEqual([res.status, res.body.code], [403, 'SELF_ELEVATION_NOT_ALLOWED']);
+    assert.equal(state(store), before);
   });
 
-  test('administrator rights cannot be granted or removed here (PRD 3.8)', async () => {
+  test('an administrator CAN remove their own permission: not elevation, audited (Handoff PRD 24)', async () => {
+    const { store, service } = setup();
+    // Another administrator gives ADMIN a Program permission first.
+    await service.grant(ADMIN_TWO, ADMIN, { permission: 'MANAGE_PROGRAM', programId: 11 });
+    const grantId = grantIdOf(store, ADMIN, 'MANAGE_PROGRAM');
+    const result = await service.revoke(ADMIN, ADMIN, grantId, {}, { correlationId: 'synthetic-self-remove' });
+    assert.equal(result.status, 'REVOKED');
+    assert.ok(!active(store, ADMIN).some((g) => g.permission === 'MANAGE_PROGRAM'));
+    const event = store._referralAuditEvents.at(-1);
+    assert.deepEqual([event.entityType, event.entityId, event.action, event.actorUserId],
+      ['USER_GRANT', grantId, 'REVOKED', ADMIN]);
+    // Their own administrator capability is still not removable here (Q1),
+    // so nobody can lock themselves out this way.
+    const before = state(store);
+    await refused(service.revoke(ADMIN, ADMIN, grantIdOf(store, ADMIN, 'ADMINISTER_PERMISSIONS'), {}), 'NOT_REVOCABLE');
+    assert.equal(state(store), before);
+    assert.ok(active(store, ADMIN).some((g) => g.permission === 'ADMINISTER_PERMISSIONS'));
+  });
+
+  test('administrator rights cannot be granted or removed here (not built pending open question Q1)', async () => {
     const { store, service } = setup();
     const before = state(store);
     await refused(service.grant(ADMIN, STAFF, { permission: 'ADMINISTER_PERMISSIONS' }), 'INVALID_REQUEST');
@@ -415,7 +440,7 @@ describe('Task Y: Permissions screen wording (public/permissions/logic.js)', asy
     assert.equal(conflict.state, 'CONFLICT');
     assert.equal(conflict.grants.length, 1);
     assert.equal(logic.interpretChange({ status: 409, body: { code: 'GRANT_CHANGED', current: [] } }).message, logic.MESSAGES.CHANGED);
-    assert.equal(logic.interpretChange({ status: 403, body: { code: 'SELF_CHANGE_NOT_ALLOWED' } }).message, logic.MESSAGES.SELF);
+    assert.equal(logic.interpretChange({ status: 403, body: { code: 'SELF_ELEVATION_NOT_ALLOWED' } }).message, logic.MESSAGES.SELF);
     assert.equal(logic.interpretChange({ status: 403, body: { code: 'NOT_AUTHORIZED' } }).state, 'NOT_ADMIN');
     for (const response of [{ unknown: true }, { status: 503, body: {} }, { status: 200, body: { status: 'GRANTED' } }]) {
       assert.equal(logic.interpretChange(response).state, response.status === 200 ? 'REFUSED' : 'UNKNOWN', JSON.stringify(response));

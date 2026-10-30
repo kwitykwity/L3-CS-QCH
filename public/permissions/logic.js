@@ -15,7 +15,7 @@ export const MESSAGES = Object.freeze({
   CHOOSE_PERMISSION: 'Choose a permission.',
   CHOOSE_PROGRAM: 'Choose the Program this permission is for.',
   SAVING: 'Saving...',
-  SELF: 'You cannot change your own permissions. Ask another administrator.',
+  SELF: 'You cannot add permissions to yourself. Ask another administrator. You can remove your own.',
   INACTIVE: 'This staff member is not active. You can remove permissions, but not add new ones.',
   ALREADY: 'Nothing was added: this staff member already has that permission. The current permissions are shown.',
   CHANGED: 'Nothing was changed: another administrator changed these permissions first. The current permissions are shown.',
@@ -70,7 +70,7 @@ export function interpretChange(response, { added } = {}) {
     case 'ALREADY_GRANTED': return { state: 'CONFLICT', message: MESSAGES.ALREADY, tone: 'info', grants: current };
     case 'GRANT_CHANGED': return { state: 'CONFLICT', message: MESSAGES.CHANGED, tone: 'info', grants: current };
     case 'NOT_REVOCABLE': return { state: 'REFUSED', message: MESSAGES.NOT_REVOCABLE, tone: 'error', grants: current };
-    case 'SELF_CHANGE_NOT_ALLOWED': return { state: 'REFUSED', message: MESSAGES.SELF, tone: 'error' };
+    case 'SELF_ELEVATION_NOT_ALLOWED': return { state: 'REFUSED', message: MESSAGES.SELF, tone: 'error' };
     case 'TARGET_NOT_ACTIVE': return { state: 'REFUSED', message: MESSAGES.INACTIVE, tone: 'error' };
     case 'NOT_AUTHORIZED':
     case 'USER_NOT_ACTIVE': return { state: 'NOT_ADMIN', message: MESSAGES.NOT_ADMIN, tone: 'error' };

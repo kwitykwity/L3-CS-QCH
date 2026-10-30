@@ -83,11 +83,15 @@ test.describe('Permissions screen', () => {
     await expect(page.locator('#grant-list')).toContainText('Organization-wide');
   });
 
-  test('your own permissions are read-only, and administrator rights are not managed here', async ({ page }) => {
+  test('you cannot add to your own permissions, you can remove them, and administrator rights are not managed here', async ({ page }) => {
     await openPerson(page, 'Synthetic Developer (sample) (you)');
-    await expect(page.locator('#person-note')).toHaveText('You cannot change your own permissions. Ask another administrator.');
+    await expect(page.locator('#person-note')).toHaveText('You cannot add permissions to yourself. Ask another administrator. You can remove your own.');
     await expect(page.locator('#add-form')).toBeHidden();
-    await expect(page.locator('#grant-list button')).toHaveCount(0);
+    // Each removable permission of your own offers Remove (not clicked here:
+    // the shared synthetic server keeps the developer's access for later specs).
+    const removable = page.locator('#grant-list li').filter({ has: page.getByRole('button', { name: /^Remove / }) });
+    await expect(removable).not.toHaveCount(0);
+    await expect(page.locator('#grant-list li').filter({ hasText: 'Administer permissions' }).getByRole('button')).toHaveCount(0);
     await expect(page.locator('#grant-list')).toContainText('Administer permissions: Organization-wide');
     await expect(page.locator('#grant-list')).toContainText('Managed outside this screen');
     // The permission list never offers administrator rights.

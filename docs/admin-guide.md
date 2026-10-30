@@ -47,16 +47,18 @@ managers need a `MANAGE_PROGRAM` grant first.
 
 Things to know:
 
-- You cannot change your own permissions. Ask another administrator.
-- Administrator rights are not given here; they are set up outside the app.
-- Those two rules, and the one below about permissions this screen cannot
-  remove, are **current team restrictions, not approved QCH policy**. QCH
-  may confirm or loosen them (see README, "Permission administration").
-  What is required is that nobody can give themselves more authority.
+- You cannot add permissions to yourself; ask another administrator.
+  This is required: nobody can give themselves more authority (Frozen
+  Handoff PRD 23, 24). You can remove your own permissions.
+- Administrator rights are not given or removed on this screen. That is
+  not built yet because the frozen documents do not say whether it should
+  be; it is an open question for QCH (Q1 in the README, "Permission
+  administration"), not a QCH rule.
 - Staff who are not active cannot get new permissions, but you can still
-  remove theirs.
-- Permissions marked "Managed outside this screen" or "Demo data; not
-  managed here" were not added on this screen and cannot be removed here.
+  remove theirs (open question Q3 in the README).
+- Permissions marked "Managed outside this screen" (administrator rights,
+  Q1) or "Demo data; not managed here" (demo setup only, never production)
+  cannot be removed here.
 - If another administrator changed the same person first, nothing is
   changed and the current list is shown. Check it, then try again if you
   still need to.
