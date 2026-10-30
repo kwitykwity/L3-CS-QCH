@@ -164,26 +164,35 @@ isn't synthetic.
 
 ## 8. QCH IT items that must NOT be presented as done
 
-These are open decisions, listed in
-[pending-qch-it-decisions.md](pending-qch-it-decisions.md). The demo shows
-none of them, and nobody should say they are finished:
+The production architecture is **confirmed** by the Frozen Handoff PRD, but
+QCH and QCH IT have **not provisioned it**, and the demo shows none of it.
+Nobody should say any of these is finished. Full list:
+[production-architecture.md](production-architecture.md).
 
-1. **Where production data lives:** SharePoint Lists or the Azure SQL
-   design. The demo uses in-memory synthetic data. The Azure SQL schema in
-   `db/` is a design, not a running database.
-2. **Hosting:** where the production server runs.
-3. **SharePoint site and access model.**
-4. **Archive behavior.**
-5. **QCH Microsoft (Entra) sign-in:** not built. Production currently
-   refuses every request without sign-in (it fails closed).
-6. **Email through Microsoft Graph / the shared mailbox:** not connected.
-7. **Any AI or language-processing service:** not approved, not used. The
-   app sends nothing to an outside service.
-8. **Retention and audit policy.**
+1. **Data:** SharePoint Lists in a private QCH Connect site, no separate
+   database (confirmed, not provisioned). The demo uses in-memory synthetic
+   data. The Azure SQL schema in `db/` is an earlier-plan design, not the
+   production store.
+2. **Server side:** Azure Functions with a managed identity (confirmed, not
+   provisioned). Where the frontend is hosted is still a QCH IT decision.
+3. **SharePoint site access:** direct access for QCH IT administrators only,
+   Graph `Sites.Selected` (confirmed, not provisioned).
+4. **Archive behavior:** confirmed (2,500 active referrals, archive the 500
+   oldest eligible closed ones, never open or Awaiting Response), not built.
+5. **QCH Microsoft (Entra) sign-in with MFA:** confirmed, not configured or
+   built. Production currently refuses every request without sign-in (it
+   fails closed). The demo's own sign-in is synthetic and never used in
+   production.
+6. **Email through Microsoft Graph and the shared mailbox, restricted through
+   Exchange RBAC:** confirmed, not connected.
+7. **Any AI or language-processing service:** not part of the MVP, not used.
+   The app sends nothing to an outside service.
+8. **Retention/deletion policy:** still a QCH decision.
 
 Also not done: production deployment, QCH handoff acceptance, and real
 QCH Program data. The app has never run in QCH's environment.
 
-**Safe wording:** "This is the working application on synthetic data.
-Production sign-in, email and data storage are designed and waiting on QCH
-IT decisions; we have not connected them."
+**Safe wording:** "This is the working application on synthetic data. The
+production architecture is agreed with QCH IT (SharePoint, Azure Functions,
+Microsoft sign-in and email), and it still has to be set up in QCH's
+environment; we have not connected it."

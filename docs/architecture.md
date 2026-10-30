@@ -3,9 +3,10 @@
 **Status: draft.** Part of the handoff documentation. It does not complete production deployment, restore verification, or QCH handoff acceptance.
 
 For a technical person picking up the code. It describes the application
-as it exists on `main`, not the planned production setup. Decisions that
-are still open with QCH IT are in
-[pending-qch-it-decisions.md](pending-qch-it-decisions.md).
+as it exists on `main`, not the planned production setup. The confirmed
+production architecture (SharePoint Lists, Azure Functions, Graph, Entra ID)
+and what QCH IT still has to provision are in
+[production-architecture.md](production-architecture.md).
 
 ## In one paragraph
 

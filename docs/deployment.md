@@ -6,13 +6,18 @@ deployment, verification. Every blank marked **PROVIDED BY QCH IT** waits on
 the items in [qch-it-requirements.md](qch-it-requirements.md). No resource
 names or deployment tools are guessed here.
 
-**Open decisions change parts of this page.** Where production data lives
-(SharePoint Lists or a relational database such as the Azure SQL design)
-and where the server is hosted are not decided; see
-[pending-qch-it-decisions.md](pending-qch-it-decisions.md). Steps that name
-App Service, Azure SQL or `sqlcmd` describe the earlier plan and apply only
-if QCH IT chooses it. No production store exists yet: `npm start` today
-serves the pages and `/health`, and every `/api` route answers 401.
+**The production architecture is now confirmed, and parts of this page
+predate it.** The Frozen Handoff PRD (§21, §22, §27 to §31) confirms
+SharePoint Lists in a dedicated private site with **no separate production
+database**, **Azure Functions** with a managed identity as the server side,
+Graph `Sites.Selected`, mail from the shared mailbox through Exchange RBAC for
+Applications, and Entra ID single sign-on with MFA; see
+[production-architecture.md](production-architecture.md). Steps that name
+App Service, Azure SQL, Key Vault or `sqlcmd` describe the **earlier plan and
+are superseded**; they are kept only until a runbook for the confirmed
+architecture can be written, which needs QCH IT's provisioning first. No
+production store exists yet: `npm start` today serves the pages and
+`/health`, and every `/api` route answers 401.
 
 ## Environments
 
@@ -24,10 +29,12 @@ a demo environment.
 | --- | --- | --- |
 | `NODE_ENV` | `development` or `test` | `production` |
 | Data | Synthetic only | Real QCH data |
-| Sign-in | Team demo sign-in, labeled on screen | Microsoft Entra ID only |
-| Notifications | Simulated in-app outbox | Microsoft Graph through the QCH shared mailbox |
+| Sign-in | Preconfigured synthetic demo identities chosen on screen, no username or password, labeled on screen ([demo-environment.md](demo-environment.md)) | Microsoft Entra ID single sign-on with MFA only |
+| Notifications | Simulated in-app outbox | Microsoft Graph through the QCH shared mailbox, restricted through Exchange RBAC for Applications |
 | Reset and seed | Allowed, synthetic only | Never |
-| Secrets | `.env` file on the developer's machine (gitignored) | Azure Key Vault and App Service settings |
+| Data | In-memory stores, rebuilt on every start | SharePoint Lists in a private QCH Connect site (no separate database) |
+| Server side | One Node.js app | Azure Functions with a managed identity |
+| Secrets | `.env` file on the developer's machine (gitignored) | No secrets or long-lived keys in source or browser code (PRD §29). Earlier plan: Key Vault and App Service settings |
 
 ## 1. Pick a known version of the source
 
@@ -79,8 +86,10 @@ Configuration table.
 
 ## 3. Apply database migrations
 
-**Applies if a relational store such as the Azure SQL design is chosen**
-(pending decision 1). Whatever store is chosen, the same rule holds: its
+**Superseded: does not apply to the confirmed architecture.** There is no
+separate production database (PRD §27), so the Azure SQL migrations in `db/`
+are not run in production. The text below is the earlier plan, kept for
+reference. Whatever store is chosen, the same rule holds: its
 structure is changed on purpose, before the new app version starts, never
 by the app on its own (PRD 9.8, 18.3).
 
@@ -113,8 +122,8 @@ A release counts as successful only after these checks pass (PRD 18.4).
 | --- | --- | --- |
 | `GET /health` | `200` with body exactly `{"status":"ok"}` | Built |
 | Startup log | `QCH Connect listening on ... (production)`, and no startup error | Built |
-| Database reachable | A readiness check that reports database availability only | Not built yet |
-| Staff sign-in | A QCH test account can sign in through Entra ID | Not built yet |
+| Data store reachable | A readiness check that reports only whether the SharePoint Lists can be reached (earlier plan: the database) | Not built yet |
+| Staff sign-in | A QCH test account can sign in through Entra ID single sign-on, with MFA as QCH policy requires | Not built yet |
 | Notification delivery | A test referral to a QCH-approved test Program sends one email **from** the shared mailbox that **arrives in that Program's configured, authorized recipient inbox** (not just leaves the mailbox). The email is generic with no participant data, and the delivery row ends `SENT`. Use synthetic referral data only. | Not built yet |
 
 `/health` reports only that the app is up. It never returns secrets,

@@ -4,18 +4,20 @@ QCH Connect - L3 Capstone Project
 
 ## Database
 
-The database schema, migrations, and synthetic development seed live in
-[`db/`](db/README.md), which explains the run order and how to apply them.
-Changes to them go through their own reviewed pull requests, separate from
-application code.
+The Azure SQL schema, migrations, and synthetic development seed in
+[`db/`](db/README.md) are a **design record from the earlier plan**, not the
+production store. Changes to them go through their own reviewed pull
+requests, separate from application code.
 
-Where production data lives is still open with QCH IT: SharePoint Lists or
-a relational database such as this Azure SQL design (see
-[`docs/pending-qch-it-decisions.md`](docs/pending-qch-it-decisions.md)).
-Today the app runs on in-memory stores with synthetic data. Whatever is
-chosen is owned by QCH and provided and configured through QCH IT. Database connection details, credentials, and secrets must never be
-committed to this repository. Locally they belong in the gitignored `.env`
-file; in production they come from Azure Key Vault (PRD 15.2).
+**Production data lives in SharePoint Lists** in a dedicated private QCH
+Connect SharePoint site, reached by **Azure Functions** with a managed
+identity; there is **no separate production database** (Frozen Handoff PRD
+§27, §29). That architecture is confirmed; QCH IT still has to provision it.
+See [`docs/production-architecture.md`](docs/production-architecture.md).
+Today the app runs on in-memory stores with synthetic data. Credentials and
+secrets must never be committed to this repository. Locally they belong in
+the gitignored `.env` file; in production no secrets or long-lived keys go in
+source or browser code (PRD §29).
 
 ## Stack
 
@@ -411,7 +413,8 @@ awaiting response, resulted in service, and the rates from PRD 12.4.
 ## Deployment and handoff
 
 [`docs/`](docs/README.md) holds the handoff documentation (PRD 18, 19):
-the open QCH IT decisions, architecture, data dictionary, admin guide,
+the confirmed production architecture and outstanding QCH IT dependencies,
+the earlier open decisions, architecture, data dictionary, admin guide,
 troubleshooting, operations, the deployment runbook, everything QCH IT needs
 to provide, the handoff checklist, and dependency licenses.
 `npm run licenses` lists every installed package's license.
