@@ -7,9 +7,12 @@ Every table and column in the team's current SQL schema design:
 data) and 003 (GPME matching states), in that order.
 
 **Read this first.** This is the schema **design**, not a running
-database. Where production data will live (SharePoint Lists or a
-relational database such as this design) is an open QCH IT decision; see
-[pending-qch-it-decisions.md](pending-qch-it-decisions.md), decision 1.
+database. It is **not the production store**: production data lives in
+SharePoint Lists in a private QCH Connect site, with no separate database
+(Frozen Handoff PRD §27; see
+[production-architecture.md](production-architecture.md)). The Lists must
+not store exact age, age range, or unnecessary discovery or interpretation
+inputs (PRD §28).
 The application runs on in-memory stores that follow the same rules. If
 the storage decision changes, this page still describes the information
 the application keeps and the rules it depends on.
