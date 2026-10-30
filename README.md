@@ -495,7 +495,6 @@ Task M), new-referral notifications started after each referral commits
 removing permissions (Task Y, `/permissions/`), demo sign-in for
 non-production demos (Task O, #60; `npm run dev:demo`), and the audit
 trail. The schema design and migrations are in `db/`.
-
 **Not built yet:** a production data store, Entra sign-in, a way to set
 a Program's notification email, the Microsoft Graph sender (notifications
 run on a simulated outbox in development), and any Azure resources. Some

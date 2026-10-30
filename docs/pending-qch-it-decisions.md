@@ -8,6 +8,18 @@ this repository does **not** assume an answer. The application code runs
 against an in-memory store with synthetic data; nothing here has run in
 QCH's environment.
 
+> **Superseded in part (October 28, 2026).** The Frozen Handoff PRD confirms
+> the planned production architecture: **SharePoint Lists** in a dedicated
+> private QCH Connect SharePoint site (no separate production database),
+> **Azure Functions** with managed identity as the server-side authority, Graph
+> `Sites.Selected` for the site, and the QCH shared mailbox named in PRD 21
+> through Exchange RBAC for Applications (PRD 21, 27 to 30). Decisions 1 to 3 and
+> 6 below were written before that and still say "open"; read them as
+> **confirmed decisions whose provisioning and production verification are still
+> outstanding**. Decision 7 (an AI service) is out of scope: no external AI is
+> delivered in the MVP (PRD 7, MVP 26). The body of this page has not been
+> rewritten; see [prd-traceability.md](prd-traceability.md) gate G-35.
+
 How to read this page:
 
 - **Decision**: what QCH IT or QCH needs to decide.
@@ -105,7 +117,8 @@ decision above (or another QCH input) it depends on.
 | A production data store (anything other than the in-memory stores) | External | Decision 1, then the team builds it |
 | Migration-history handling and a database readiness check | External, then engineering | Decision 1 |
 | Staff sign-in through Entra ID | External, then engineering | Decision 5 |
-| Demo sign-in for non-production demos (PRD 16.1) | Engineering | Nothing |
+| Demo sign-in for non-production demos (PRD 16.1) | Done (Task O, #60, merged) | Nothing |
+| Permission administration screens | Done (Task Y, #63, merged) | Remaining policy questions are documented in the README's Permission administration section |
 | Microsoft Graph sender, and starting the notifier and retry timer in the hosted app | External, then engineering | Decisions 2 and 6 |
 | Managing a Program's notification email (routing) | Engineering | Nothing; Program creation says routing is set up separately, and no screen or route sets it yet |
 | Describe-the-need step | Requirement | Governed by Frozen Handoff PRD §§5.1–5.3 and §7; Handoff MVP §§5–6 and §26 |

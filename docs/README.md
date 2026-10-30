@@ -32,6 +32,8 @@ proof that the documents contain no secrets; reviewers still check by eye.
 | [freeze-audit.md](freeze-audit.md) | Is `main` ready for the Nov 2 code freeze? Findings by class and the evidence for each check (Task V) |
 | [verification-evidence.md](verification-evidence.md) | Evidence that the MVP journeys work together, failures found and fixed, and what waits on the QCH environment (Task G) |
 | [ai-interpretation-options.md](ai-interpretation-options.md) | Research only: three ways an open-ended "Find a Program" box could work, compared for pending decision 7 |
+| [prd-traceability.md](prd-traceability.md) | Handoff requirements traceability audit (Task GG): frozen requirements, implementation, verification evidence and remaining questions |
+| [historical-oct14-implementation-map.md](historical-oct14-implementation-map.md) | The earlier audit against the Oct 14 Final Technical PRD. Historical only: not a source of requirements |
 
 ## Deployment and handoff
 

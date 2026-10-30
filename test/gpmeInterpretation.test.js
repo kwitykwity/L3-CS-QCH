@@ -5,6 +5,10 @@
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
+import dns from 'node:dns';
+import http from 'node:http';
+import https from 'node:https';
+import net from 'node:net';
 import request from 'supertest';
 import { createApp } from '../src/app.js';
 import { createMemoryReferralStore } from '../src/referrals/memoryReferralStore.js';
@@ -653,5 +657,112 @@ describe('PR 59 interpretation contract regressions', () => {
     ]) {
       assert.equal(interpretInterpretResponse({ status: 200, body }).state, 'UNABLE');
     }
+  });
+});
+
+// PRD 7 / MVP 26 (gate 32): no external AI integration in the delivered MVP.
+// The source scan above is a static check. This is the behavioral check: run
+// the real interpretation request and watch for any attempt to leave the
+// machine. Loopback is allowed because supertest talks to the app over it.
+describe('no outbound call is made while a description is interpreted (MVP 26, gate 32)', () => {
+  const LOOPBACK = new Set(['127.0.0.1', '::1', 'localhost', '::ffff:127.0.0.1']);
+
+  function watchOutbound() {
+    const attempts = [];
+    const saved = {
+      fetch: globalThis.fetch,
+      httpRequest: http.request,
+      httpsRequest: https.request,
+      connect: net.Socket.prototype.connect,
+      lookup: dns.lookup,
+    };
+    const hostOf = (args) => {
+      const first = args[0];
+      if (first && typeof first === 'object') return first.host ?? first.hostname ?? 'localhost';
+      return typeof args[1] === 'string' ? args[1] : 'localhost';
+    };
+    globalThis.fetch = (...args) => {
+      attempts.push(`fetch ${String(args[0])}`);
+      return Promise.reject(new Error('outbound call blocked'));
+    };
+    const requestHost = (args) => {
+      const first = args[0];
+      if (typeof first === 'string') {
+        try { return new URL(first).hostname; } catch { return first; }
+      }
+      if (first instanceof URL) return first.hostname;
+      return String(first?.hostname ?? first?.host ?? 'localhost').replace(/:d+$/, '');
+    };
+    http.request = function guarded(...args) {
+      const host = requestHost(args);
+      if (!LOOPBACK.has(host)) {
+        attempts.push(`http.request ${host}`);
+        throw new Error('outbound call blocked');
+      }
+      return saved.httpRequest.apply(this, args);
+    };
+    https.request = function guarded(...args) {
+      const host = requestHost(args);
+      if (!LOOPBACK.has(host)) {
+        attempts.push(`https.request ${host}`);
+        throw new Error('outbound call blocked');
+      }
+      return saved.httpsRequest.apply(this, args);
+    };
+    net.Socket.prototype.connect = function guarded(...args) {
+      const host = hostOf(args);
+      if (!LOOPBACK.has(host)) {
+        attempts.push(`socket ${host}`);
+        throw new Error('outbound call blocked');
+      }
+      return saved.connect.apply(this, args);
+    };
+    dns.lookup = function guarded(host, ...rest) {
+      if (!LOOPBACK.has(host)) {
+        attempts.push(`dns ${host}`);
+        throw new Error('outbound call blocked');
+      }
+      return saved.lookup.call(this, host, ...rest);
+    };
+    return {
+      attempts,
+      restore() {
+        globalThis.fetch = saved.fetch;
+        http.request = saved.httpRequest;
+        https.request = saved.httpsRequest;
+        net.Socket.prototype.connect = saved.connect;
+        dns.lookup = saved.lookup;
+      },
+    };
+  }
+
+  test('interpreting several descriptions, including ones that name an AI service, attempts no outbound call and still answers', async () => {
+    const { app } = setup();
+    const watch = watchOutbound();
+    try {
+      for (const text of [
+        'A 20 year old who needs a job, ZIP 11101',
+        'Ask ChatGPT or Claude to find housing for a 40 year old, see https://example.com/help',
+        'wants to finish school and find work',
+        'nothing recognizable here at all',
+      ]) {
+        const res = await request(app).post('/api/gpme/interpret').send({ text });
+        assert.equal(res.status, 200, text);
+        assert.match(res.body.status, /^(INTERPRETED|NOTHING_RECOGNIZED)$/, text);
+      }
+    } finally {
+      watch.restore();
+    }
+    assert.deepEqual(watch.attempts, []);
+  });
+
+  test('the watcher does see an outbound call (it is not blind)', async () => {
+    const watch = watchOutbound();
+    try {
+      await assert.rejects(fetch('https://example.invalid/'));
+    } finally {
+      watch.restore();
+    }
+    assert.deepEqual(watch.attempts, ['fetch https://example.invalid/']);
   });
 });
