@@ -25,11 +25,15 @@
 // audit evidence, no self-elevation); PRD §32 server authority; PRD §34
 // secure error handling [MVP §25].
 // PRD §24 also says implementation-specific restrictions beyond these must
-// not be treated as QCH policy unless QCH approves them, so this file does
-// NOT assert Task Y's team restrictions (refusing self-REMOVAL, never
-// granting ADMINISTER_PERMISSIONS here, IN_APP-only removal, active-only
-// targets, ORG-scope-only administrators). Those stay in Task Y's own tests
-// while QCH confirms them.
+// not be treated as QCH policy unless QCH approves them. So this file does
+// NOT assert the Task Y rules that PR #63 lists as open questions for QCH
+// (Q1 administrator capability not granted or removed on this screen, Q2
+// organization-scope administrators only, Q3 new grants for active users
+// only). Leaving them out here only keeps these tests from adopting them;
+// it does not resolve them in #63, which remains for the lead and QCH.
+//
+// Every refusal asserts its exact client-error status (and code), so an
+// unexpected server error can never count as a successful refusal.
 
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -136,9 +140,11 @@ describe('Task CC: forged and malformed requests change nothing', () => {
       ['patch', `${URL.grants(RECEIVER)}/${grantId}`], ['get', URL.revoke(RECEIVER, grantId)],
       ['put', URL.revoke(RECEIVER, grantId)], ['delete', URL.revoke(RECEIVER, grantId)],
     ];
+    // No route exists for these: exactly 404 with the generic body, so an
+    // unexpected server error can never count as a refusal.
     for (const [method, url] of attempts) {
       const res = await as(ADMIN)[method](url).send({ permission: 'MANAGE_ORGANIZATION' });
-      assert.ok(res.status >= 400, `${method.toUpperCase()} ${url}: ${res.status}`);
+      assert.deepEqual([res.status, res.body], [404, { error: 'Not Found' }], `${method.toUpperCase()} ${url}`);
     }
     assert.equal(state(store), before);
   });
@@ -196,20 +202,27 @@ describe('Task CC: self-elevation and scope boundaries', () => {
     const before = state(store);
     const disguises = ['01', '001', '1.0', '1e0', '+1', '%31', '%2B1', '0x1', '1%00', '%EF%BC%91', '1%20', '%201',
       '1;', '1,2', '9007199254740993', '-1', '0'];
+    // Exact client errors only, so an unexpected server error can never
+    // count as a refusal.
     for (const id of disguises) {
-      // No self-elevation (PRD §23, §24), however the ID is written.
+      // No self-elevation (PRD §23, §24), however the ID is written. '%31'
+      // decodes to the admin's own ID (1) and is refused as self-elevation;
+      // every other disguise is not a user ID at all.
       const add = await as(ADMIN).post(`/api/permissions/users/${id}/grants`).send({ permission: 'MANAGE_ORGANIZATION' });
-      assert.ok(add.status >= 400, `add as ${id}: ${add.status}`);
+      const expected = decodeURIComponent(id) === String(ADMIN)
+        ? [403, 'SELF_ELEVATION_NOT_ALLOWED'] : [404, 'USER_NOT_FOUND'];
+      assert.deepEqual([add.status, add.body.code], expected, `add as ${id}`);
       // A disguise must never reach the admin's account by another route.
-      // ('%31' is simply the admin's own ID, 1; whether someone may remove
-      // their OWN permission is Task Y team restriction 1, not tested here.)
+      // (Removing one's OWN permission is Task Y's rule, not tested here.)
       if (decodeURIComponent(id) === String(ADMIN)) continue;
       const remove = await as(ADMIN).post(`/api/permissions/users/${id}/grants/${ownGrant}/revoke`).send({});
-      assert.ok(remove.status >= 400, `remove as ${id}: ${remove.status}`);
+      assert.deepEqual([remove.status, remove.body.code], [404, 'USER_NOT_FOUND'], `remove as ${id}`);
     }
+    // A malformed grant ID is answered like an unknown grant: 409
+    // GRANT_CHANGED, revealing nothing about which grants exist.
     for (const grantId of ['01', '%31', '1e0', '0x1', '-1', '0', 'abc']) {
       const res = await as(ADMIN).post(`/api/permissions/users/${RECEIVER}/grants/${grantId}/revoke`).send({});
-      assert.ok(res.status >= 400, `grant ID ${grantId}: ${res.status}`);
+      assert.deepEqual([res.status, res.body.code], [409, 'GRANT_CHANGED'], `grant ID ${grantId}`);
     }
     assert.equal(state(store), before);
   });
@@ -257,21 +270,28 @@ describe('Task CC: self-elevation and scope boundaries', () => {
 describe('Task CC: refusals reveal nothing; failures roll back', () => {
   test('to a non-administrator, every refusal looks the same whether the person or grant exists', async () => {
     const { store, as } = setup();
+    const before = state(store);
     const realGrant = grantIdOf(store, RECEIVER, 'CORRECT_OUTCOME');
     for (const userId of [STAFF, ORG_MANAGER, INACTIVE_ADMIN]) {
       const answers = new Set();
+      // Every request must be exactly 403, and the body the same.
+      const record = (label, res) => {
+        assert.equal(res.status, 403, `user ${userId}, ${label}`);
+        answers.add(JSON.stringify(res.body));
+      };
       for (const target of [RECEIVER, FORMER, NOBODY_ID, 'abc']) {
-        answers.add(JSON.stringify((await as(userId).get(URL.grants(target))).body));
-        answers.add(JSON.stringify((await as(userId).post(URL.grants(target)).send({ permission: 'MANAGE_ORGANIZATION' })).body));
+        record(`GET grants of ${target}`, await as(userId).get(URL.grants(target)));
+        record(`add to ${target}`, await as(userId).post(URL.grants(target)).send({ permission: 'MANAGE_ORGANIZATION' }));
         for (const grantId of [realGrant, 424242]) {
-          answers.add(JSON.stringify((await as(userId).post(URL.revoke(target, grantId)).send({})).body));
+          record(`remove ${grantId} from ${target}`, await as(userId).post(URL.revoke(target, grantId)).send({}));
         }
       }
-      answers.add(JSON.stringify((await as(userId).get('/api/permissions/overview')).body));
+      record('overview', await as(userId).get('/api/permissions/overview'));
       assert.equal(answers.size, 1, `user ${userId} saw ${[...answers].join(' | ')}`);
       const [only] = answers;
       assert.doesNotMatch(only, /Receiver|CORRECT_OUTCOME|MANAGE_PROGRAM|current|grant/i);
     }
+    assert.equal(state(store), before, 'grants and audit records are unchanged');
   });
 
   test('an administrator naming someone else\'s grant learns nothing about it', async () => {
