@@ -19,24 +19,24 @@ How to use this page:
   requirement and an executed, recorded test run.
 - Use the "Where built" and "Evidence" columns to find code and tests. Do not use
   the status column to decide what QCH requires.
-- Where the Handoff PRD supersedes this page, the Handoff PRD wins. In
-  particular: SharePoint Lists and Azure Functions are the confirmed planned
-  production architecture (Handoff PRD 27 to 30), so rows here that call the
-  data store or hosting "pending" or assume Azure SQL are out of date; and no
-  external AI integration belongs to the delivered MVP (Handoff PRD 7), so the
-  AI row (R5) is not a pending dependency. The disposition of each Oct 14
-  finding is in [prd-traceability.md](prd-traceability.md#historical-findings-and-what-the-frozen-prd-says-about-them).
+- Where the Handoff PRD supersedes this page, the Handoff PRD wins.
+  SharePoint Lists and Azure Functions are the confirmed planned production
+  architecture (Handoff PRD 27 to 30). Historical rows that describe the
+  architecture as undecided or assume Azure SQL are superseded.
+  External AI is excluded from the delivered MVP (Handoff PRD 7).
+  The disposition of the earlier findings is recorded in
+  [prd-traceability.md](prd-traceability.md#historical-findings-and-what-the-frozen-prd-says-about-them).
 
 ## 1. System overview and architecture
 
 | ID | Requirement | Where built | Evidence | Status | Note |
 | --- | --- | --- | --- | --- | --- |
 | T-1.1 | Browser web app: HTML/CSS/JS front end, Node.js JSON API (1.3) | `src/app.js`, `public/` | `test/server.test.js`, `e2e/mvpJourney.spec.js` | `tested` | |
-| T-1.2 | Azure SQL Database is the authoritative store (1.3, 9.2) | Design only: `db/migrations/001_core_schema.sql` to `004_language_of_service.sql`. The app runs on in-memory stores (`src/referrals/memoryReferralStore.js`, `src/affiliation/memoryStore.js`) | `docs/pending-qch-it-decisions.md` | `waits-on-qch` | Pending decision 1 and register R19: SharePoint Lists or Azure SQL. The SQL has not been run in QCH's environment |
-| T-1.3 | Entra ID SSO and MFA (1.4, 3.1) | `resolveIdentity` seam in `src/app.js`; no Entra code | `test/securityPass.test.js` (production answers 401 without sign-in) | `waits-on-qch` | Pending decision 5, register R22. The fail-closed behavior is verified in T-3.1 |
-| T-1.4 | Azure App Service hosting (1.4) | `npm start` (`src/server.js`) runs on any Node host | `docs/deployment.md` | `waits-on-qch` | Pending decision 2, register R20 |
+| T-1.2 | Azure SQL Database is the authoritative store (1.3, 9.2) | Design only: `db/migrations/001_core_schema.sql` to `004_language_of_service.sql`. The app runs on in-memory stores (`src/referrals/memoryReferralStore.js`, `src/affiliation/memoryStore.js`) | `docs/pending-qch-it-decisions.md` | `waits-on-qch` | Historical architecture assumption, superseded by the Frozen Handoff PRD: SharePoint Lists is the planned production store. The SQL has not been run in QCH's environment |
+| T-1.3 | Entra ID SSO and MFA (1.4, 3.1) | `resolveIdentity` seam in `src/app.js`; no Entra code | `test/securityPass.test.js` (production answers 401 without sign-in) | `waits-on-qch` | Entra provisioning and production verification remain outstanding |
+| T-1.4 | Azure App Service hosting (1.4) | `npm start` (`src/server.js`) runs on any Node host | `docs/deployment.md` | `waits-on-qch` | Historical hosting assumption, superseded by the Frozen Handoff PRD: Azure Functions is the planned production host |
 | T-1.5 | Secrets in Key Vault, never in source (1.4, 15.2) | No code reads a secret. `.env.example` holds placeholders only | `test/envExample.test.js`, `test/docs.test.js` | `waits-on-qch` | Key Vault setup is QCH IT's. Placeholders-only is verified; nothing real has been wired |
-| T-1.6 | Notifications through Microsoft Graph and a QCH shared mailbox (1.4, 11.1) | Simulated outbox only: `src/notifications/simulatedOutbox.js` | `test/notifications.test.js` | `waits-on-qch` | Pending decision 6, register R23. No Graph sender exists |
+| T-1.6 | Notifications through Microsoft Graph and a QCH shared mailbox (1.4, 11.1) | Simulated outbox only: `src/notifications/simulatedOutbox.js` | `test/notifications.test.js` | `waits-on-qch` | Microsoft Graph sender implementation and production verification remain outstanding |
 | T-1.7 | Azure Monitor and Application Insights (1.4, 15.3) | None. Log lines carry IDs only (see T-15.3) | `docs/operations.md` | `waits-on-qch` | Pending decision 2 |
 
 ## 2. Product boundary and workflows
@@ -68,7 +68,7 @@ How to use this page:
 | T-4.1 | Authorized staff maintain Program information in the app (4.1) | `src/programs/programService.js`, `public/program-management/` | `test/programManagement.test.js`, `e2e/programManagement.spec.js` | `tested` | |
 | T-4.2 | Common attributes plus Program-specific fields; core fields not removable (4.2) | `src/programs/fieldService.js`, `src/gpme/programFacts.js` | `test/programFields.test.js`, `test/gpme.test.js` | `tested` | Age and service area carry the four states (set, no restriction, not on file, other limit), not N/A / Not Listed / Unknown wording; the meaning matches |
 | T-4.3 | Field identity follows meaning; lifecycle; retire after about three months; audit (4.3) | `src/programs/fieldService.js` (`RETIRE_AFTER_DAYS = 90`) | `test/programFields.test.js`, `test/programFieldValues.test.js`, `e2e/fieldValues.spec.js` | `tested` | 90 days is a recorded team decision, not QCH's |
-| T-4.4 | Program and Department lifecycle; a Department with active Programs cannot be discontinued (4.4) | `src/programs/organizationService.js` | `test/programOrganization.test.js`, `e2e/organization.spec.js` | `tested` | Department names: register R24, QCH-IT |
+| T-4.4 | Program and Department lifecycle; a Department with active Programs cannot be discontinued (4.4) | `src/programs/organizationService.js` | `test/programOrganization.test.js`, `e2e/organization.spec.js` | `tested` | QCH supplies the Department taxonomy |
 | T-4.5 | Program Directory is never committed (4.5, 19.3) | `.gitignore` (`*.xlsx`, `*Program_Directory*`, `data/private/`) | `docs/freeze-audit.md` (manual scan of every commit on `main`) | `built` | Documentation evidence only. A test that fails if a data file is tracked is in open PR #70 (Task FF) and not on `main`; this row becomes `tested` when it merges |
 | T-4.6 | Real QCH Program data loaded for production (4.5) | Seed is synthetic: `scripts/syntheticSeed.js`, `db/seeds/dev_synthetic_seed.sql` | `docs/pending-qch-it-decisions.md` | `not-on-main` | Handoff step. Depends on the store (T-1.2) and QCH supplying the data privately |
 
@@ -131,7 +131,7 @@ How to use this page:
 | T-9.7 | Schema reproducible from migrations; never changed at startup (9.8) | `db/migrations/`, `db/README.md` | `docs/deployment.md` | `waits-on-qch` | The app does no schema work at startup. Migration-history handling waits on decision 1 |
 | T-9.8 | Parameterized SQL, bounded pooling, safe retries (9.9) | None: no database driver in use | None | `waits-on-qch` | Applies once a database exists (decision 1) |
 | T-9.9 | Historical imports with provenance, dry-run, no live side effects (9.10) | Not built | None | `not-on-main` | PRD says "may be imported when trustworthy". No validated historical data has been supplied |
-| T-9.10 | Retention and purge (9.11) | Nothing is purged; committed referrals are never hard-deleted | `docs/pending-qch-it-decisions.md` | `waits-on-qch` | Pending decisions 4 and 8; register R25. The PRD forbids inventing a policy |
+| T-9.10 | Retention and purge (9.11) | Nothing is purged; committed referrals are never hard-deleted | `docs/pending-qch-it-decisions.md` | `waits-on-qch` | Retention and archival policy requires QCH confirmation. |
 | T-9.11 | Health checks show availability only, with no secrets or internals (9.12, 15.3) | `GET /health` in `src/app.js` returns `{ status: "ok" }` | `test/health.test.js` | `tested` | Covers the app only. A database or dependency readiness check cannot exist yet (decision 1); see T-15.4 |
 
 ## 10. API and backend
@@ -224,29 +224,6 @@ How to use this page:
 | T-19.6 | Knowledge transfer and handoff acceptance (19.5, 19.6) | Not started | `docs/handoff-checklist.md` | `not-on-main` | Target Nov. 10 (PRD 20.2) |
 | T-20.1 | Priority and non-goals respected: no Salesforce, no external AI, no maps, no forecasting, no participant bulk export (20, 21) | None built | `test/securityPass.test.js` (aggregate only), `test/gpmeInterpretation.test.js` (no outside call) | `tested` | Absence is proved for AI and bulk export. Salesforce, maps and forecasting are absent by inspection |
 
-## Newer confirmed QCH requirements
-
-Mapped from [requirements-reconciliation-register.md](requirements-reconciliation-register.md).
-That page is the controlled record; this table only adds the audit's
-verification of what `main` does today.
-
-| Register ID | Requirement | Where built | Evidence | Status | Note |
-| --- | --- | --- | --- | --- | --- |
-| R1, R2 | Describe the need in words; show the reading for the worker to correct before matching | `src/gpme/interpretation/`, `public/referral/guided.js` | `test/gpmeInterpretation.test.js`, `e2e/gpme.spec.js` | `tested` | PR #43 merged (`f3905cb`). The register still says "In review"; corrected in this PR |
-| R3, R4 | How free text fits PRD 8.2; everyday age words | `src/gpme/interpretation/ruleBasedInterpreter.js`, `docs/gpme-description-step-prd-8-2.md` | `test/gpmeInterpretation.test.js` | `not-on-main` | The code is merged. The two team decisions are still unrecorded; record them in the Oct 30 revision |
-| R5 | Approved AI or language-processing service | Rules only, no AI | `docs/ai-interpretation-options.md` | `waits-on-qch` | Pending decision 7 |
-| R6 | Need is the most important factor | `src/gpme/matchPrograms.js` | `test/gpme.test.js` | `tested` | |
-| R7 | Language of service, several per Program | `db/migrations/004_language_of_service.sql`, `src/programs/`, `src/gpme/gpmeService.js` | `test/languageOfService.test.js`, `e2e/languageOfService.spec.js` | `tested` | Shown, not used to match, per Task W. Which languages QCH lists is a QCH decision (R7) |
-| R8, R14 | Full or wait-listed Programs still appear with status; contact shown with a prompt to refer through the app | Not on `main`. Open PR #64 (Task X) shows current Program information in Find a Program | None on `main` | `not-on-main` | Never removed from results, but the status and contact are not shown until #64 merges. Confirmed by QCH on Oct 26, so this needs a recorded scope decision if #64 does not land before the freeze |
-| R9 | No participant waitlist system | None built | `docs/task-c-program-information.md` | `built` | Nothing was built, which is the requirement. No test proves an absence; a search of `db/migrations/` and `src/` found no waitlist table or route |
-| R10 | Add and remove Programs as contracts change | `src/programs/programService.js` | `test/programManagement.test.js`, `test/programOrganization.test.js` | `tested` | "Remove" is met by discontinue and retire (PRD 4.4) |
-| R11 | Mix of standard and flexible fields | `src/programs/fieldService.js` | `test/programFields.test.js` | `tested` | |
-| R12 | "Program Description" and "Important Information About Our Program" as flexible text | `src/programs/programService.js` (description); the second is not a named field | `test/currentProgramInformation.test.js` | `gap-vs-oct14` | Confirmed by QCH on Oct 26 and only half built. Task C's "Current Program information" label is demo data, not a standard field |
-| R13 | Multiple locations: separate listings, or one shared listing | Separate listings work (site is part of a Program). A shared listing is only free text | `test/programFieldValues.test.js` | `gap-vs-oct14` | Confirmed by QCH on Oct 26. Both options were requested |
-| R15, R16 | "No match found" lets staff revise or use Direct Referral; no automatic Family Support | `public/referral/guided.js` | `e2e/gpme.spec.js`, `test/gpmeUi.test.js` | `tested` | |
-| R17, R18 | Improve through Program information and rule versions; missing information is never "no restriction" | `src/gpme/matchPrograms.js`, `src/gpme/programFacts.js` | `test/gpme.test.js`, `test/programMatching.test.js` | `tested` | |
-| R19 to R25 | Data store, hosting, SharePoint access, Entra, Graph, Department names, retention | None built | `docs/pending-qch-it-decisions.md` | `waits-on-qch` | All still open. R24 (Department names) is QCH's, not QCH IT's |
-
 ## Gaps measured against the Oct 14 PRD (historical)
 
 These rows were gaps measured against the Oct 14 Final Technical PRD. They are **not** current
@@ -261,11 +238,11 @@ requirements. Which of them survive in the frozen Handoff PRD is decided in
 | 4 | T-9.6 | Lists show the browser's time zone; reports show New York; the business time zone is unconfirmed | **No** |
 | 5 | T-11.6 | No way to set a Program's notification address | Yes, Task V finding 6, but classed as a QCH IT item |
 | 6 | T-14.7 | XL text on a phone-width screen scrolls sideways | Yes, issues #46 and #51; fix in PR #69 |
-| 7 | R12 | "Important Information About Our Program" is not a standard field | Yes, Task V finding 8 |
-| 8 | R13 | A shared multi-location listing is only free text | Yes, Task V finding 8 |
+| 7 | Program information | "Important Information About Our Program" is not a standard field | Yes, Task V finding 8 |
+| 8 | Multiple locations | A shared multi-location listing is only free text | Yes, Task V finding 8 |
 
 Also worth deciding, but not `gap-vs-oct14`: T-3.6 (permission administration, PR #63,
-the item Task V rated BLOCKS FREEZE), T-8 and R8/R14 (PR #64), and T-9.2.
+the item Task V rated BLOCKS FREEZE), T-8 and Program availability/contact information (PR #64), and T-9.2.
 
 ## Documentation corrections
 
@@ -274,7 +251,6 @@ history:
 
 | Document | Said | Reality | Action |
 | --- | --- | --- | --- |
-| `requirements-reconciliation-register.md` R1, R2, R4 | "No. In review as PR #43" | Merged as `f3905cb` | Corrected in this PR |
 | `pending-qch-it-decisions.md` gaps table | Demo sign-in is engineering work; describe-the-need is in review; language of service is not built | Task O (#60), PR #43 and Task W (#62) are merged | Corrected in this PR |
 | `README.md` "Not built yet" | Demo sign-in "in progress" | Merged (#60) | Corrected in this PR |
 | `demo-runbook.md` sections 2 and 7 (L1, L4) | One person plays every role; describe-the-need not on `main` | `npm run dev:demo` adds three people and describe-the-need is merged | Not changed: Task T owns the runbook; the team must decide what the Nov. 9 demo shows |

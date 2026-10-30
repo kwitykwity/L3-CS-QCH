@@ -33,10 +33,9 @@ and are not classified as requirements or gaps.
    the difference as a UX difference or an uncertainty, not as a requirement
    or a gap.
 
-The **October 14 Final Technical PRD** and the
-[requirements reconciliation register](requirements-reconciliation-register.md)
-are historical references. They do not define current requirements. The earlier
-audit that used them is kept, clearly labelled, in
+The **October 14 Final Technical PRD** is a historical reference.
+It does not define current requirements. The earlier audit is kept,
+clearly labelled, in
 [historical-oct14-implementation-map.md](historical-oct14-implementation-map.md).
 A requirement that exists only in those older documents is not carried into the
 completion contract here without support in the frozen documents (see
@@ -60,14 +59,15 @@ completion contract here without support in the frozen documents (see
 - The tested SHA of the commit that contains this page is reported in the pull
   request, because a commit cannot name its own hash.
 
-### Current integrated status (`main` at `eea57fd`, merged into this branch)
+### Earlier integration verification (`eea57fd`; tests at `2022443`)
 
-These runs are separate from the audit runs above and support only the
-[Current integrated status](#current-integrated-status) section.
+These results describe the earlier integration only. They do not verify
+the latest main merged into this branch. References below to open pull
+requests and skipped tests describe their status at that earlier revision.
 
 - **Product code:** `eea57fd` (`main`) plus one added test, in commit
-  `2022443`. The product code is the same as `main`.
-- **`node --test`, run at `2022443`:** 1569 tests, 1569 pass, 0 fail, 0 skipped.
+  `2022443`. The product code matched `main` at `eea57fd`.
+  - **`node --test`, run at `2022443`:** 1569 tests, 1569 pass, 0 fail, 0 skipped.
   (An earlier full run on the same merge failed one file, `test/referralActivity.test.js`,
   once under full-suite load. It passes alone and on `main`, and the full suite
   passed on the next run. The cause is not identified.)
@@ -250,13 +250,14 @@ UX status words: `MATCHES` (the experience is there), `PARTIAL` (part of it is
 there), `DIFFERENT` (the need is met, or may be met, a different way),
 `NOT BUILT`, `OPEN PR` (in an open pull request, not run here). "Not found"
 means a search of `public/` and the tests did not find it; it is not a
-browser check. The "now" column is `main` after the pull requests merged since
-the audit (see [Current integrated status](#current-integrated-status)).
+browser check. The comparison column describes the earlier `eea57fd`
+snapshot. It does not describe the latest integrated tree; see
+[Current integrated status](#current-integrated-status).
 
-| # | Screen | Experiences the wireframe shows | Backing in the frozen documents | On `main` at `cd22455` | On `main` now | UX status |
+| # | Screen | Experiences the wireframe shows | Backing in the frozen documents | On `main` at `cd22455` | At the earlier `eea57fd` snapshot | UX status |
 | --- | --- | --- | --- | --- | --- | --- |
 | 1 | Employee Dashboard | Welcome; two entry cards (Find a Program, Direct Referral); "My Recent Referrals" with View All; side navigation; text size and user menu | PRD 4 (two entry paths); the dashboard itself is wireframe only | The home page `public/index.html` is a list of links (New referral, Program Management, Referrals I sent, Received referrals, Reporting Center). The two paths are chosen on the New Referral page (`public/referral/index.html`). No recent-referrals table found | No change | `DIFFERENT`: both paths are reachable; the cards and the recent-referrals table are not built (U-6) |
-| 2 | Find a Program: Describe Need | Open-ended description with a 0 to 500 counter; participant age as exact or range, optional, with a "matching only" note; Cancel and Continue; step indicator | PRD 4.1, 5.1, 5.3, 5.4; MVP 5, 6 | A description box marked optional, and an age range From and to with a hint that a range is fine. Exact age is not accepted (`src/gpme/validateMatchRequest.js`). The page says the answers are "not saved with the referral". Counter and step indicator not assessed | Exact age is open PR #75 | `PARTIAL`: exact age is G-6 |
+| 2 | Find a Program: Describe Need | Open-ended description with a 0 to 500 counter; participant age as exact or range, optional, with a "matching only" note; Cancel and Continue; step indicator | PRD 4.1, 5.1, 5.3, 5.4; MVP 5, 6 | A description box marked optional, and an age range From and to with a hint that a range is fine. Exact age is not accepted (`src/gpme/validateMatchRequest.js`). The page says the answers are "not saved with the referral". Counter and step indicator not assessed | Exact age was pending in PR #75 at this snapshot; #75 is now merged | `PARTIAL`: exact age is G-6 |
 | 3 | Review and Confirm Information | Interpreted information the worker can edit (primary need, details, age, geography, other considerations); a "matching only, not saved" note; Back and Continue | PRD 3.1, 5.2; MVP 5 | The reading proposes needs, age and ZIP into editable fields, and nothing is matched until the worker chooses Find Programs. There are no fields for "details" or "other considerations"; matching uses only need, age and ZIP (PRD 6.2). Remove and add-missing are not tested (G-5) | No change | `PARTIAL` |
 | 4 | Program Matches (GPME results) | A "suggestions" note; per result: Department, ages, language, availability; "Why this program?"; Select Program; a no-match box with Direct Referral | PRD 3.3, 6.1, 6.3 to 6.5; MVP 7 to 9 | Plausible and possible lists, each with explanations and a choose button; language shown, or "not on file"; no availability in results; the no-match message offers Change answers and Direct Referral | Availability, wait list and primary contact are shown with each result (#64 merged) | `PARTIAL`: each result carries explanations, not a separate "Why this program?" link (not assessed in a browser) |
 | 5 | Program Details | A page with tabs (Overview, Services, Locations, Enrollment, Contact, Important Info); Department, ages, languages, availability, schedule, locations; Select This Program; a callout to refer through QCH Connect and to call or email only if needed | PRD 8, 14; MVP 10, 11 | Not shown to staff on `main`; managers see Program information in Program Management | Shown inline under each result as "Current Program information", with the PRD 14 wording asserted by `test/findProgramInformation.test.js`. No separate tabbed page | `DIFFERENT`: the information and the guidance are there; the tabbed page is not (U-5) |
@@ -273,19 +274,29 @@ the audit (see [Current integrated status](#current-integrated-status)).
 | 16 | Permission Administration | A user table (role, Department and Program access, status, actions) and a note that changes need server authorization and cannot be used for self-elevation | PRD 23, 24; MVP 23 | Not on `main` | Open PR #63; see G-28 for the restrictions it adds | `OPEN PR` |
 | 17 | Multi-Location Program | A Locations table (name, primary or satellite, status, Add Location) and a note that a Program can have several locations under one listing, or separate listings | PRD 13; MVP 14 | Separate listings by site, and a free-text "Additional locations" field for a shared listing (G-20). No structured Locations list | No change | `DIFFERENT`: both representations are possible; the structured list is not built (U-3) |
 | 18 | No Match Result | "No matches found" with Revise Search and Go to Direct Referral | PRD 6.5; MVP 7 | Says so plainly, keeps the answers, and offers Change answers and Use Direct Referral (`e2e/gpme.spec.js`) | No change | `MATCHES` |
-| 19 | Accessibility Controls | Text size S, M, L, XL (12, 14, 18, 24 px) with a sample; an Accessibility Help link | PRD 33; MVP 27 | S, M, L, XL buttons on the pages. The pixel sizes and the Accessibility Help link were not checked here. XL at phone width scrolls sideways (G-33) | Fix is open PR #69 | `PARTIAL` |
+| 19 | Accessibility Controls | Text size S, M, L, XL (12, 14, 18, 24 px) with a sample; an Accessibility Help link | PRD 33; MVP 27 | S, M, L, XL buttons on the pages. The pixel sizes and the Accessibility Help link were not checked here. XL at phone width scrolls sideways (G-33) | The fix was pending in PR #69 at this snapshot; #69 is now merged | `PARTIAL` |
 | 20 | Department Administration (note) | A written note: Department administration remains an MVP requirement; no dedicated screen is drawn; Departments are configurable, and are discontinued or retired, not deleted | PRD 11, 12; MVP 13 | Organization pages exist (`public/program-management/organization.html`) and are tested under G-19 | No change | `MATCHES` the note |
 | 21 | Help and Guidance | Inline help and key reminders: refer through QCH Connect; age is used only for matching; do not include unnecessary personal information; use Direct Referral if the Program is known | PRD 3.2, 5.4, 14, 15 | No help panel found. Pieces of the guidance appear in place (the age and matching note) | The QCH Connect-first line appears after #64 | `PARTIAL`: the reminders exist in places; the panel is wireframe only (U-6) |
 
 ## Current integrated status
 
-This section is separate from the audit above. The audit describes `cd22455`.
-This describes **`main` at `eea57fd`**, which is `cd22455` plus eleven merged
-pull requests, including the three that touch audit rows (#64, #67 and #72),
-merged into this branch. This branch adds one test and documentation, and no
-product code.
+The original audit above describes `cd22455`. The tables below record
+the earlier integration at `eea57fd` and its verification at `2022443`;
+they are historical snapshots, not the status of today's main.
 
-**What merged since the audit:**
+This branch incorporates main at `263bb15`, including the permission,
+privacy, accessibility, exact-age and regression changes merged since
+the earlier snapshot.
+
+Validation of the updated integration, run locally before the merge commit:
+- `npm test`: 1,721 passed, 0 failed, 0 skipped.
+- `npm run test:e2e`: 207 Chromium tests passed.
+
+These results cover the synthetic, in-memory environment. They do not
+verify production services or other browsers. The final tested commit
+will be recorded in the PR comment after committing.
+
+**Merges included in the earlier eea57fd snapshot:**
 
 | Pull request | What it is | Audit rows it affects |
 | --- | --- | --- |
@@ -293,9 +304,9 @@ product code.
 | #67 (Task AA) | Journey 13: Program Management changes reach Find a Program | Adds evidence to G-16 and G-18 (see below) |
 | #72 (Task S) | Demo reset steps (documentation) | None |
 
-**Rows that changed status:**
+**Status changes verified in the earlier snapshot:**
 
-| Row | Audit status | Current status | Why it changed | Evidence run now | Limits |
+| Row | Audit status | Status at eea57fd | Why it changed | Evidence at that snapshot | Limits |
 | --- | --- | --- | --- | --- | --- |
 | G-13 | `OPEN-PR-MATCHES` | `VERIFIED` | #64 merged. Staff now see availability and wait-list information with each result | `test/findProgramInformation.test.js` ("a wait-listed or full Program still appears, with its information and primary contact"), `e2e/findProgramInformation.spec.js` | Chromium only for the spec. In-memory store. Availability is shown from Program-maintained text fields |
 | G-15 | `MERGED-NEEDS-VERIFICATION` | `VERIFIED` | #64 added a test that results carry the same Programs in the same order with or without availability data | `test/findProgramInformation.test.js` ("each result carries both, with the same Programs in the same order") | Server side. In-memory store |
@@ -303,13 +314,13 @@ product code.
 | G-17 | `OPEN-PR-MATCHES` | `VERIFIED` | #64 merged, and its tests assert the PRD 14 wording | `test/findProgramInformation.test.js` (asserts the guidance matches "contact only if you cannot find what you need here"), `e2e/findProgramInformation.spec.js` | Chromium only for the spec |
 | G-32 | `MERGED-NEEDS-VERIFICATION` | `VERIFIED` | This branch adds a behavioral check: the real interpretation request runs while fetch, http, https, sockets and DNS are watched, and the test fails on any non-loopback attempt. It passes, a companion case shows the watcher sees an outbound call, and planting a `fetch` in the interpreter makes it fail | `test/gpmeInterpretation.test.js` ("no outbound call is made while a description is interpreted (MVP 26, gate 32)") | Covers the interpretation request path only. The source scan stays as supporting static evidence. In-memory store |
 
-Rows **not** changed by the merges: G-5 and G-20 stay `MERGED-NEEDS-VERIFICATION`
-(reasons in their rows), G-28 stays `OPEN-PR-MISMATCH`, and every other open pull
-request below is still open.
+At the earlier eea57fd snapshot, G-5 and G-20 remained
+`MERGED-NEEDS-VERIFICATION` and G-28 remained `OPEN-PR-MISMATCH`.
+These classifications have not yet been reassessed for the updated integration.
 
-**Counts, current:**
+**Historical counts at eea57fd:**
 
-| Status | As of `cd22455` | Current |
+| Status | As of cd22455` | As of eea57fd |
 | --- | --- | --- |
 | `VERIFIED` | 26 | 31 |
 | `MERGED-NEEDS-VERIFICATION` | 10 | 8 |
@@ -318,12 +329,13 @@ request below is still open.
 | `TRUE-GAP` | 2 | 2 |
 | `PRODUCTION-DEPENDENCY` | 7 | 7 |
 
-**Still open and not run here:** #63 (permission administration), #68 (privacy
-regression), #69 (accessibility and the XL fix), #70 (demo verification), #74
-(failure recovery), #75 (age privacy and exact age), #76 (rehearsal), #77
-(lifecycle regression). Their rows (G-6, G-8, G-28, G-30, G-33, G-34, G-3 and
-P-36) stay as the audit recorded them until the pull requests merge and their
-tests are run.
+**Merged since the earlier snapshot:** #63 (permission administration),
+#68 (privacy regression), #69 (accessibility and the XL fix),
+#70 (demo verification), #74 (failure recovery),
+#75 (age privacy and exact age), #76 (rehearsal), and
+#77 (lifecycle regression). Their changes are included in this integration.
+The affected audit rows require reassessment against this updated tree.
+Passing validation results for this integration are recorded above.
 
 ## Revisions made to the audit
 
@@ -389,7 +401,7 @@ None carries forward as a defect unless the frozen documents support it.
 | "Important Information About Our Program" is not a standard field | PRD 9 names it as a flexible-text field | Carried forward as P-9, `MERGED-NEEDS-VERIFICATION` (a manager can create it) |
 | A shared multi-location listing is only free text | PRD 13 and MVP 14 require that both representations be possible | Carried forward as G-20, `MERGED-NEEDS-VERIFICATION`; both exist, and whether free text is enough is U-3 |
 | Data store "SharePoint Lists or Azure SQL" pending | PRD 27 confirms SharePoint Lists | Replaced by the production architecture table. G-35 tracks the documents |
-| Approved AI service pending (decision 7, R5) | PRD 7 and MVP 26 exclude external AI from the MVP | Removed from pending items (G-32) |
+| Earlier assumption that an approved AI service was pending | PRD 7 and MVP 26 exclude external AI from the MVP | Removed from pending items (G-32) |
 | Permission administration blocks freeze (Task V) | PRD 24 and MVP 23 require it | Carried forward as G-28, `OPEN-PR-MISMATCH` (the four extra restrictions, U-4) |
 
 ## Keeping this page current

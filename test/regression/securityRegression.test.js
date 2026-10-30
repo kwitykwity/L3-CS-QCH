@@ -199,6 +199,11 @@ const REFERRAL_OUTSIDERS = [P.REFERRER, P.VIEWER, P.OTHER_RECEIVER, P.DEMO_RECEI
 const PROGRAM_OUTSIDERS = [P.OTHER_MANAGER, P.WIDE_MANAGER, P.DEMO_MANAGER, P.ORG_ADMIN, P.RECEIVER, P.PERMISSION_ADMIN, P.NOBODY];
 const ORG_OUTSIDERS = [P.MANAGER, P.WIDE_MANAGER, P.DEMO_ORG_ADMIN, P.PERMISSION_ADMIN, P.RECEIVER, P.NOBODY];
 const PM = '/api/program-management';
+// Permission administration (Task Y): only ADMINISTER_PERMISSIONS at ORG
+// scope. Organization admins, Program managers and receivers are refused.
+const PERMISSION_OUTSIDERS = [P.REFERRER, P.RECEIVER, P.MANAGER, P.WIDE_MANAGER, P.ORG_ADMIN, P.DEMO_ORG_ADMIN, P.NOBODY];
+const grantIdOf = (store, userId, permission, programId) => store._grants
+  .find((g) => g.userId === userId && g.permission === permission && g.programId === programId && g.revokedAt == null).grantId;
 
 // method, path, the allowed person, the people who must be refused, and a
 // setup that returns { url, body } for a fresh store.
@@ -273,6 +278,14 @@ const MUTATIONS = [
     setup: async () => ({ url: `${PM}/programs`, body: { departmentId: 1, name: 'Synthetic New Program' } }) },
   { method: 'post', path: `${PM}/programs/:programId/move`, allowed: P.ORG_ADMIN, denied: ORG_OUTSIDERS,
     setup: async (s) => ({ url: `${PM}/programs/12/move`, body: { version: await programVersion(s, 12), departmentId: 2 } }) },
+  // Permission administration (Task Y): ADMINISTER_PERMISSIONS at ORG scope
+  { method: 'post', path: '/api/permissions/users/:userId/grants', allowed: P.PERMISSION_ADMIN, denied: PERMISSION_OUTSIDERS,
+    setup: async () => ({ url: `/api/permissions/users/${P.NOBODY}/grants`, body: { permission: 'MANAGE_PROGRAM', programId: 12 } }) },
+  { method: 'post', path: '/api/permissions/users/:userId/grants/:grantId/revoke', allowed: P.PERMISSION_ADMIN, denied: PERMISSION_OUTSIDERS,
+    setup: async (s) => ({
+      url: `/api/permissions/users/${P.OTHER_MANAGER}/grants/${grantIdOf(s, P.OTHER_MANAGER, 'MANAGE_PROGRAM', 12)}/revoke`,
+      body: {},
+    }) },
 ];
 
 // Routes that change data only for the signed-in person themselves, so
@@ -302,6 +315,12 @@ const READS = [
     path: `${PM}${tail}`, url: () => `${PM}${tail}`,
     allowed: [P.ORG_ADMIN], denied: ORG_OUTSIDERS,
   })),
+  // Permission administration (Task Y): who exists and what they hold is
+  // for ADMINISTER_PERMISSIONS only.
+  { path: '/api/permissions/overview', url: () => '/api/permissions/overview',
+    allowed: [P.PERMISSION_ADMIN], denied: PERMISSION_OUTSIDERS },
+  { path: '/api/permissions/users/:userId/grants', url: () => `/api/permissions/users/${P.RECEIVER}/grants`,
+    allowed: [P.PERMISSION_ADMIN], denied: PERMISSION_OUTSIDERS },
 ];
 
 // ---------------------------------------------------------------------------
@@ -311,6 +330,7 @@ describe('Task F route inventory', () => {
     const mounts = {
       'referrals/routes.js': '/api/referrals', 'programs/routes.js': PM, 'reporting/routes.js': '/api/reports',
       'gpme/routes.js': '/api/gpme', 'affiliation/routes.js': '/api',
+      'permissions/routes.js': '/api/permissions',
     };
     const files = [];
     const walk = (dir) => {

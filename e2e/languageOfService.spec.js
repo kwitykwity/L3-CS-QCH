@@ -36,6 +36,7 @@ async function findPrograms(page, need, min, max) {
   await page.locator('#path-guided').click();
   await expect(page.locator('#needs-options input[name="need"]').first()).toBeVisible();
   await page.locator('#needs-options label', { hasText: need }).locator('input').check();
+  await page.locator('#ageMode-range').check(); // Exact age is the default (wireframe screen 2)
   await page.locator('#ageMin').fill(String(min));
   await page.locator('#ageMax').fill(String(max));
   await page.locator('#find-programs').click();

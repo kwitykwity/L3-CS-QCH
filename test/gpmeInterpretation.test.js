@@ -479,8 +479,22 @@ describe('screen logic for the describe step', () => {
   test('a proposal fills the answers and shows what was understood', () => {
     const r = interpretInterpretResponse(body({ ageRange: { min: 17, max: 17 }, participantZip: '11101' }));
     assert.equal(r.state, 'PROPOSED');
-    assert.deepEqual([r.needCategoryIds, r.ageMin, r.ageMax, r.matchZip], [[3], '17', '17', '11101']);
+    // One age fills the Exact age box, not a 17-to-17 range (Handoff PRD 5.3, Task HH).
+    assert.deepEqual([r.needCategoryIds, r.ageMode, r.ageExact, r.ageMin, r.ageMax, r.matchZip],
+      [[3], 'exact', '17', '', '', '11101']);
     assert.deepEqual(r.understood, ['Need: Employment', 'Age: 17', 'ZIP code: 11101']);
+  });
+
+  test('a proposed range fills the range boxes; no proposed age leaves the mode alone', () => {
+    const range = interpretInterpretResponse(body({ ageRange: { min: 18, max: 24 } }));
+    assert.deepEqual([range.ageMode, range.ageExact, range.ageMin, range.ageMax], ['range', '', '18', '24']);
+    const none = interpretInterpretResponse(body({}));
+    assert.deepEqual([none.ageMode, none.ageExact, none.ageMin, none.ageMax], [null, '', '', '']);
+  });
+
+  test('a proposed exact age is matched as that one age', () => {
+    const r = interpretInterpretResponse(body({ ageRange: { min: 17, max: 17 } }));
+    assert.deepEqual(toMatchRequest(r), { needCategoryIds: [3], ageRange: { min: 17, max: 17 } });
   });
 
   test('the filled answers become exactly the three approved criteria', () => {
