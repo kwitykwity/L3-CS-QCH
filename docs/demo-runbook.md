@@ -152,15 +152,13 @@ isn't synthetic.
 - **L2** The demo runs on the presenting laptop only (`127.0.0.1`). Data is
   in memory and vanishes on reset. That is intended for a demo.
 - **L3** Notifications are simulated (section 4).
-- **L4** "Describe the need in your own words" (PR #43) is **not on `main`**.
-  Don't present it unless it has merged and this runbook has been updated.
-  The requirement is recorded as confirmed by QCH, but two team decisions
-  about it are still open: R3 and R4 in
-  [requirements-reconciliation-register.md](requirements-reconciliation-register.md).
-- **L5** (Fixed in Task BB: the New Referral entry screen now fits at XL
-  on a phone-width screen. Was issue #46.)
-- **L6** Matching uses need, age range and ZIP only. Results are
-  suggestions, not eligibility decisions.
+- **L4** The describe-the-need step proposes structured answers for employee
+  review before matching. Governing requirements: Frozen Handoff PRD
+  §§5.1–5.3 and §7; Handoff MVP §§5–6 and §26.
+- **L5** Fixed in Task BB: the New Referral entry screen now fits at XL
+  on a phone-width screen. Previously tracked as issue #46.
+- **L6** Matching uses need, participant age (exact or range), and ZIP only.
+  Results are suggestions, not eligibility decisions.
 
 ## 8. QCH IT items that must NOT be presented as done
 
