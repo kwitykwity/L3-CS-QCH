@@ -684,15 +684,9 @@ test.describe('keyboard and accessibility of the guided journey (PRD 14.2, 14.3,
     await page.locator('.text-size__btn[data-size="M"]').click();
   });
 
-  // KNOWN DEFECT (pre-existing; also fails with PR #32's CSS), found by this
-  // suite and not fixed here (test-only task). Follow-up:
-  // https://github.com/kwitykwity/L3-CS-QCH/issues/46
-  // At XL on a 375px screen the "How do you want to choose the Program?"
-  // group on the entry screen (.path-btn, #path-label) is 16px wider than
-  // the screen, so the page scrolls sideways. directReferral.spec.js misses
-  // it because it only measures after the entry screen is hidden. Remove
-  // `fixme` once the entry screen reflows.
-  test.fixme('XL at phone width: the entry screen itself does not scroll sideways', async ({ page }) => {
+  // Was issue #46 (fixed in Task BB): at XL on a phone the path buttons on
+  // the entry screen were wider than the screen. They stack now.
+  test('XL at phone width: the entry screen itself does not scroll sideways', async ({ page }) => {
     await page.setViewportSize({ width: 375, height: 800 });
     await page.goto('/referral/');
     await page.locator('.text-size__btn[data-size="XL"]').click();
