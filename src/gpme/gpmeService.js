@@ -33,6 +33,7 @@ import { validateInterpretRequest } from './interpretation/validateInterpretRequ
 import { validateInterpretation, validateInterpreterVersion } from './interpretation/validateInterpretation.js';
 import { readMatchingFacts } from './programFacts.js';
 import { readCurrentProgramInformation } from '../programs/currentProgramInformation.js';
+import { attachProgramInformation } from './programInformationForResults.js';
 import { matchingFactsOf } from '../programs/validateMatchingChange.js';
 
 function compareText(a, b) {
@@ -215,7 +216,12 @@ export function createGpmeService({
       } catch (err) {
         return unableToMatch(err);
       }
-      return addServiceLanguages(result, candidates);
+      // Information for staff, attached AFTER matching so it can never add,
+      // remove, or reorder a result: language of service (Task W), then
+      // current Program information (Task X). Each leaves its own part out
+      // if it cannot be read; neither can fail the match.
+      const withLanguages = await addServiceLanguages(result, candidates);
+      return attachProgramInformation(store, withLanguages, { logFailure });
     },
   };
 

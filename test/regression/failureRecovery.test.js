@@ -25,6 +25,9 @@ import { createSimulatedOutboxSender } from '../../src/notifications/simulatedOu
 import { NEW_REFERRAL } from '../../src/notifications/content.js';
 import { FAILURE_CATEGORIES, NotificationSendError } from '../../src/notifications/errors.js';
 
+// The generic answer to an unexpected server failure (src/errorHandler.js).
+const SERVER_ERROR = { error: 'Internal Server Error' };
+
 const WORKER = 100;   // sends from Program 10
 const INTAKE = 200;   // Programs 11 and 12: view, respond, record, correct
 const P_SENDER = 10;
@@ -240,10 +243,15 @@ describe('Task EE: failed writes report no success, change nothing, and retry on
     const id = (await worker.post('/api/referrals', draft(P_EMAIL))).body.referral.referralId;
     const url = (suffix) => `/api/referrals/${id}${suffix}`;
     const version = async () => (await intake.get(url(''))).body.referral.version;
-    const unchanged = async (label, attempt) => {
+    // Each refusal must give its exact expected answer, so an unexpected
+    // server error can never pass as a refusal. Injected audit failures are
+    // the only expected 500s, with the generic body and nothing else.
+    const unchanged = async (label, [status, code], attempt) => {
       const before = snapshot(store);
       const res = await attempt();
-      assert.ok(res.status >= 400, `${label}: ${res.status}`);
+      assert.equal(res.status, status, `${label}: status`);
+      if (status === 500) assert.deepEqual(res.body, SERVER_ERROR, `${label}: generic error body`);
+      else assert.equal(res.body?.code, code, `${label}: error code`);
       assert.notEqual(res.body?.status, 'RECEIVED');
       assert.equal(res.body?.referral, undefined, `${label}: no referral returned as if saved`);
       assert.equal(snapshot(store), before, `${label}: changed something`);
@@ -251,33 +259,32 @@ describe('Task EE: failed writes report no success, change nothing, and retry on
     };
 
     // Invalid requests.
-    await unchanged('bad decision', () => intake.post(url('/response'), { decision: 'MAYBE' }));
-    await unchanged('extra field', () => intake.post(url('/response'), { decision: 'ACCEPTED', actorUserId: WORKER }));
-    await unchanged('outcome too early', () => intake.post(url('/outcome'), { outcome: 'RESULTED_IN_SERVICE' }));
+    await unchanged('bad decision', [400, 'INVALID_REQUEST'], () => intake.post(url('/response'), { decision: 'MAYBE' }));
+    await unchanged('extra field', [400, 'UNEXPECTED_FIELD'], () => intake.post(url('/response'), { decision: 'ACCEPTED', actorUserId: WORKER }));
+    await unchanged('outcome too early', [409, 'OUTCOME_NOT_ALLOWED'], () => intake.post(url('/outcome'), { outcome: 'RESULTED_IN_SERVICE' }));
 
     // Audit failure on the response: no success, nothing saved; retry once.
     store._failNextAudit();
-    await unchanged('response audit fails', () => intake.post(url('/response'), { decision: 'ACCEPTED' }));
+    await unchanged('response audit fails', [500], () => intake.post(url('/response'), { decision: 'ACCEPTED' }));
     assert.equal((await intake.post(url('/response'), { decision: 'ACCEPTED' })).status, 200);
-    await unchanged('second response', () => intake.post(url('/response'), { decision: 'NOT_APPROPRIATE', reasonId: 1 }));
+    await unchanged('second response', [409, 'ALREADY_RESPONDED'], () => intake.post(url('/response'), { decision: 'NOT_APPROPRIATE', reasonId: 1 }));
 
     // Audit failure on the outcome; retry once; a second record is refused.
     store._failNextAudit();
-    await unchanged('outcome audit fails', () => intake.post(url('/outcome'), { outcome: 'RESULTED_IN_SERVICE' }));
+    await unchanged('outcome audit fails', [500], () => intake.post(url('/outcome'), { outcome: 'RESULTED_IN_SERVICE' }));
     const recorded = await intake.post(url('/outcome'), { outcome: 'RESULTED_IN_SERVICE' });
     assert.equal(recorded.status, 200);
-    await unchanged('outcome twice', () => intake.post(url('/outcome'), { outcome: 'DID_NOT_RESULT_IN_SERVICE' }));
+    await unchanged('outcome twice', [409, 'OUTCOME_ALREADY_RECORDED'], () => intake.post(url('/outcome'), { outcome: 'DID_NOT_RESULT_IN_SERVICE' }));
 
     // Corrections: audit failure rolls back; a stale screen is refused with
     // what is saved now, never overwriting it.
     const seen = await version();
     store._failNextAudit();
-    await unchanged('outcome correction audit fails', () => intake.post(url('/outcome/correction'), { outcome: 'DID_NOT_RESULT_IN_SERVICE', version: seen }));
+    await unchanged('outcome correction audit fails', [500], () => intake.post(url('/outcome/correction'), { outcome: 'DID_NOT_RESULT_IN_SERVICE', version: seen }));
     assert.equal((await intake.post(url('/outcome/correction'), { outcome: 'DID_NOT_RESULT_IN_SERVICE', version: seen })).status, 200);
-    const stale = await unchanged('stale outcome correction', () => intake.post(url('/outcome/correction'), { outcome: 'RESULTED_IN_SERVICE', version: seen }));
-    assert.equal(stale.body.code, 'REFERRAL_CHANGED');
+    const stale = await unchanged('stale outcome correction', [409, 'REFERRAL_CHANGED'], () => intake.post(url('/outcome/correction'), { outcome: 'RESULTED_IN_SERVICE', version: seen }));
     assert.equal(stale.body.current.serviceOutcome, 'DID_NOT_RESULT_IN_SERVICE');
-    await unchanged('stale decision correction', () => intake.post(url('/response/correction'), { decision: 'NOT_APPROPRIATE', reasonId: 1, version: seen }));
+    await unchanged('stale decision correction', [409, 'REFERRAL_CHANGED'], () => intake.post(url('/response/correction'), { decision: 'NOT_APPROPRIATE', reasonId: 1, version: seen }));
 
     // One audit entry per change that really happened.
     const trail = store._referralAuditEvents.filter((e) => e.entityType === 'REFERRAL' && e.entityId === id).map((e) => e.action);
@@ -294,7 +301,7 @@ describe('Task EE: failed writes report no success, change nothing, and retry on
     const body = draft(P_EMAIL);
     store._failNextAudit();
     const failed = await worker.post('/api/referrals', body);
-    assert.ok(failed.status >= 500);
+    assert.deepEqual([failed.status, failed.body], [500, SERVER_ERROR], 'the injected audit failure is a generic 500');
     assert.notEqual(failed.body?.status, 'RECEIVED');
     noMarkers(JSON.stringify(failed.body ?? {}), 'failed create');
     await settle();
