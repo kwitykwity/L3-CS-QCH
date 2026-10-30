@@ -31,6 +31,69 @@ test.describe('Permissions screen', () => {
     await clearGrants(request, STAFF_A);
     await clearGrants(request, STAFF_B);
   });
+      test('an unconfirmed change stays locked through failed reloads until permissions load', async ({ page, request }) => {
+    const created = await request.post(
+      `/api/permissions/users/${STAFF_A}/grants`,
+      { data: { permission: 'VIEW_RECEIVED_REFERRAL', programId: 4 } },
+    );
+    expect(created.status()).toBe(201);
+    await openPerson(page, 'Synthetic Staff A (sample)');
+
+    const grantsPath = `/api/permissions/users/${STAFF_A}/grants`;
+    let failOverview = true;
+    let failPerson = true;
+
+    await page.route('**/api/permissions/**', async (route) => {
+      const req = route.request();
+      const path = new URL(req.url()).pathname;
+      const fail = (req.method() === 'POST' && path === grantsPath)
+        || (req.method() === 'GET'
+          && path === '/api/permissions/overview' && failOverview)
+        || (req.method() === 'GET'
+          && path === grantsPath && failPerson);
+
+      if (fail) {
+        await route.fulfill({
+          status: 503,
+          contentType: 'application/json',
+          body: JSON.stringify({ error: 'Internal Server Error' }),
+        });
+      } else {
+        await route.continue();
+      }
+    });
+
+    await page.locator('#permission-select').selectOption('MANAGE_ORGANIZATION');
+    await page.locator('#add-permission').click();
+    await expect(status(page)).toHaveText(
+      'The change was not confirmed. Reload this person before trying again.',
+    );
+
+    const remove = page.locator('[data-remove]');
+    await expect(remove).toHaveCount(1);
+
+    // Neither a failed overview nor a failed person reload may unlock writes.
+    for (const overviewFails of [true, false]) {
+      failOverview = overviewFails;
+      const reloaded = page.waitForResponse((res) =>
+        res.request().method() === 'GET'
+        && new URL(res.url()).pathname === grantsPath);
+      await page.locator('#reload').click();
+      await reloaded;
+      await expect(status(page)).toHaveText(
+        'Permissions could not be loaded. Try again.',
+      );
+      await expect(page.locator('#add-permission')).toBeDisabled();
+      await expect(remove).toBeDisabled();
+    }
+
+    // A successful permissions reload restores the controls.
+    failPerson = false;
+    await page.locator('#reload').click();
+    await expect(status(page)).toHaveText('Permissions loaded.');
+    await expect(page.locator('#add-permission')).toBeEnabled();
+        await expect(remove).toBeEnabled();
+  });
 
   test('add and remove a permission by keyboard; the list follows', async ({ page }) => {
     await page.goto('/');

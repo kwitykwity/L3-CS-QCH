@@ -14,6 +14,7 @@ const $ = (id) => document.getElementById(id);
 let overview = null;   // { users, programs, grantable }
 let person = null;     // { user, canAdd, grants }
 let busy = false;
+let changeUnconfirmed = false;
 
 let storage;
 try { storage = window.localStorage; } catch { storage = null; }
@@ -50,8 +51,10 @@ async function request(method, path, body) {
 
 function controls() {
   $('choose-controls').disabled = busy || !overview;
-  $('add-controls').disabled = busy;
-  for (const button of document.querySelectorAll('[data-remove]')) button.disabled = busy;
+  $('add-controls').disabled = busy || changeUnconfirmed;
+  for (const button of document.querySelectorAll('[data-remove]')) {
+    button.disabled = busy || changeUnconfirmed;
+  }
 }
 
 function option(value, text) {
@@ -129,6 +132,7 @@ function renderGrants(grants) {
 }
 
 function renderPerson(data) {
+  changeUnconfirmed = false;
   person = { ...data };
   $('person-panel').hidden = false;
   $('person-heading').textContent = personHeading(data.user);
@@ -176,16 +180,15 @@ async function loadPerson(userId) {
 }
 
 function applyChange(outcome) {
+  if (outcome.state === 'UNKNOWN') {
+    changeUnconfirmed = true;
+  }
   if (outcome.grants) renderGrants(outcome.grants);
   if (outcome.state === 'NOT_ADMIN') {
     $('person-panel').hidden = true;
     overview = null;
   }
-  if (outcome.state === 'UNKNOWN') {
-    // Not confirmed: block further changes until this person is reloaded.
-    $('add-controls').disabled = true;
-    for (const button of document.querySelectorAll('[data-remove]')) button.disabled = true;
-  }
+  controls();
   message(outcome.message, outcome.tone);
 }
 

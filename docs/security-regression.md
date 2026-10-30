@@ -29,6 +29,77 @@ problems, three faults were introduced on purpose and then removed:
 | Program edit skipping its permission check | 7 |
 | Program view returning every stored column | 1 |
 
+## Privacy and data-leakage regression (Task DD)
+
+Checks that participant and referral information is kept out of logs,
+aggregate reports, notifications, URLs, browser storage and unauthorized
+responses. Governing requirements, from the frozen handoff documents:
+
+- Frozen Handoff PRD 34 (data minimization; no participant information in
+  application logs, aggregate reports or notification content; secure error
+  handling), 25 (reporting stays aggregate), 21 (notification after the
+  referral is saved), 5.4 and 28 (age is a temporary matching input, never
+  persisted), 35 (synthetic data only outside QCH production).
+- Handoff MVP 25 (Privacy and Security), 24 (Reporting), 21
+  (Notifications), 6 (Participant Age Input); acceptance gates 8, 29, 30
+  and 31.
+- Current Handoff Wireframes: screen 2 ("Age is used only for program
+  matching and will not be saved on the referral"), screen 7 ("Collect only
+  necessary pre-intake information"), screen 14 (aggregate-only reports,
+  synthetic data banner).
+
+Authorized referral views
+(the creator, and the receiving Program's permitted staff) legitimately
+show it, and these tests do not treat that as a leak. Two new files sit on
+top of the suites above and do not repeat them:
+
+- `test/regression/privacyRegression.test.js` (`npm test`): the whole app
+  as the synthetic dev server builds it, driven with marked synthetic data
+  through describe the need, matching, GPME-assisted and Direct
+  Referral, Not Appropriate with an explanation, corrections, a failed
+  audit, every report, and notification sending (including a NO_RECIPIENT
+  failure); plus an interpreter that fails while holding the worker's
+  text, and 22 refused or invalid requests that carry the markers.
+- `e2e/privacy.spec.js` (`npm run test:e2e`): one referral carried through
+  every screen in Chromium, recording every request, page address and
+  console message, and checking storage and every cookie (HttpOnly too)
+  at seven points during the journey.
+
+| Acceptance item | Where it is checked |
+| --- | --- |
+| No participant data in URLs or query strings | `e2e/privacy.spec.js`: every request and page address; page addresses carry numeric IDs only. Server routes refuse unknown query parameters without echoing them (`securityPass`) |
+| No sensitive data in browser storage | `e2e/privacy.spec.js`: checked at seven points during the journey, each while that sensitive page is open (after matching, with the details form filled in, after sending, after the Not appropriate response, after the correction and outcome, on the sent referral's page, and at the end). localStorage holds only the text size; sessionStorage, IndexedDB, Cache Storage and service workers are empty at every point. A leak that is cleaned up before the end (planted: copied into sessionStorage, removed on leaving the page) fails at the step where it happens. Also `e2e/gpme.spec.js` for the describe step |
+| No participant data in cookies | `e2e/privacy.spec.js` reads the browser's own cookie jar (`page.context().cookies()`), so HttpOnly cookies, which `document.cookie` cannot see, are checked too, at the same seven points: no cookie name or value carries a marker. **Scope:** the e2e fixture is the fixed-identity dev server, which sets no cookies, so that test also expects an empty jar. That expectation does not apply to the Task O demo (`npm run dev:demo`), which legitimately uses an HttpOnly session cookie. `privacyRegression` covers the demo: every `Set-Cookie` through sign-in, a referral, a Not Appropriate response, switching person and sign-out is only `qch_demo_session` with a random 32-character token (or the sign-out clear), and carries no marker. Production cookies wait on Entra sign-in, a QCH IT production dependency (Frozen Handoff PRD 22 and 37 item 3; Handoff MVP 22 and 31 item 3) |
+| Logs and console carry no participant data or free text | `privacyRegression` (every console channel, whole workflow, failures included); `e2e/privacy.spec.js` (browser console and page errors); `securityPass`, `errorHandler`, `notificationWiring` |
+| Notifications stay generic | `privacyRegression` (every email sent in the run); `notifications`, `notificationWiring` |
+| Reporting is aggregate only | `privacyRegression`: every report, two periods, no markers and no referral fields; `securityRegression` |
+| Unauthorized and error responses leak nothing | `privacyRegression` (22 invalid requests, an unknown user, no sign-in); `securityPass`, `securityRegression` |
+| Describe-the-need text stays transient | `privacyRegression` (not echoed, not logged even when the interpreter fails holding it); `gpmeInterpretation`, `e2e/gpme.spec.js` |
+
+**Result: no leaks found, no code changed.** By design, the receiving
+queue shows the need (referral context) to the authorized receivers so they
+can triage; Frozen Handoff PRD 34 keeps participant information out of
+logs, aggregate reports and notification content, not out of the
+authorized receivers' own queue. The describe step proposes the ZIP it
+read back to the worker; it never echoes the text. Report data comes from
+a store query that returns counts only, so a report cannot carry a name
+unless that query changes.
+
+To check that the new tests catch real leaks, faults were planted and then
+removed. Each one made a test fail:
+
+| Fault planted | Caught by |
+| --- | --- |
+| Interpreter failures logged with the error message | `privacyRegression` |
+| The response route logs its request body | `privacyRegression` |
+| Referral errors echo the request body | `privacyRegression` |
+| The receiving page logs its text to the console | `e2e/privacy.spec.js` |
+| The sent page copies itself into sessionStorage | `e2e/privacy.spec.js` |
+| The sent list puts a name in the page address | `e2e/privacy.spec.js` |
+| The sent list sends a name in a query string | `e2e/privacy.spec.js` |
+| Creating a referral sets an HttpOnly cookie holding the participant's name (invisible to `document.cookie`) | `e2e/privacy.spec.js` and `privacyRegression` (demo cookie test) |
+| The receiving page copies itself into sessionStorage and removes it on leaving (gone by the end of the journey) | `e2e/privacy.spec.js`, at step 4. The end-only version of the test passed with this leak |
+
 ## Route inventory
 
 54 API routes (33 use POST, PUT or PATCH: 29 change shared data, 3 are self-service or read-only, plus `POST /api/gpme/interpret` from Task D, which has no row below yet), plus `GET /health` (public, availability only). People used
