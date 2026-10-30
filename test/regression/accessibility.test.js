@@ -224,6 +224,39 @@ describe('text size (PRD 14.5)', () => {
       assert.deepEqual(pxSizes, [':root'], `${name}: only :root may set a px size`);
     }
   });
+
+  // Task BB: a grid column with a rem minimum grows with the text size; at XL
+  // on a phone it was wider than the screen (issue #46, the sent and
+  // received lists). min(..., 100%) keeps it inside the screen.
+  test('no grid column has a size-scaled minimum that can be wider than the screen', () => {
+    for (const { name, css } of stylesheets) {
+      const unsafe = [...css.matchAll(/minmax\(\s*([^,]+?)\s*,/g)].map((m) => m[1])
+        .filter((min) => /\d(\.\d+)?(rem|em|px|ch)\b/.test(min) && !min.startsWith('min('));
+      assert.deepEqual(unsafe, [], `${name}: wrap the minimum in min(<size>, 100%)`);
+    }
+  });
+
+  // Task BB: number boxes were left out of the shared control style, so the
+  // Program matching age range stayed at the browser's default size.
+  test('every kind of text box the pages use, in HTML or built by page scripts, is in the shared control style', () => {
+    const skip = ['radio', 'checkbox', 'hidden', 'submit', 'button', 'reset'];
+    const fromHtml = pages.flatMap((p) => tags(p.html, 'input').map((a) => attr(a, 'type') ?? 'text'));
+    // Page scripts that build inputs: `x.type = 'number'`, or a choice such as
+    // `x.type = cond ? 'number' : 'date'` (the Program fields page). Task BB
+    // found a scripted date box that the HTML-only version of this check missed.
+    const scripts = files.filter((f) => f.endsWith('.js')).map((f) => readFileSync(f, 'utf8'));
+    const fromScripts = scripts.flatMap((js) => [...js.matchAll(/\.type\s*=\s*([^;\n]+)/g)]
+      .flatMap((m) => [...m[1].matchAll(/'([a-z-]+)'/g)].map((q) => q[1])));
+    const used = new Set([...fromHtml, ...fromScripts].filter((type) => !skip.includes(type)));
+    assert.ok(used.has('text') && used.has('date') && used.has('number'));
+    const shared = stylesheets.find((s) => s.name === path.join('referral', 'referral.css')).css;
+    for (const type of used) {
+      // A page-wide selector (not one scoped to a single page's container).
+      assert.match(shared, new RegExp(`(^|[,}])\\s*input\\[type="${type}"\\][^{]*\\{[^}]*font: inherit`, 'm'), `input type="${type}" is not in the shared control style`);
+    }
+    // The Reporting Center has its own stylesheet and styles its date box there.
+    assert.match(stylesheets.find((s) => s.name === path.join('reporting', 'reporting.css')).css, /input\[type="date"\][^{]*\{[^}]*font: inherit/);
+  });
 });
 
 describe('test tools stay out of the shipped app', () => {

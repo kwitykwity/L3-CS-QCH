@@ -155,10 +155,10 @@ isn't synthetic.
 - **L4** The describe-the-need step proposes structured answers for employee
   review before matching. Governing requirements: Frozen Handoff PRD
   §§5.1–5.3 and §7; Handoff MVP §§5–6 and §26.
-- **L5** Known issue #46: at XL text on a phone-width screen, the New
-  Referral entry screen doesn't fit. Present at desktop width.
-- **L6** Matching uses need, age range and ZIP only. Results are
-  suggestions, not eligibility decisions.
+- **L5** Fixed in Task BB: the New Referral entry screen now fits at XL
+  on a phone-width screen. Previously tracked as issue #46.
+- **L6** Matching uses need, participant age (exact or range), and ZIP only.
+  Results are suggestions, not eligibility decisions.
 
 ## 8. QCH IT items that must NOT be presented as done
 
