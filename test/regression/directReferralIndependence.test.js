@@ -100,9 +100,23 @@ function startApp({ gpmeDown }) {
     store._failLanguages(true);
   }
 
-  // Notification spy: the notifier is started after the referral commits.
+  // Notifier spy. It records each INVOCATION of the notifier, not an email:
+  // no sender is attached here, so nothing is delivered. (One delivery per
+  // referral, however often the notifier is invoked, is tested in
+  // test/notificationWiring.test.js and test/regression/notificationFailure.test.js.)
+  // At the moment of each invocation it also records whether the referral
+  // and its CREATED audit record were already saved (PRD §21).
   const notified = [];
-  const notifier = { async notifyReferralCommitted({ referralId }) { notified.push(referralId); } };
+  const notifier = {
+    async notifyReferralCommitted({ referralId }) {
+      notified.push({
+        referralId,
+        savedBefore: store._referrals.some((r) => r.referralId === referralId)
+          && store._referralAuditEvents.some((e) => e.entityType === 'REFERRAL' && e.entityId === referralId && e.action === 'CREATED'),
+      });
+    },
+  };
+  const invocationsFor = (referralId) => notified.filter((n) => n.referralId === referralId);
 
   let current = null;
   const app = createApp({
@@ -115,7 +129,7 @@ function startApp({ gpmeDown }) {
     put: (url, body) => { current = userId; return request(app).put(url).send(body); },
   });
   const resetCounts = () => { for (const key of Object.keys(gpmeCalls)) gpmeCalls[key] = 0; };
-  return { store, as, gpmeCalls, resetCounts, notified };
+  return { store, as, gpmeCalls, resetCounts, notified, invocationsFor };
 }
 
 const waitFor = async (check, what) => {
@@ -147,14 +161,19 @@ async function directJourney(t) {
   const body = draft();
   const sent = await worker.post('/api/referrals', body);
   assert.equal(sent.status, 201);
-  const retry = await worker.post('/api/referrals', body);
-  assert.ok([200, 201].includes(retry.status), `retry: ${retry.status}`);
-  assert.equal(t.store._referrals.length, 1, 'one referral, not two');
   const id = sent.body.referral.referralId;
+  const retry = await worker.post('/api/referrals', body);
+  assert.deepEqual([retry.status, retry.body.status, retry.body.referral.referralId], [200, 'ALREADY_RECEIVED', id]);
+  assert.equal(t.store._referrals.length, 1, 'one referral, not two');
   const url = (suffix = '') => `/api/referrals/${id}${suffix}`;
 
-  // The receiving Program is notified after the referral is saved (PRD §21).
-  await waitFor(() => t.notified.includes(id), 'the notification to start');
+  // The notifier is invoked for the send and again for its retry (by
+  // design: the notification service, not this path, keeps it to one
+  // delivery). Wait for BOTH invocations, and check that at each one the
+  // referral and its CREATED audit record were already saved (PRD §21).
+  await waitFor(() => t.invocationsFor(id).length === 2, 'both notifier invocations');
+  assert.deepEqual(t.invocationsFor(id).map((n) => n.savedBefore), [true, true],
+    'the referral was saved before each notifier invocation');
 
   // Awaiting Response in the receiving queue (PRD §16, §17).
   const queue = await t.as(INTAKE).get('/api/referrals/received');
@@ -184,7 +203,7 @@ async function directJourney(t) {
     source: row.source,
     gpmeEvaluationId: row.gpmeEvaluationId ?? null,
     evaluations: t.store._gpmeEvaluations.length,
-    notificationStarts: t.notified.filter((n) => n === id).length,
+    notifierInvocations: t.invocationsFor(id).length,
     decision: row.decision,
     serviceOutcome: row.serviceOutcome,
     senderStage: senderView.body.referral.stage,
@@ -203,7 +222,8 @@ describe('Task KK: Direct Referral does not depend on GPME (PRD §3.4, §4.2)', 
     const worker = down.as(WORKER);
     const interpreted = await worker.post('/api/gpme/interpret', { text: 'Synthetic: looking for work' });
     assert.equal(interpreted.body.status, 'UNABLE_TO_INTERPRET');
-    assert.ok((await worker.get('/api/gpme/need-categories')).status >= 500, 'need categories down');
+    const categories = await worker.get('/api/gpme/need-categories');
+    assert.deepEqual([categories.status, categories.body], [500, { error: 'Internal Server Error' }], 'need categories down');
     const matched = await worker.post('/api/gpme/match', { needCategoryIds: [EMPLOYMENT] });
     assert.deepEqual([matched.status, matched.body.status], [503, 'UNABLE_TO_MATCH']);
     assert.equal(down.store._referrals.length, 0);
@@ -225,10 +245,10 @@ describe('Task KK: Direct Referral does not depend on GPME (PRD §3.4, §4.2)', 
     assert.equal(withoutGpme.source, 'DIRECT');
     assert.equal(withoutGpme.gpmeEvaluationId, null);
     assert.equal(withoutGpme.evaluations, 0);
-    // Started for the send and again for its retry, by design: the real
-    // notifier keeps one delivery per referral, so only one email goes out
-    // (test/notificationWiring.test.js). Here it shows notification runs.
-    assert.equal(withoutGpme.notificationStarts, 2);
+    // Notifier INVOCATIONS (send + retry), not emails: no sender is
+    // attached here. The real notification service sends at most one
+    // email per referral (test/notificationWiring.test.js).
+    assert.equal(withoutGpme.notifierInvocations, 2);
     assert.deepEqual([withoutGpme.decision, withoutGpme.serviceOutcome], ['ACCEPTED', 'DID_NOT_RESULT_IN_SERVICE']);
     assert.deepEqual([withoutGpme.senderStage, withoutGpme.senderOutcome], ['COMPLETE', 'DID_NOT_RESULT_IN_SERVICE']);
     assert.deepEqual(withoutGpme.trail, [
@@ -255,6 +275,8 @@ describe('Task KK: Direct Referral does not depend on GPME (PRD §3.4, §4.2)', 
     assert.equal(sent.status, 201);
     assert.equal(t.store._referrals.length, 1);
     assert.equal(t.store._referrals[0].source, 'DIRECT');
-    await waitFor(() => t.notified.length === 1, 'the notification to start');
+    await waitFor(() => t.notified.length === 1, 'one notifier invocation');
+    assert.deepEqual(t.notified, [{ referralId: sent.body.referral.referralId, savedBefore: true }],
+      'invoked once, for the Direct referral, after it was saved');
   });
 });
