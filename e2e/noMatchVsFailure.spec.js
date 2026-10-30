@@ -37,6 +37,7 @@ async function openGuided(page) {
 
 async function childcareForAdults(page) {
   await need(page, 'Childcare (sample)').check();
+  await page.locator('#ageMode-range').check(); // Exact age is the default (wireframe screen 2)
   await page.locator('#ageMin').fill('40');
   await page.locator('#ageMax').fill('45');
 }
