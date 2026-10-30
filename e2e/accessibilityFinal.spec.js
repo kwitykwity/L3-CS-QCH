@@ -259,6 +259,50 @@ test('every screen, populated: the text size reaches every form control, includi
   }
 });
 
+// Task 201: checkboxes and radio buttons are left out of the test above (their
+// font size does not draw them), but they are controls too. Browsers draw them
+// at a fixed ~13px, so at XL they stayed small beside 24px labels. At every
+// size each box must be square and at least as large as the root text size,
+// and it must grow from S to XL (Frozen Handoff PRD 33: text size applies
+// consistently to relevant controls; MVP 27). Some pages draw them larger on
+// purpose (the Program fields "required" boxes are 1.25rem); that passes.
+// Sideways scrolling at XL on 375px and 320px is checked by the first test.
+const SCREENS_WITH_BOXES = [
+  'Find a Program, questions', 'Referral details', 'Received referral',
+  'Program fields (six seeded types)', 'Program matching (with languages)',
+];
+
+test('every screen, populated: checkboxes and radio buttons grow with the text size (Task 201)', async ({ page, request }) => {
+  test.setTimeout(180000);
+  const data = await seed(page, request);
+  const boxes = () => page.evaluate(() => [...document.querySelectorAll('main input[type=checkbox], main input[type=radio]')]
+    .filter((el) => el.getBoundingClientRect().width > 0)
+    .map((el, i) => {
+      const r = el.getBoundingClientRect();
+      return { box: el.id || `${el.type} ${i}`, width: Math.round(r.width), height: Math.round(r.height) };
+    }));
+  const withBoxes = [];
+  for (const screen of screens(data)) {
+    const [name] = screen;
+    await open(page, screen);
+    if (!(await expectSizeControls(page, name))) continue; // explicit exception only (NO_SIZE_CONTROL)
+    const widthAt = {};
+    for (const [size, px] of Object.entries(SIZES)) {
+      await page.locator(`[data-size="${size}"]`).click();
+      const all = await boxes();
+      widthAt[size] = Object.fromEntries(all.map((b) => [b.box, b.width]));
+      const wrong = all.filter((b) => b.width !== b.height || b.width < px);
+      expect(wrong, `${name} at ${size}: boxes not square or smaller than the ${px}px text`).toEqual([]);
+    }
+    const ids = Object.keys(widthAt.S);
+    const stuck = ids.filter((box) => !(widthAt.XL[box] > widthAt.S[box]));
+    expect(stuck, `${name}: boxes that do not grow from S to XL`).toEqual([]);
+    if (ids.length > 0) withBoxes.push(name);
+  }
+  // The screens that have these controls were really checked.
+  expect(withBoxes).toEqual(expect.arrayContaining(SCREENS_WITH_BOXES));
+});
+
 for (const colorScheme of ['light', 'dark']) {
   test(`every screen, populated, passes axe at XL on a 320px screen (${colorScheme})`, async ({ page, request }) => {
     test.setTimeout(180000);
