@@ -45,7 +45,12 @@ if (config.nodeEnv !== 'development') {
 // until they choose. Without it, the one fixed developer identity is used.
 const demoMode = process.env.QCH_DEMO_SIGN_IN === 'true';
 let demoSignIn = null;
-let seed = syntheticSeed({ programManagement: true, organizationManagement: true, receiving: true });
+// permissionAdministration (Task Y) makes the fixed developer an
+// administrator for the Permissions screen. Demo personas get no admin
+// rights (Task O), so in demo mode nobody signed in can use that screen.
+let seed = syntheticSeed({
+  programManagement: true, organizationManagement: true, receiving: true, permissionAdministration: true,
+});
 if (demoMode) {
   const { createDemoSignIn } = await import('./demoSignIn.js');
   const { withDemoPeople } = await import('./demoPersonas.js');

@@ -95,9 +95,55 @@
 //   for the same cohort and scope as countReferrals (see its comment).
 //
 // Read methods (card 6, receiving queue + authorization):
-//   getActiveGrants(userId) -> [{ permission, scopeType, programId,
-//       departmentId, grantSource, revokedAt }] from dbo.user_grants where
-//       revoked_at IS NULL. Authorization is decided by the service, not here.
+//   getActiveGrants(userId) -> [{ grantId, permission, scopeType, programId,
+//       departmentId, grantSource, grantedAt, revokedAt }] from dbo.user_grants
+//       where revoked_at IS NULL. Authorization is decided by the service, not here.
+//
+// Permission administration (Task Y, PRD 3.8). All inside withTransaction.
+// The CONTRACT below is what any store must guarantee; the service and the
+// tests in test/permissionAdministration.test.js depend on it.
+//   tx.holdPermissionAdministration()
+//       One grant or revoke at a time across the whole application. Called
+//       FIRST, before reading anything, so two administrators editing each
+//       other cannot deadlock and cannot both add the same grant.
+//   tx.listUsers()       the users the screen may show (no lock needed: the
+//       hold above plus tx.getUser on the target cover what matters)
+//   tx.insertGrant({ userId, permission, scopeType, programId, departmentId,
+//       grantSource }) -> { grantId, ..., grantedAt, revokedAt: null }
+//   tx.revokeGrant({ grantId, userId }) -> { ...grant, revokedAt } | null
+//       Sets revokedAt only if that grant belongs to that user and is still
+//       active; otherwise null (already revoked or not this user's), and
+//       nothing is written.
+//   Both take effect only when the transaction commits, together with the
+//   audit event: if the audit write fails, no grant changes. A revocation
+//   also waits for (or is re-checked by) any receiving action already
+//   using that user's grants, so it applies to the next action.
+//
+// This in-memory store meets the contract with in-process locks and a
+// staged commit. Planned production store (QCH IT, Oct 27): SharePoint
+// Lists on a dedicated site, written only by the Azure Functions app's
+// managed identity (Sites.Selected), with no separate database. SharePoint
+// Lists have no database transactions or held locks, so how that store
+// keeps each guarantee requires implementation and verification under
+// Frozen Handoff PRD §§24, 26–29. It is not built.
+// Possible building blocks, not yet verified:
+//   - the hold: one coordination item in the site, claimed with a
+//     conditional update (If-Match on its ETag) and released after; a
+//     failed claim is retried or answered as "try again";
+//   - revokeGrant: a conditional update of the grant item (If-Match on its
+//     ETag); a precondition failure means "0 rows" (GRANT_CHANGED);
+//   - duplicates: there is no filtered unique index, so the hold above
+//     (the service checks for an active match under it) is what prevents
+//     a second identical grant;
+//   - grant change + audit together: not atomic in SharePoint, so the
+//     store needs an ordered write with an undo if the second write fails,
+//     and a check that finds any half-finished change. Until that design
+//     exists, the all-or-nothing guarantee is proven only on this store;
+//   - in-flight receiving actions: re-read the actor's grants just before
+//     the receiving action's own conditional write.
+// The server-side authorization, scope checks, audit and concurrency
+// behavior stay in the service either way; only how the store provides
+// them changes.
 //   getReferralById(referralId) -> referral row | null
 //   listReferralsByReceivingPrograms(programIds, { stage, limit, after })
 //   listReferralsByCreator(userId, { stage, limit, after })
@@ -376,6 +422,7 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     const staged = {
       referrals: [], audit: [], locks: [], updates: [], responseLocks: [], programUpdates: [], holds: [],
       departmentInserts: [], programInserts: [], departmentUpdates: [], evaluations: [],
+      grantInserts: [], grantRevokes: [],
     };
     // Uncommitted field-table rows: "table:id" -> row.
     const overlay = new Map();
@@ -483,7 +530,34 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       listActivePrograms: base.listActivePrograms,
       listNeedCategories: base.listNeedCategories,
       listMatchablePrograms: base.listMatchablePrograms,
+      listUsers: base.listUsers,
       listServiceLanguages: base.listServiceLanguages,
+
+      // ----- Permission administration (Task Y) -----
+      async holdPermissionAdministration() {
+        await holdForUpdate('permission-administration');
+      },
+      async insertGrant({ userId, permission, scopeType, programId = null, departmentId = null, grantSource }) {
+        if (!holds('permission-administration')) {
+          throw new Error('insertGrant requires holdPermissionAdministration first');
+        }
+        const row = {
+          grantId: nextGrantId++, userId, permission, scopeType, programId, departmentId, grantSource,
+          grantedAt: now().toISOString(), revokedAt: null,
+        };
+        staged.grantInserts.push(row);
+        return { ...row };
+      },
+      async revokeGrant({ grantId, userId }) {
+        if (!holds('permission-administration')) {
+          throw new Error('revokeGrant requires holdPermissionAdministration first');
+        }
+        const grant = grants.find((g) => g.grantId === grantId && g.userId === userId && g.revokedAt == null);
+        if (!grant || staged.grantRevokes.some((r) => r.grantId === grantId)) return null; // 0 rows
+        const revokedAt = now().toISOString();
+        staged.grantRevokes.push({ grantId, userId, revokedAt });
+        return { ...grant, revokedAt };
+      },
 
       async insertGpmeEvaluation({ ruleVersion, results }) {
         // Like an IDENTITY column: IDs are never reused, gaps are possible.
@@ -754,6 +828,11 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       for (const { programId } of staged.programUpdates) {
         writeReleases.push(await locks.upgrade(`program:${programId}`, owner));
       }
+      // Grant changes wait for every other reader of that user's grants.
+      const grantUsers = new Set([...staged.grantInserts, ...staged.grantRevokes].map((g) => g.userId));
+      for (const userId of grantUsers) {
+        writeReleases.push(await locks.upgrade(`grants:${userId}`, owner));
+      }
       for (const row of staged.departmentInserts) base._insertDepartment(row);
       for (const row of staged.programInserts) base._insertProgram(row);
       for (const { departmentId, fields } of staged.departmentUpdates) {
@@ -771,6 +850,10 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
       referrals.push(...staged.referrals);
       for (const { referralId, fields } of staged.updates) {
         Object.assign(referrals.find((r) => r.referralId === referralId), fields);
+      }
+      grants.push(...staged.grantInserts);
+      for (const { grantId, revokedAt } of staged.grantRevokes) {
+        grants.find((g) => g.grantId === grantId).revokedAt = revokedAt;
       }
       auditEvents.push(...staged.audit);
       gpmeEvaluations.push(...staged.evaluations);
@@ -799,7 +882,12 @@ export function createMemoryReferralStore(seed = {}, { now = () => new Date() } 
     },
   });
 
-  const grants = (seed.grants ?? []).map((g) => ({ revokedAt: null, ...g }));
+  // grantId: a stable ID the store assigns to each grant (in SharePoint, the
+  // list item ID).
+  const grants = (seed.grants ?? []).map((g, index) => ({
+    revokedAt: null, grantedAt: null, ...g, grantId: g.grantId ?? index + 1,
+  }));
+  let nextGrantId = Math.max(0, ...grants.map((g) => g.grantId)) + 1;
   const reasons = (seed.notAppropriateReasons ?? []).map((r) => ({ requiresExplanation: false, lifecycleStatus: 'ACTIVE', ...r }));
   const activeGrants = (userId) =>
     grants.filter((g) => g.userId === userId && g.revokedAt == null).map((g) => ({ ...g }));

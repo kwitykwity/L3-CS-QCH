@@ -45,6 +45,20 @@ describe('guided form validation', () => {
     assert.equal(validateGuidedForm(answers({ ageMin: '21', ageMax: '20' })).ageRange, GUIDED_FIELD_MESSAGES.ageRange.order, 'off by one');
   });
 
+  test('an exact age is one whole number, never an error for being one age (Handoff PRD 5.3, Task HH)', () => {
+    const exact = (ageExact, extra = {}) => answers({ ageMode: 'exact', ageExact, ...extra });
+    assert.deepEqual(validateGuidedForm(exact('37')), {});
+    assert.deepEqual(validateGuidedForm(exact(' 0 ')), {});
+    assert.deepEqual(validateGuidedForm(exact('120')), {});
+    assert.deepEqual(validateGuidedForm(exact('')), {}, 'blank is fine: age is optional');
+    for (const bad of ['121', '-1', '18.5', 'abc', '1e1', '12 14']) {
+      assert.equal(validateGuidedForm(exact(bad)).ageRange, GUIDED_FIELD_MESSAGES.ageRange.exactInvalid, bad);
+    }
+    // Only the chosen mode counts: leftover range boxes never block an exact age.
+    assert.deepEqual(validateGuidedForm(exact('37', { ageMin: '18' })), {});
+    assert.deepEqual(validateGuidedForm(answers({ ageMode: 'range', ageExact: 'abc', ageMin: '18', ageMax: '24' })), {});
+  });
+
   test('ZIP is five digits or blank', () => {
     assert.equal(validateGuidedForm(answers({ matchZip: '1234' })).matchZip, GUIDED_FIELD_MESSAGES.matchZip);
     assert.equal(validateGuidedForm(answers({ matchZip: '12345-6789' })).matchZip, GUIDED_FIELD_MESSAGES.matchZip);
@@ -65,10 +79,20 @@ describe('the request sent to matching', () => {
       { needCategoryIds: [1, 3], ageRange: { min: 19, max: 20 }, participantZip: '99901' });
   });
 
+  test('an exact age is sent as that one age, never widened; the other mode\'s boxes are ignored', () => {
+    assert.deepEqual(toMatchRequest(answers({ ageMode: 'exact', ageExact: ' 37 ', ageMin: '18', ageMax: '24' })),
+      { needCategoryIds: [3], ageRange: { min: 37, max: 37 } });
+    assert.deepEqual(toMatchRequest(answers({ ageMode: 'exact', ageExact: '' })), { needCategoryIds: [3] });
+    assert.deepEqual(toMatchRequest(answers({ ageMode: 'range', ageExact: '37', ageMin: '18', ageMax: '24' })),
+      { needCategoryIds: [3], ageRange: { min: 18, max: 24 } });
+  });
+
   test('everything the client accepts, the server accepts too (parity)', () => {
     const cases = [
       answers(),
       answers({ ageMin: '0', ageMax: '120' }),
+      answers({ ageMode: 'exact', ageExact: '0' }),
+      answers({ ageMode: 'exact', ageExact: '120' }),
       answers({ ageMin: '7', ageMax: '7', matchZip: '00001' }),
       answers({ needCategoryIds: [1, 2, 3, 4, 5] }),
     ];
@@ -207,6 +231,17 @@ describe('page structure', () => {
     assert.match(html, /id="needs" aria-describedby="needs-hint needs-error"/);
     assert.match(html, /id="ageMin"[^>]*aria-describedby="ageRange-error"/);
     assert.match(html, /id="matchZip"[^>]*aria-describedby="matchZip-hint matchZip-error"/);
+  });
+
+  test('participant age opens on Exact age, as in the Current Handoff Wireframes (screen 2; Handoff PRD 5.3)', () => {
+    assert.match(html, /id="ageMode-exact"[^>]*\bchecked\b/);
+    assert.doesNotMatch(html, /id="ageMode-range"[^>]*\bchecked\b/);
+    assert.match(html, /<div class="range" id="ageExact-group">/, 'the Exact age box is shown');
+    assert.match(html, /<div class="range" id="ageRange-group" hidden>/, 'the range boxes start hidden');
+    assert.match(html, /<label for="ageExact">/);
+    // The wording says this is the participant's age and that it is not saved,
+    // keeping it apart from the Program age limits shown with results.
+    assert.match(html, /Age is used only to find Programs and is not saved with the referral/);
   });
 
   test('the guided outcome is announced; Try again and Direct Referral are offered', () => {

@@ -23,7 +23,13 @@ export const NOT_APPROPRIATE_REASONS = Object.freeze([
   { reasonId: 5, code: 'OTHER', label: 'Other', displayOrder: 5 },
 ]);
 
-export function syntheticSeed({ programManagement = false, organizationManagement = false, receiving = false } = {}) {
+// Two synthetic staff members with no permissions, to practice permission
+// administration on (Task Y). The developer cannot change their own.
+export const SAMPLE_STAFF_IDS = Object.freeze([2, 3]);
+
+export function syntheticSeed({
+  programManagement = false, organizationManagement = false, receiving = false, permissionAdministration = false,
+} = {}) {
   return {
     departments: [
       { departmentId: 1, name: 'Youth Services (sample)', lifecycleStatus: 'ACTIVE' },
@@ -77,7 +83,11 @@ export function syntheticSeed({ programManagement = false, organizationManagemen
       6: 'wellness-center.sample@example.org',
     },
     // No affiliation yet, so the first-use affiliation step is visible.
-    users: [{ userId: DEV_USER_ID, isActive: true }],
+    users: [
+      { userId: DEV_USER_ID, isActive: true, displayName: 'Synthetic Developer (sample)' },
+      { userId: SAMPLE_STAFF_IDS[0], isActive: true, displayName: 'Synthetic Staff A (sample)' },
+      { userId: SAMPLE_STAFF_IDS[1], isActive: true, displayName: 'Synthetic Staff B (sample)' },
+    ],
     // Explicit synthetic permissions for the local management UI.
     // Default callers keep an unprivileged seed. No real QCH mappings.
     grants: [...(programManagement ? [3, 7].map((programId) => ({
@@ -88,6 +98,15 @@ export function syntheticSeed({ programManagement = false, organizationManagemen
       departmentId: null,
       grantSource: 'IN_APP',
     })) : []),
+      // Designated permission administrator (Task Y, PRD 3.8), org-wide.
+      ...(permissionAdministration ? [{
+        userId: DEV_USER_ID,
+        permission: 'ADMINISTER_PERMISSIONS',
+        scopeType: 'ORG',
+        programId: null,
+        departmentId: null,
+        grantSource: 'IN_APP',
+      }] : []),
       ...(organizationManagement ? [{
         userId: DEV_USER_ID,
         permission: 'MANAGE_ORGANIZATION',
