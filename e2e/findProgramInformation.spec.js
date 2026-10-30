@@ -38,7 +38,10 @@ async function startServer() {
 
 async function stopServer(page, server) {
   await page.goto('about:blank');
-  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  await new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+    server.closeAllConnections();
+  });
 }
 
 // Education + Employment, ages 19 to 30: Evening Classes and Job Readiness.
