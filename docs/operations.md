@@ -91,7 +91,11 @@ These hold whatever store and hosting QCH IT chooses.
 | Node.js 24.15.0 | Running the server | Development pin; the production version is a QCH IT choice |
 | Express 5 and `dotenv` | Web server and local configuration | See [dependencies.md](dependencies.md) for every package and license |
 | Playwright with Chromium, axe-core, supertest | Tests only | Not installed in production (`npm ci --omit=dev`) |
-| A production store | Everything stored | Not chosen (decision 1) |
-| Microsoft Entra ID | Staff sign-in | Not built (decision 5) |
-| Microsoft Graph and a shared mailbox | New-referral email | Not built (decision 6) |
-| Hosting and monitoring | Running and watching the app | Not chosen (decision 2) |
+| SharePoint Lists in a private QCH Connect site | Everything stored | Confirmed (PRD §27); not provisioned or built |
+| Azure Functions with a managed identity | The production server side | Confirmed (PRD §29); not provisioned or built |
+| Microsoft Entra ID single sign-on with MFA | Staff sign-in | Confirmed (PRD §22); not configured or built |
+| Microsoft Graph, the shared mailbox and Exchange RBAC | New-referral email | Confirmed (PRD §21, §30); not configured or built |
+| Frontend hosting and monitoring | Running and watching the app | Outstanding QCH IT decision |
+
+All of these are QCH/QCH IT production dependencies; see
+[production-architecture.md](production-architecture.md).

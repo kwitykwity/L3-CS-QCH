@@ -1,16 +1,23 @@
 # What QCH IT needs to provide
 
-Everything QCH Connect needs from QCH IT to run in production, in one list
-(Final Technical PRD 1.4, 11, 15, 18, 19, 22). Nothing here holds a real
-value. Real values are entered by QCH IT into App Service settings or Azure
-Key Vault, never into this repository.
+Production dependencies and configuration to be supplied by QCH and QCH IT
+under the Frozen Handoff PRD §§21–24, §§27–32 and §37.
+No real configuration values or secrets belong in this repository.
+QCH IT determines the approved configuration and secret-management setup
+for Azure Functions and Microsoft Entra ID. Historical App Service and
+Azure SQL placeholders below are not deployment instructions.
 
-**Some rows describe the earlier plan, not a final choice.** Rows that name
-Azure App Service or Azure SQL come from the plan the team started with.
-Where production data lives (SharePoint Lists or a relational database such
-as Azure SQL) and where the app is hosted are still open; see
-[pending-qch-it-decisions.md](pending-qch-it-decisions.md). Once QCH IT
-decides, those rows are rewritten to match.
+**The production architecture is confirmed** by the Frozen Handoff PRD
+(§21, §22, §27 to §31, §37): SharePoint Lists in a dedicated private QCH
+Connect site with no separate production database, Azure Functions with a
+managed identity, Microsoft Graph `Sites.Selected`, mail sending from the
+shared mailbox restricted through Exchange RBAC for Applications, and
+Microsoft Entra ID single sign-on with MFA. What is still outstanding is
+QCH/QCH IT **provisioning and configuration**. The full checklist, and which
+older statements this replaces, are in
+[production-architecture.md](production-architecture.md). Rows below that
+name Azure App Service, Azure SQL or Key Vault come from the earlier plan
+and are marked as such.
 
 Status key: **Needed** = not yet recorded here as provided. **Provided** = in
 place. Update a row as QCH IT responds.
@@ -24,51 +31,61 @@ table does not list.
 
 | Variable | What it is | Where it lives in production | Needed for | Status |
 | --- | --- | --- | --- | --- |
-| `AZURE_TENANT_ID` | QCH's Microsoft Entra ID tenant | App Service settings | Staff sign-in | Needed |
-| `AZURE_CLIENT_ID` | The QCH Connect app registration in Entra ID | App Service settings | Staff sign-in; Microsoft Graph too, if QCH IT uses the same registration | Needed |
-| `AZURE_CLIENT_SECRET` | Secret for that app registration | Azure Key Vault (PRD 15.2) | Staff sign-in; Microsoft Graph too, if QCH IT uses the same registration | Needed |
-| `AZURE_REDIRECT_URI` | Address Entra ID returns to after sign-in | App Service settings | Staff sign-in | Needed |
-| `KEY_VAULT_URI` | Address of the Key Vault that holds the secrets | App Service settings | Reading secrets at startup | Needed |
-| `DATABASE_URL` | Connection information for the production data store (Azure SQL in the earlier plan; depends on the storage decision) | Azure Key Vault (PRD 15.2) | Everything that stores data | Needed |
-| `NOTIFICATION_MAILBOX` | Exchange Online shared mailbox that sends referral emails | App Service settings | New-referral emails (Card 15) | Needed |
+| `AZURE_TENANT_ID` | QCH's Microsoft Entra ID tenant | QCH IT-approved production configuration; hosting details to be confirmed | Staff sign-in | Needed |
+| `AZURE_CLIENT_ID` | The QCH Connect app registration in Entra ID | QCH IT-approved production configuration; hosting details to be confirmed | Staff sign-in; Microsoft Graph too, if QCH IT uses the same registration | Needed |
+| `AZURE_CLIENT_SECRET` | Secret for that app registration (earlier plan) | Earlier plan: Azure Key Vault. Under the confirmed design the Azure Functions use a managed identity and no secret is kept in source or browser code (PRD §29); QCH IT decides whether sign-in still needs one | Staff sign-in | Needed (earlier-plan placeholder) |
+| `AZURE_REDIRECT_URI` | Address Entra ID returns to after sign-in | QCH IT-approved production configuration; hosting details to be confirmed | Staff sign-in | Needed |
+| `KEY_VAULT_URI` | Address of the Key Vault that holds the secrets (earlier plan) | Earlier plan: App Service settings. Not named in the confirmed architecture; QCH IT decides whether a secret store is needed alongside the managed identity | Reading secrets at startup | Needed (earlier-plan placeholder) |
+| `DATABASE_URL` | Connection string for a production database (earlier plan) | **Superseded**: there is no separate production database; data lives in SharePoint Lists reached through Graph with the Functions' managed identity (PRD §27, §29, §30). No code reads this placeholder | Nothing under the confirmed design | Not needed under the confirmed design (placeholder kept in `.env.example`) |
+| `NOTIFICATION_MAILBOX` | Exchange Online shared mailbox that sends referral emails (the address is named in PRD §21; not recorded here) | Production configuration (QCH IT) | New-referral emails (Card 15) | Needed |
 
 `PORT` and `NODE_ENV` are not QCH IT secrets or settings to invent. `PORT`
-is supplied by the hosting platform (App Service) at runtime; QCH IT
+is supplied by the hosting platform at runtime (App Service in the earlier
+plan); QCH IT
 confirms how their setup provides it, and the deployment must not hard-code
 it. `NODE_ENV` is set by the deployment and must be exactly `production`.
 
 ## Azure and Microsoft 365 setup
 
-| Item | What QCH Connect needs | PRD | Status |
+The confirmed design is in [production-architecture.md](production-architecture.md)
+section 1. Each row is a provisioning or configuration item that QCH IT still
+has to do.
+
+| Item | What QCH Connect needs | Frozen PRD | Status |
 | --- | --- | --- | --- |
-| US regions | Every QCH Connect resource (App Service, Azure SQL, Key Vault, monitoring) in an approved US region. Referral data stays in QCH-approved Microsoft infrastructure unless QCH IT approves otherwise in writing. | 1.4 | Needed |
-| Azure App Service | A QCH-owned App Service to host the Node.js app, and confirmation of its Node version. The team develops on Node 24.15.0; the production version is not confirmed. If QCH IT selects a different version, the team updates the repository's exact pin and tests and validates that version before deployment (see deployment.md step 1). | 1.4 | Needed |
-| Application address (URL) | The production web address of QCH Connect. **Required**: the Entra ID redirect URI (`AZURE_REDIRECT_URI`) and the app registration's allowed sign-in addresses are built from it, so sign-in cannot be configured without it. Emails may also link to it later. | 1.4, 3.1 | Needed |
-| Azure SQL Database | A QCH-owned database that is not publicly reachable (private endpoint or firewall rules limited to the app), encrypted at rest and in transit with TLS 1.2 or higher. | 1.4, 15.1 | Needed |
-| Separate database privileges | Two different database identities: a least-privilege **runtime** identity the app uses (read and write data only, no schema changes), and a separate **migration/admin** identity used only to apply reviewed migrations. The app never holds migration rights. | 9.2 | Needed |
-| Database migration access | Who applies schema migrations in production, with the migration identity above. Migrations are applied on purpose, never by the app at startup. | 9.8, 18.3 | Needed |
-| Backup and restore | QCH's backup approach for Azure SQL, and an isolated non-production place where the team can test one restore before handoff. | 18.4, 19.5 | Needed |
-| Entra ID app registration | The app registration for QCH Connect sign-in, and the Microsoft Graph permission QCH IT approves for sending mail as the shared mailbox. QCH IT decides whether sign-in and mail sending share one registration. | 3.1, 11.1 | Needed |
-| Entra access | Which Entra group or assignment grants access to the app. Entra decides who can open the app; action permissions are managed inside QCH Connect. | 3.4, 22 | Needed |
-| Tenant MFA | Confirmation that QCH's tenant-level MFA applies to QCH Connect sign-in. The app relies on Entra for MFA and does not add its own. | 3.1 | Needed |
-| Azure Key Vault | A Key Vault for production secrets, and the way the app is allowed to read it. | 15.2 | Needed |
-| Shared mailbox | The Exchange Online shared mailbox notifications are sent from. QCH IT has created it (the address is not recorded here). Still needed: how the app may send as it (Send As or Graph permission, app identity) and the production configuration. Until then the app uses the simulated outbox. | 11.1 | Needed (mailbox created; sending permission and configuration pending) |
-| Azure Monitor / Application Insights | A resource for app logs and alerts, including alerts on repeated notification failures. Logs never hold participant data. | 11.6, 15.3 | Needed |
-| Deployment tooling | Which CI/CD tool or process QCH IT wants for deployments. | 18.2, 22 | Needed |
-| Non-production environment | A QCH-provided non-production environment, if one is available in time (Plan A). Otherwise the team uses its own synthetic-only environment (Plan B). | 16.4 | Needed |
-| Source repository | The QCH-owned repository where the source lives after handoff. | 19.3 | Needed |
-| Supported browsers | The browsers and versions QCH staff use. | 22 | Needed |
+| Azure Functions | The production server side (authorization, business logic, validation, referral transactions, GPME execution, notification orchestration, reporting support, audit handling), in QCH-owned Azure | §29, §32 | Needed |
+| Managed identity | The Functions' managed identity. No production secrets or long-lived service keys in source or browser code | §29 | Needed |
+| SharePoint site and Lists | A dedicated, private QCH Connect SharePoint site with its Lists. No separate production database. Direct site access only for appropriate QCH IT administrators. The Lists must not store exact age, age range, or unnecessary discovery or interpretation inputs | §27, §28 | Needed |
+| Graph site permission | `Sites.Selected`, granted for the QCH Connect site only (not `Sites.ReadWrite.All`) | §30 | Needed |
+| Shared mailbox and mail sending | The shared mailbox named in PRD §21 (address not recorded here). QCH IT earlier reported the mailbox as created; still needed: the Graph mail-sending permission (named `Mail.Send` on Task PP) restricted to this mailbox through Exchange RBAC for Applications. Until then the app uses the simulated outbox | §21, §30 | Needed (mailbox reported created; sending permission and RBAC pending) |
+| Entra ID single sign-on | The app registration for staff sign-in with QCH Microsoft accounts, its allowed sign-in addresses, and the group or assignment that grants access. Action permissions are managed inside QCH Connect | §22 | Needed |
+| MFA | Confirmation that QCH's MFA policy applies to QCH Connect sign-in. The app relies on Entra for MFA | §22 | Needed |
+| Production users, groups and permissions | Who has access, and the first permission administrators | §24, §37 item 6 | Needed |
+| Frontend hosting | Where the browser pages are hosted | §32, §37 item 11 | Needed |
+| Supported browsers | The browsers and versions QCH staff use | §37 item 10 | Needed |
+| Monitoring | Where production logs and alerts go (for example on repeated notification failures). Logs never hold participant data | §21, §34 | Needed |
+| Deployment process | How releases reach production | §37 | Needed |
+| Source repository | Confirm source ownership and the repository handoff process with QCH; the earlier PRD citation does not establish a current frozen requirement | Handoff coordination; confirm with QCH | Confirmation outstanding |
+| Non-production environment | A QCH-provided non-production environment, if available; otherwise the team's synthetic-only environment | §35 | Needed |
+
+**Earlier-plan rows, superseded** (kept so readers of older pages can match
+them up): Azure App Service hosting is replaced on the server side by Azure
+Functions; the Azure SQL Database, its two database identities, migration
+access and Azure SQL backup do not apply because there is no separate
+production database (§27); Key Vault is not named in the confirmed
+architecture. Backup and restore of the SharePoint data is a QCH IT matter
+under the confirmed design.
 
 ## QCH policy decisions
 
 | Item | Why it matters | PRD | Status |
 | --- | --- | --- | --- |
-| Production data store | SharePoint Lists or a relational database such as the Azure SQL design. Decides how the store, migrations, backups and reports are built (pending decision 1). | 1.4, 9 | Policy |
-| AI boundary | Whether any AI service may be used for matching, and under what rules. Nothing in the app uses AI today (pending decision 7). | 1.4, 15 | Policy |
-| Archive | Whether and how old referrals are archived (pending decision 4). | 9.11, 22 | Policy |
-| Retention and purge | How long referral data is kept. The team will not invent an automatic deletion rule. | 9.11, 22 | Policy |
-| Initial permission administrators and break-glass access | Who the first designated permission administrators are, and the controlled, documented, QCH-approved emergency (break-glass) administrative access. Administrator identity is configuration, never hard-coded. | 3.8 | Policy |
-| Business time zone | The QCH-approved business time zone for displaying times and drawing reporting period boundaries (with daylight-saving handling). Times are stored in UTC; a fixed offset such as UTC-5 is not allowed. | 9.7 | Policy |
+| Production data store | **Confirmed**: SharePoint Lists in a private site, no separate database (Frozen PRD §27). Provisioning is in the table above | §27 | Confirmed |
+| AI boundary | **Confirmed**: no external AI in the MVP; any future use needs QCH and QCH IT approval, a security and privacy review, approved data handling and explicit authorization (Frozen PRD §7). Nothing in the app uses AI | §7 | Confirmed |
+| Archive | **Confirmed**: at 2,500 active referrals, archive the 500 oldest eligible closed/completed ones; never open or Awaiting Response; archived records read-only and available for authorized reporting and audit ([production-architecture.md](production-architecture.md) section 2) | §31 | Confirmed |
+| Retention and purge | How long referral data is kept after archival. The team will not invent an automatic deletion rule | §31, §37 item 9 | Policy |
+| Initial permission administrators and break-glass access | QCH identifies the first production permission administrators. Any emergency administrative-access process requires explicit agreement and is not treated here as an approved additional requirement | Frozen Handoff PRD §24, §37; handoff questions Q1 and Q15 | Policy / setup outstanding |
+| Business time zone | Reporting currently uses America/New_York. Confirm the production reporting time zone with QCH; current implementation is not itself QCH policy | Frozen Handoff PRD §25; handoff question Q6 | Policy |
 
 ## Credentials and ownership
 
