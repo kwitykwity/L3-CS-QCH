@@ -20,6 +20,19 @@ The production server (`npm start`) has no sign-in yet and **fails
 closed**: every API answers 401 and each page says the person is not
 signed in (step 19).
 
+### Which runs are scripted and which are manual
+
+| Run | How | Status |
+| --- | --- | --- |
+| Run 1 | **Scripted** (a one-off Playwright script acting as the user, Chromium) | Done on `main` at `36f6e82` plus the fixes below |
+| Run 3 | **Scripted** (a one-off Playwright script, three demo people, Chromium) | Done on `main` at `cd22455` |
+| Run 2 | **Manual**, by a person in Safari | **Outstanding** (started; see Run 2) |
+
+Each run's results apply only to the revision it names. A scripted run
+shows that the screens and the server work; it does not show that a person
+can find their way, unless a step says the script used the visible
+navigation.
+
 ## The script
 
 Start: `npm run dev:synthetic`, then open `http://127.0.0.1:3000/`. Each
@@ -89,31 +102,47 @@ script acted as the people (not added to the suite). Starting point:
 | 5 | Referring Worker | Pass. Referral 1 opens read-only ("You sent this referral."), no response or outcome panels; a direct response request is refused (403) |
 | 6 | Housing Help Desk Staff (second window) | Pass. Both referrals in the queue. Referral 1: Accepted, then Resulted in service. Referral 2: Not appropriate, reason "Program criteria not met" |
 | 7 | Older Adult Wellness Center Staff (third window) | Pass. Neither referral in the queue; the detail page says "This referral is not available"; the API answers 404 to reads and corrections |
-| 8 | Referring Worker | Pass. Sees Accepted / Resulted in service, and "Reason: Program criteria not met"; referral 1 shows created by "Referring Worker (demo)" |
+| 8 | Referring Worker | Pass. Sees Accepted / Resulted in service, and "Reason: Program criteria not met"; referral 1 shows created by "Referring Worker (demo)". **Reached by scripted navigation:** the script opened `/sent/` by its address, not through a visible link (see the limitation below) |
 | 9 | Housing Help Desk Staff, two windows | Pass. A correction from the older window was refused: "Your change was not saved. Review the latest information before trying again." Outcome put back to Resulted in service |
-| 10 | Window 1, **Switch person** | Pass. As Housing Help Desk Staff the sent list is empty; back as Referring Worker it has both referrals, so the identity really changes |
+| 10 | Window 1, **Switch person** | Pass. As Housing Help Desk Staff the sent list is empty; back as Referring Worker it has both referrals, so the identity really changes. **Reached by scripted navigation:** after each switch the script opened `/sent/` by its address, not through a visible link (see the limitation below) |
 | 11 | Referring Worker | Pass. Reporting Center (organization, this month): total 2, accepted 1, not appropriate 1, resulted 1, awaiting 0 |
 | 12 | All | Pass. 267 addresses checked across all windows: none with participant data. Browser storage empty; the session cookie is not readable by page script (HttpOnly). Server log: one `[notification] … type=NEW_REFERRAL … outcome=SENT` line per referral, IDs only, no names or needs |
 | 13 | All | Pass. axe WCAG 2.2 AA: no violations on the Reporting Center (worker), referral detail (Housing staff), received list (Wellness staff), Referrals I sent (worker) |
 | 14 | Reset | Pass. After a restart, the old sign-in cookie answers 401 and a fresh Housing sign-in sees 0 referrals |
 | 15 | Production | Pass. `NODE_ENV=production npm start` with `QCH_DEMO_SIGN_IN=true`: `/health` 200, `/demo/` and `/demo/api/sign-in` 404, API 401 with or without a demo cookie. `NODE_ENV=production npm run dev:demo` refuses to start |
 
+**Known limitation, navigation to Referrals I sent (not a pass).** Run 3
+did not test how an employee gets to Referrals I sent; the script opened
+`/sent/` by address. Task V found, and a recheck on `main` at `e7a0b48`
+(`npm run dev:demo`) confirms: after signing in or **Switch person**, the
+Referring Worker lands on `/referral/`, whose only links are Switch person,
+Skip to main content and QCH Connect (the home page). There is no Referrals
+I sent link there. The worker has to go to the home page first (QCH
+Connect, then Referrals I sent) or type `/sent/`; typing `/sent/` works.
+Recorded here for the lead; nothing was changed.
+
 Not repeated in Run 3 (Run 1 still applies; nothing in them depends on who
 is signed in): Program Management changing Find a Program results and
 discontinue/reactivate (Run 1 steps 4 to 6), the cut-off first send
-(steps 7 to 8), XL at phone width (step 17). Production email, Entra and
-SharePoint remain QCH/QCH IT production dependencies (Handoff MVP §31), not
-part of this rehearsal.
+(steps 7 to 8), XL at phone width (step 17).
 
-### Run 2: by hand on a Mac (to fill in)
+Production email, Entra sign-in, and the frozen production architecture of
+SharePoint Lists with Azure Functions as the server-side authority are
+QCH/QCH IT production dependencies (Frozen Handoff PRD §21, §22, §27, §29,
+§37). They are not part of this rehearsal and not Capstone gaps.
+
+### Run 2: by hand on a Mac (manual, outstanding)
+
+Not finished, so it gives no pass for the rehearsal yet. Nothing in Run 1
+or Run 3 stands in for it.
 
 | | |
 | --- | --- |
-| Date / tester | _to fill in_ |
-| `main` commit | _to fill in_ |
-| Browser | Safari _version_ |
-| Steps passed | _to fill in_ |
-| Problems | _to fill in_ |
+| Date / tester | Started October 28–29, 2026, Jimmy Ong |
+| `main` commit | `eea57fd` |
+| Browser | Safari 27.0 |
+| Steps passed | 1 to 6, by hand. Steps 7 to 19 not yet run |
+| Problems | Under review; recorded here when the run is finished |
 
 ## Found and fixed in this rehearsal
 
@@ -135,5 +164,6 @@ part of this rehearsal.
 
 - **Demo sign-in and identity switching:** covered by Run 3.
 - **Describe the need in Find a Program:** covered by Run 3, step 3.
-- **Real email, Entra and Azure SQL:** they wait on QCH IT decisions
-  ([pending-qch-it-decisions.md](pending-qch-it-decisions.md)).
+- **Production email, Entra sign-in, SharePoint Lists and Azure
+  Functions:** QCH/QCH IT production dependencies under the frozen
+  architecture (Frozen Handoff PRD §27, §29, §37), not Capstone gaps.
