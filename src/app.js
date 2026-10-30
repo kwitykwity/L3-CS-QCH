@@ -7,6 +7,7 @@ import { createReferralRouter } from './referrals/routes.js';
 import { createGpmeRouter } from './gpme/routes.js';
 import { createReportingRouter } from './reporting/routes.js';
 import { createProgramRouter } from './programs/routes.js';
+import { createPermissionRouter } from './permissions/routes.js';
 
 const publicDir = path.join(
   path.dirname(fileURLToPath(import.meta.url)),
@@ -69,6 +70,12 @@ export function createApp({ affiliationStore, referralStore, resolveIdentity, al
   app.use(
     '/api/program-management',
     createProgramRouter({ store: referralStore, resolveIdentity, allowDemoGrants, nodeEnv }),
+  );
+
+  // Permission administration (Task Y): ADMINISTER_PERMISSIONS only.
+  app.use(
+    '/api/permissions',
+    createPermissionRouter({ store: referralStore, resolveIdentity, allowDemoGrants, nodeEnv }),
   );
 
   app.use(

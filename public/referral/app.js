@@ -351,7 +351,22 @@ function clearPath() {
 // Guided matching (GPME, card 11; PRD 8)
 // ---------------------------------------------------------------------------
 
-const GUIDED_INPUTS = ['ageMin', 'ageMax', 'matchZip'];
+const GUIDED_INPUTS = ['ageExact', 'ageMin', 'ageMax', 'matchZip'];
+
+// Exact age or age range (Handoff PRD 5.3; wireframe 2). Only the boxes for
+// the chosen mode are shown, read and sent.
+const ageMode = () => ($('ageMode-exact').checked ? 'exact' : 'range');
+
+function syncAgeMode() {
+  const exact = ageMode() === 'exact';
+  $('ageExact-group').hidden = !exact;
+  $('ageRange-group').hidden = exact;
+}
+
+function ageModeChanged() {
+  syncAgeMode();
+  guidedAnswersChanged();
+}
 
 function showMatchMessage(message, tone, { retry = null, edit = false, direct = false, focus = true } = {}) {
   unlinkSummary();
@@ -403,6 +418,8 @@ async function loadNeedCategories() {
 function readGuided() {
   return {
     needCategoryIds: [...document.querySelectorAll('input[name="need"]:checked')].map((b) => Number(b.value)),
+    ageMode: ageMode(),
+    ageExact: $('ageExact').value,
     ageMin: $('ageMin').value,
     ageMax: $('ageMax').value,
     matchZip: $('matchZip').value,
@@ -411,19 +428,23 @@ function readGuided() {
 
 function hasGuidedAnswers() {
   const v = readGuided();
-  return $('describe').value.trim().length > 0 || v.needCategoryIds.length > 0 || Boolean(v.ageMin.trim() || v.ageMax.trim() || v.matchZip.trim());
+  return $('describe').value.trim().length > 0 || v.needCategoryIds.length > 0
+    || Boolean(v.ageExact.trim() || v.ageMin.trim() || v.ageMax.trim() || v.matchZip.trim());
 }
 
 function setGuidedErrors(errors) {
   setFieldError(null, 'needs-error', errors.needs ?? null);
-  setFieldError('ageMin', 'ageRange-error', errors.ageRange ?? null);
-  $('ageMax').setAttribute('aria-invalid', errors.ageRange ? 'true' : 'false');
+  const ageError = errors.ageRange ?? null;
+  const exact = ageMode() === 'exact';
+  setFieldError(exact ? 'ageExact' : 'ageMin', 'ageRange-error', ageError);
+  $(exact ? 'ageMin' : 'ageExact').setAttribute('aria-invalid', 'false');
+  $('ageMax').setAttribute('aria-invalid', ageError && !exact ? 'true' : 'false');
   setFieldError('matchZip', 'matchZip-error', errors.matchZip ?? null);
 }
 
 function focusGuidedField(field) {
   if (field === 'needs') (document.querySelector('input[name="need"]') ?? $('guided-heading')).focus();
-  else if (field === 'ageRange') $('ageMin').focus();
+  else if (field === 'ageRange') $(ageMode() === 'exact' ? 'ageExact' : 'ageMin').focus();
   else if (field === 'matchZip') $('matchZip').focus();
 }
 
@@ -465,6 +486,9 @@ async function describeNeed() {
     for (const box of document.querySelectorAll('input[name="need"]')) {
       box.checked = result.needCategoryIds.includes(Number(box.value));
     }
+    if (result.ageMode) $(`ageMode-${result.ageMode}`).checked = true;
+    syncAgeMode();
+    $('ageExact').value = result.ageExact;
     $('ageMin').value = result.ageMin;
     $('ageMax').value = result.ageMax;
     $('matchZip').value = result.matchZip;
@@ -793,6 +817,7 @@ function setSendButton({ enabled, sending = false }) {
 // Clears the guided answers and results (participant information).
 function clearGuided() {
   $('guided-form').reset();
+  syncAgeMode();
   hideUnderstood();
   setFieldError(null, 'describe-error', null);
   setGuidedErrors({});
@@ -1041,6 +1066,8 @@ function init() {
   $('guided-form').addEventListener('submit', findPrograms);
   $('guided-form').addEventListener('keydown', blockImplicitSubmit);
   for (const id of GUIDED_INPUTS) $(id).addEventListener('input', guidedAnswersChanged);
+  for (const id of ['ageMode-exact', 'ageMode-range']) $(id).addEventListener('change', ageModeChanged);
+  syncAgeMode();
   $('describe-go').addEventListener('click', describeNeed);
   $('match-retry').addEventListener('click', retryMatching);
   $('match-edit').addEventListener('click', () => focusGuidedField('needs'));

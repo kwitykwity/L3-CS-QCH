@@ -54,10 +54,10 @@ npm test
   - `npm run check-runtime` checks for exactly Node 24.15.0, the team's
     settled **development** version. Use it on developer machines and any
     build machine that is meant to match development.
-  - The **production** Node version on App Service is **PROVIDED BY QCH IT**
-    and may differ. `check-runtime` is not the production check. Before
-    deploying, confirm the App Service runs the Node version QCH IT
-    confirmed, and that the test run above used that same version.
+  - QCH IT must confirm the supported Node.js runtime for the Azure Functions
+    deployment. The development pin alone does not establish compatibility
+    with that hosting environment. Validate the production implementation
+    and its dependencies on the selected runtime before deployment.
   - **If QCH IT selects a production Node version other than 24.15.0,** the
     team must first reconcile the repository with it: update the exact pin
     in `.nvmrc`, `package.json` `engines`, `package-lock.json`, and
@@ -69,20 +69,22 @@ npm test
 
 ## 2. Set the configuration
 
-Every variable, what it does, and where it lives in production is listed in
-[qch-it-requirements.md](qch-it-requirements.md) and the README
-Configuration table.
+The production configuration procedure for Azure Functions and Microsoft
+Entra ID remains to be implemented and verified with QCH IT. See
+[qch-it-requirements.md](qch-it-requirements.md) and
+[production-architecture.md](production-architecture.md).
 
-- `NODE_ENV` must be exactly `production`. The app refuses to start with a
-  missing or unknown value.
-- `PORT` is supplied by the hosting platform (App Service) at runtime and is
-  not a QCH IT secret or setting to invent. The deployment must not hard-code
-  a port. QCH IT confirms how their App Service setup provides it. The same
-  rule appears in [qch-it-requirements.md](qch-it-requirements.md).
-- Secrets (`AZURE_CLIENT_SECRET`, `DATABASE_URL`) come from Azure Key Vault,
-  never from a `.env` file or source code (PRD 15.2).
-- Production must never fall back to demo sign-in, development defaults, or
-  an unapproved service (PRD 18.5).
+- Azure Functions uses a managed identity for approved service access.
+- QCH IT supplies the approved Entra configuration and any required
+  secret-management arrangements. No real values belong in this repository.
+- `AZURE_CLIENT_SECRET`, `DATABASE_URL` and `KEY_VAULT_URI` are earlier-plan
+  placeholders, not instructions to create a production database or secrets.
+- `PORT` belongs to the current Node.js development/server entry point;
+  confirm the Azure Functions hosting configuration with QCH IT.
+- The current production Node.js entry point requires `NODE_ENV=production`
+  and fails closed without identity integration. It is not a completed
+  Azure Functions deployment.
+- Production must never use demo identity selection or development defaults.
 
 ## 3. Apply database migrations
 
