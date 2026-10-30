@@ -207,8 +207,16 @@ test.describe('New Referral page: what a screen reader is told', () => {
     await expect(page.getByRole('heading', { name: 'Guided matching' })).toBeFocused();
     const needs = page.getByRole('group', { name: 'What does the participant need?' });
     await expect(needs).toHaveAccessibleDescription(/Choose all that apply\./);
+    // Participant age: a named group, Exact age selected first (wireframe
+    // screen 2) with one labelled box; Age range shows From and to.
+    const age = page.getByRole('group', { name: 'Participant age (optional)' });
+    await expect(age).toHaveAccessibleDescription(/not saved with the referral/);
+    await expect(age.getByRole('radio', { name: 'Exact age' })).toBeChecked();
+    await expect(page.getByRole('textbox', { name: 'Age', exact: true })).toBeVisible();
+    await age.getByRole('radio', { name: 'Age range' }).check();
     await expect(page.getByRole('textbox', { name: 'From' })).toBeVisible();
     await expect(page.getByRole('textbox', { name: 'to' })).toBeVisible();
+    await age.getByRole('radio', { name: 'Exact age' }).check();
 
     // Nothing chosen: the error is announced and focus goes to the first need.
     await page.getByRole('button', { name: 'Find Programs' }).click();

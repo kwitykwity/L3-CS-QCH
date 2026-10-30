@@ -114,9 +114,17 @@
             </fieldset>
 
             <fieldset class="field" id="ageRange" aria-describedby="ageRange-hint ageRange-error">
-              <legend>Age range (optional)</legend>
-              <p id="ageRange-hint" class="muted">A range is fine if you do not know the exact age, for example 18 to 24.</p>
-              <div class="range">
+              <legend>Participant age (optional)</legend>
+              <p id="ageRange-hint" class="muted">Enter an exact age, or a range if you do not know the exact age, for example 18 to 24. Age is used only to find Programs and is not saved with the referral.</p>
+              <div class="radios__options" id="ageMode-options">
+                <span><input type="radio" name="ageMode" id="ageMode-exact" value="exact" checked /> <label for="ageMode-exact">Exact age</label></span>
+                <span><input type="radio" name="ageMode" id="ageMode-range" value="range" /> <label for="ageMode-range">Age range</label></span>
+              </div>
+              <div class="range" id="ageExact-group">
+                <label for="ageExact">Age</label>
+                <input id="ageExact" type="text" inputmode="numeric" autocomplete="off" maxlength="3" aria-describedby="ageRange-error" />
+              </div>
+              <div class="range" id="ageRange-group" hidden>
                 <label for="ageMin">From</label>
                 <input id="ageMin" type="text" inputmode="numeric" autocomplete="off" maxlength="3" aria-describedby="ageRange-error" />
                 <label for="ageMax">to</label>

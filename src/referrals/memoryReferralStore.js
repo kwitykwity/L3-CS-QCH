@@ -124,8 +124,9 @@
 // Lists on a dedicated site, written only by the Azure Functions app's
 // managed identity (Sites.Selected), with no separate database. SharePoint
 // Lists have no database transactions or held locks, so how that store
-// keeps each guarantee is team design work still to confirm (register R19),
-// not built. Likely building blocks, to be confirmed:
+// keeps each guarantee requires implementation and verification under
+// Frozen Handoff PRD §§24, 26–29. It is not built.
+// Possible building blocks, not yet verified:
 //   - the hold: one coordination item in the site, claimed with a
 //     conditional update (If-Match on its ETag) and released after; a
 //     failed claim is retried or answered as "try again";

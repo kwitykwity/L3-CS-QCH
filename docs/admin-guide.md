@@ -9,10 +9,10 @@ refused safely if someone else changed the same record first.
 
 **Not available yet:**
 
-- **Making someone a permission administrator** (PRD 3.8). That is done
-  outside the app through a QCH-approved process. Who the first permission
-  administrators are is a QCH decision
-  ([qch-it-requirements.md](qch-it-requirements.md)).
+- **Making someone a permission administrator:** not supported on this
+  screen. Whether authorized administrators should assign administrator
+  rights here or through a separate process remains open question Q1
+  in the README's Permission administration section.
 - **Setting a Program's notification email** (where new-referral emails
   go).
 - **Sign-in.** Until Entra sign-in exists, these screens are used with
