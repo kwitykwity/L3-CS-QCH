@@ -63,7 +63,7 @@ freeze, and every finding is re-checked on the freeze candidate.
 | Reporting stays aggregate | **Pass** | Report routes are totals, timing, activity and the Department list only; no drill-down route exists. "Reporting is aggregate only" in `test/securityPass.test.js`; "nothing names a person" in `e2e/reportingKnownAnswers.spec.js` |
 | GPME stays advisory | **Pass** | Matching stores nothing and returns no scores; a referral is created only when the worker sends it, and a Program GPME did not list is refused with nothing saved. `test/gpme.test.js`, `test/gpmeReferral.test.js` |
 | Staff remain the referral decision-makers | **Pass** | Time passing never changes a referral; Not Appropriate is never rerouted. `test/referralResponse.test.js`, `test/regression/journeys.test.js`, `e2e/sentReferrals.spec.js` |
-| Unresolved production architecture is documented, not guessed | **Pass** | [pending-qch-it-decisions.md](pending-qch-it-decisions.md) decisions 1 to 8; [requirements-reconciliation-register.md](requirements-reconciliation-register.md) R19 to R25 |
+| Production architecture requirements | Historical audit; not production verification | Governing requirements: Frozen Handoff PRD §§27–31; production dependencies: §37 |
 | Handoff and deployment docs match the code | **Pass after fixes** | [architecture.md](architecture.md) lists every route group and screen correctly. Three stale docs fixed here (finding 10) |
 
 ## Re-run on the freeze candidate
