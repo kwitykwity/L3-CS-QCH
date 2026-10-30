@@ -38,7 +38,10 @@ async function startServer() {
 
 async function stopServer(page, server) {
   await page.goto('about:blank');
-  await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
+  await new Promise((resolve, reject) => {
+    server.close((error) => (error ? reject(error) : resolve()));
+    server.closeAllConnections();
+  });
 }
 
 // Education + Employment, ages 19 to 30: Evening Classes and Job Readiness.
@@ -49,6 +52,7 @@ async function search(page, base) {
   await page.locator('#path-guided').click();
   await page.getByLabel('Education (sample)', { exact: true }).check();
   await page.getByLabel('Employment (sample)', { exact: true }).check();
+  await page.locator('#ageMode-range').check(); // Exact age is the default (wireframe screen 2)
   await page.locator('#ageMin').fill('19');
   await page.locator('#ageMax').fill('30');
   await page.locator('#find-programs').click();
