@@ -102,9 +102,9 @@ script acted as the people (not added to the suite). Starting point:
 | 5 | Referring Worker | Pass. Referral 1 opens read-only ("You sent this referral."), no response or outcome panels; a direct response request is refused (403) |
 | 6 | Housing Help Desk Staff (second window) | Pass. Both referrals in the queue. Referral 1: Accepted, then Resulted in service. Referral 2: Not appropriate, reason "Program criteria not met" |
 | 7 | Older Adult Wellness Center Staff (third window) | Pass. Neither referral in the queue; the detail page says "This referral is not available"; the API answers 404 to reads and corrections |
-| 8 | Referring Worker | Pass. Sees Accepted / Resulted in service, and "Reason: Program criteria not met"; referral 1 shows created by "Referring Worker (demo)". **Reached by scripted navigation:** the script opened `/sent/` by its address, not through a visible link (see the limitation below) |
+| 8 | Referring Worker | Display check passed: sees Accepted / Resulted in service, and "Reason: Program criteria not met"; referral 1 shows created by "Referring Worker (demo)". How the script reached this page is unverified; this does not establish that visible employee navigation passed |
 | 9 | Housing Help Desk Staff, two windows | Pass. A correction from the older window was refused: "Your change was not saved. Review the latest information before trying again." Outcome put back to Resulted in service |
-| 10 | Window 1, **Switch person** | Pass. As Housing Help Desk Staff the sent list is empty; back as Referring Worker it has both referrals, so the identity really changes. **Reached by scripted navigation:** after each switch the script opened `/sent/` by its address, not through a visible link (see the limitation below) |
+| 10 | Window 1, **Switch person** | Identity check passed: as Housing Help Desk Staff the sent list is empty; back as Referring Worker it has both referrals. Navigation limitation: switching back lands on `/referral/` without a My Referrals link. Opening `/sent/` directly works, but the original script's navigation method is unverified |
 | 11 | Referring Worker | Pass. Reporting Center (organization, this month): total 2, accepted 1, not appropriate 1, resulted 1, awaiting 0 |
 | 12 | All | Pass. 267 addresses checked across all windows: none with participant data. Browser storage empty; the session cookie is not readable by page script (HttpOnly). Server log: one `[notification] … type=NEW_REFERRAL … outcome=SENT` line per referral, IDs only, no names or needs |
 | 13 | All | Pass. axe WCAG 2.2 AA: no violations on the Reporting Center (worker), referral detail (Housing staff), received list (Wellness staff), Referrals I sent (worker) |
@@ -160,7 +160,7 @@ or Run 3 stands in for it.
    then reload this page." Other errors still suggest reloading. Covered
    by two tests in `e2e/directReferral.spec.js`.
 
-## Not covered here
+## Coverage and production dependencies
 
 - **Demo sign-in and identity switching:** covered by Run 3.
 - **Describe the need in Find a Program:** covered by Run 3, step 3.
