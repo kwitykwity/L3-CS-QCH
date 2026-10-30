@@ -10,7 +10,7 @@ import { STATUS_CODES } from 'node:http';
 // req.baseUrl, so the mount point is chosen from this fixed list by
 // prefix; the request path itself is never copied. Keep the list in step
 // with the app.use() mounts in app.js (a test checks this).
-export const MOUNT_POINTS = Object.freeze(['/api/referrals', '/api/program-management', '/api/reports', '/api/gpme', '/api']);
+export const MOUNT_POINTS = Object.freeze(['/api/referrals', '/api/program-management', '/api/reports', '/api/permissions', '/api/gpme', '/api']);
 
 export function safeLocation(req) {
   const url = typeof req.originalUrl === 'string' ? req.originalUrl.split('?')[0] : '';

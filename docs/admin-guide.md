@@ -9,11 +9,10 @@ refused safely if someone else changed the same record first.
 
 **Not available yet:**
 
-- **Giving or removing permissions** (PRD 3.8). Permissions are stored as
-  grants (see [architecture.md](architecture.md#who-may-do-what)), but no
-  screen or route changes them yet. Who the first permission
-  administrators are is a QCH decision
-  ([qch-it-requirements.md](qch-it-requirements.md)).
+- **Making someone a permission administrator:** not supported on this
+  screen. Whether authorized administrators should assign administrator
+  rights here or through a separate process remains open question Q1
+  in the README's Permission administration section.
 - **Setting a Program's notification email** (where new-referral emails
   go).
 - **Sign-in.** Until Entra sign-in exists, these screens are used with
@@ -27,6 +26,7 @@ refused safely if someone else changed the same record first.
 | Change a shared field's wording or options, replace or discontinue it | `MANAGE_PROGRAM` for **every** Program that uses the field |
 | Retire a field | `MANAGE_ORGANIZATION` (organization-wide), and only 90 days after it was discontinued (see the note below) |
 | Create a Program, move a Program to another Department, create or rename a Department, discontinue or reactivate a Department | `MANAGE_ORGANIZATION` |
+| Give or remove permissions on the Permissions screen | `ADMINISTER_PERMISSIONS` (organization-wide) |
 
 **About the 90 days:** the exact 90-day wait before a field can be retired
 is the team's implementation decision (`RETIRE_AFTER_DAYS` in
@@ -35,6 +35,36 @@ different period.
 
 Creating a Program does **not** give anyone permission to manage it. Its
 managers need a `MANAGE_PROGRAM` grant first.
+
+## Permissions (`/permissions/`)
+
+1. Choose a staff member and select **Show permissions**.
+2. Their current permissions are listed, each with the Program it is for or
+   "Organization-wide".
+3. To add one, choose the permission and, if it is for one Program, the
+   Program, then select **Add permission**.
+4. To take one away, select **Remove** next to it and confirm.
+
+Things to know:
+
+- You cannot add permissions to yourself; ask another administrator.
+  This is required: nobody can give themselves more authority (Frozen
+  Handoff PRD 23, 24). You can remove your own permissions.
+- Administrator rights are not given or removed on this screen. That is
+  not built yet because the frozen documents do not say whether it should
+  be; it is an open question for QCH (Q1 in the README, "Permission
+  administration"), not a QCH rule.
+- Staff who are not active cannot get new permissions, but you can still
+  remove theirs (open question Q3 in the README).
+- Permissions marked "Managed outside this screen" (administrator rights,
+  Q1) or "Demo data; not managed here" (demo setup only, never production)
+  cannot be removed here.
+- If another administrator changed the same person first, nothing is
+  changed and the current list is shown. Check it, then try again if you
+  still need to.
+- Every add and removal is saved with an audit event naming who did it.
+- A removed permission stops working for that person's next action. Pages
+  they already have open are refused by the server when they act.
 
 ## Program Management (`/program-management/`)
 

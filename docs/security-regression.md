@@ -102,7 +102,7 @@ removed. Each one made a test fail:
 
 ## Route inventory
 
-49 API routes (30 use POST, PUT or PATCH: 27 change shared data, 3 are self-service or read-only), plus `GET /health` (public, availability only). People used
+54 API routes (33 use POST, PUT or PATCH: 29 change shared data, 3 are self-service or read-only, plus `POST /api/gpme/interpret` from Task D, which has no row below yet), plus `GET /health` (public, availability only). People used
 in the tests: a referrer with no grants, receivers with all, view-only or
 another Program's receiving capabilities, Program managers for this or
 another Program or only at Department/Organization scope, organization
@@ -131,6 +131,7 @@ and an active user with no grants.
 | `POST .../fields/:fieldId/retire` | `MANAGE_ORGANIZATION` (ORG), 90 days after discontinuing | Program manager, Department/Org-scope manager, DEMO org admin, permission admin, receiver, no grants |
 | `POST .../departments`; `PATCH .../departments/:id`; `POST .../departments/:id/discontinue`, `/reactivate` | `MANAGE_ORGANIZATION` (ORG) | Same |
 | `POST .../programs`; `POST .../programs/:id/move` | `MANAGE_ORGANIZATION` (ORG) | Same |
+| `POST /api/permissions/users/:userId/grants`, `.../grants/:grantId/revoke` | `ADMINISTER_PERMISSIONS` (ORG). Never to add to themselves (no self-elevation, Frozen Handoff PRD 23, 24); removing their own permissions is allowed | Referrer, receiver, Program manager, Department/Org-scope manager, org admin, DEMO org admin, no grants |
 
 ### Routes that read data
 
@@ -143,6 +144,7 @@ and an active user with no grants.
 | `GET /api/referrals/not-appropriate-reasons`, `/api/programs`, `/api/me/affiliation`, `/api/gpme/need-categories` | Any active user | Reference data or the caller's own record; no notification email |
 | `GET .../programs`, `.../programs/:id`, `/matching-facts`, `/available-fields`, `/fields` | `MANAGE_PROGRAM` for that Program | Others: 403/404, or the Program is left out of the list |
 | `GET .../organization-programs`, `.../departments` | `MANAGE_ORGANIZATION` (ORG) | Others: 403/404 |
+| `GET /api/permissions/overview`, `/api/permissions/users/:userId/grants` | `ADMINISTER_PERMISSIONS` (ORG) | Others: 403; staff names only, never email addresses |
 | `GET /api/reports/total-referrals`, `/timing-metrics`, `/referral-activity`, `/departments` | Any active user; aggregate only | No referral content, contact details, notes or explanations (both suites) |
 
 ## Not covered here, and why
@@ -188,4 +190,3 @@ them.
 | Notifications | The Graph sender sends only as the shared mailbox and is limited to it (least-privilege permission or access policy); provider errors are stored and logged as categories only | Decisions 6 and 2 |
 | Secrets | Secrets come from Key Vault (or QCH's choice); none in the repository, configuration files or logs | Decision 2 |
 | Demo sign-in | When demo sign-in (PRD 16.1) is built: it cannot be turned on in production, and demo identities cannot reach production data | Engineering (not built) |
-| Permission administration | When the screens to grant and remove capabilities are built: only `ADMINISTER_PERMISSIONS` holders may use them, every change is audited, and a person cannot grant themselves anything | Engineering (not built) |

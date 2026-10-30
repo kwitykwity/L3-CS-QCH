@@ -90,7 +90,7 @@ server; the pages only hide buttons the server says are not available.
 | `UPDATE_RECEIVED_REFERRAL` | Program | Correct a decision (Accepted / Not Appropriate, reason, explanation) |
 | `MANAGE_PROGRAM` | Program | Maintain that Program's information, lifecycle, matching facts, fields and values |
 | `MANAGE_ORGANIZATION` | Organization | Create and move Programs, manage Departments, retire fields |
-| `ADMINISTER_PERMISSIONS` | | Defined in the schema; no feature uses it yet (permission administration is not built) |
+| `ADMINISTER_PERMISSIONS` | Organization | Give and remove the other permissions above on the Permissions screen. Required (Frozen Handoff PRD 23, 24): server-side check, no self-elevation (nobody adds to themselves), Program scope validated, audited. Removing your own permissions is allowed. This permission itself is not managed on the screen: not built pending open question Q1 (README, "Permission administration"), not QCH policy |
 | `VIEW_UNDERLYING_REFERRAL` | | Defined in the schema; no feature uses it yet |
 
 A person who cannot view a referral gets the same 404 as for a referral
@@ -112,6 +112,7 @@ details are in the README sections and the header comment of each
 | Guided matching | `GET /api/gpme/need-categories`, `POST /api/gpme/match` |
 | Referrals | `POST /api/referrals`, `GET /api/referrals/submissions/:submissionId`, `GET /api/referrals/received`, `GET /api/referrals/sent`, `GET /api/referrals/:referralId`, `GET /api/referrals/not-appropriate-reasons` |
 | Response, outcome, corrections | `POST /api/referrals/:id/response`, `POST .../outcome`, `POST .../outcome/correction`, `POST .../response/correction` |
+| Permissions | `GET /api/permissions/overview`, `GET /api/permissions/users/:userId/grants`, `POST /api/permissions/users/:userId/grants`, `POST /api/permissions/users/:userId/grants/:grantId/revoke` |
 | Reports | `GET /api/reports/total-referrals`, `GET /api/reports/timing-metrics`, `GET /api/reports/referral-activity`, `GET /api/reports/departments` |
 | Program Management | Under `/api/program-management`: Programs (list, read, update, discontinue, reactivate, matching facts), fields (list, available, create, apply, settings, values, rename, replace, discontinue, reactivate, retire), options, Departments, creating and moving Programs |
 
@@ -125,7 +126,7 @@ details are in the README sections and the header comment of each
 | `/sent/` | Referrals I sent: the creator's own referrals and each one's Response, Decision and Service outcome, read-only | Built (Trello Task L) |
 | `/receiving/` | Received referrals, respond, record and correct outcomes | Built (Trello Task A, merged in #37 as e3fd11e) |
 | `/reporting/` | Reporting Center: aggregate counts, rates and timing by period and scope | Built (Trello Task B, merged in #41) |
-| Permission administration | | Not built |
+| `/permissions/` | Choose a staff member, see their permissions, add or remove them | Built (Trello Task Y) |
 
 Every page supports keyboard-only use, S/M/L/XL text sizes and light and
 dark themes; see [regression-coverage.md](regression-coverage.md).
