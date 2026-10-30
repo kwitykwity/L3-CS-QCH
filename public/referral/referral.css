@@ -123,6 +123,11 @@ input[type="text"], input[type="search"], input[type="tel"], input[type="email"]
   font: inherit;
 }
 input[type="number"] { max-width: 8rem; }
+/* Checkboxes and radio buttons follow S/M/L/XL as well (Frozen Handoff PRD
+   §33: text size applies consistently to relevant controls). Browsers draw
+   them at a fixed ~13px; sizing them from the root text size makes them
+   12, 14, 18 or 24px with the chosen size (Task 201). */
+input[type="checkbox"], input[type="radio"] { width: 1rem; height: 1rem; flex: none; }
 /* Date boxes are built in code on the Program fields page; they were also
    stuck at the browser's default size (Task BB, found with seeded fields). */
 input[type="date"] { max-width: 14rem; }
@@ -141,7 +146,9 @@ fieldset.plain:disabled { opacity: 0.75; }
 .program-options { list-style: none; margin: 0; padding: 0; max-height: 20rem; overflow-y: auto; }
 .program-options li { border-top: 1px solid var(--border); }
 .program-options li:first-child { border-top: 0; }
-.program-options label { display: flex; padding: 0.5rem 0.25rem; width: 100%; }
+/* flex-wrap: with radio buttons sized to the text (Task 201), the name and
+   details no longer fit on one line at XL on a 320px screen; the details wrap. */
+.program-options label { display: flex; flex-wrap: wrap; padding: 0.5rem 0.25rem; width: 100%; }
 .program-options .program-meta { margin-left: auto; color: var(--muted); font-size: 0.875rem; text-align: right; }
 
 .field__error { color: var(--error); font-weight: 600; margin: 0.25rem 0 0; }
