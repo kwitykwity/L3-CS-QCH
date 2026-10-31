@@ -37,7 +37,7 @@ Current Handoff Wireframes, using the MVP 33 classifications. In short:
   in the next section. The architecture they serve is confirmed (PRD 27 to
   30): SharePoint Lists in a private site with no separate production
   database, Azure Functions with managed identity, Graph `Sites.Selected`,
-  `Mail.Send` through Exchange RBAC for Applications, and Entra SSO with MFA.
+  a Graph mail-sending permission with Exchange RBAC for Applications (permission model to be confirmed with QCH IT), and Entra SSO with MFA.
 - **Not delivered:** an external AI service. It is excluded from the MVP (PRD 7,
   MVP 26), so it is not a pending item.
 - **Gates not yet met on `main`:** items in open pull requests (an open pull
