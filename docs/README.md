@@ -26,6 +26,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 
 | File | What it covers |
 | --- | --- |
+| [release-notes-capstone-handoff.md](release-notes-capstone-handoff.md) | **Capstone handoff release notes**: what is delivered (with evidence), production status, how to run and verify, and the final verification, with the frozen commit and Task V results pending (Task 219) |
 | [demo-runbook.md](demo-runbook.md) | **Nov. 9 demo runbook**: setup, who plays which role, the exact journey and what to expect, reset, fallbacks, and what must not be presented as done (Task T) |
 | [production-architecture.md](production-architecture.md) | **Confirmed production architecture** from the Frozen Handoff PRD (SharePoint Lists, Azure Functions, Graph, Exchange RBAC, Entra ID with MFA), confirmed archival behavior, and the full checklist of QCH/QCH IT production dependencies still outstanding (Task PP/QQ) |
 | [pending-qch-it-decisions.md](pending-qch-it-decisions.md) | **Pending QCH IT Architecture Decisions** as they stood before the frozen PRD (most are now confirmed; see production-architecture.md), and which unfinished work is an engineering gap versus an outside dependency |
