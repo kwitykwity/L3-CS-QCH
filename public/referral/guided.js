@@ -14,7 +14,7 @@
 //   group are equals; the list order is alphabetical, not a ranking
 //   (PRD 8.4).
 // - Only need categories, an age range and a ZIP are ever sent to
-//   matching (PRD 8.2). Matching answers are not saved with the referral
+//   matching (Handoff PRD: GPME matching inputs). Matching answers are not saved with the referral
 //   (PRD 5.3).
 
 export const GUIDED_MESSAGES = Object.freeze({
@@ -67,7 +67,7 @@ export function programInformationOf(item) {
 
 // Describe-the-need step (Task D). The description only PROPOSES answers
 // for the worker to check; matching still runs on the confirmed need
-// categories, age range, and ZIP alone (PRD 8.2). The text is held in memory
+// categories, age range, and ZIP alone (Handoff PRD: GPME matching inputs). The text is held in memory
 // for this screen only, sent in a POST body to /api/gpme/interpret, and never
 // saved, logged, or sent with the referral.
 export const DESCRIBE_MESSAGES = Object.freeze({
@@ -222,7 +222,7 @@ export function firstGuidedError(errors) {
 }
 
 // The exact body for POST /api/gpme/match, and the `gpme` part of a
-// GPME-assisted referral. Only the three approved inputs (PRD 8.2); blank
+// GPME-assisted referral. Only the three approved inputs (Handoff PRD: GPME matching inputs); blank
 // optional answers are left out. An exact age is sent as that one age
 // (min equals max), never widened into a range (Handoff PRD 5.3).
 export function toMatchRequest(values) {

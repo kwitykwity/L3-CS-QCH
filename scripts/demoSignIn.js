@@ -19,6 +19,7 @@
 
 import { randomBytes } from 'node:crypto';
 import { readFile } from 'node:fs/promises';
+import { withDevNotice } from './devNotice.js';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import express from 'express';
@@ -117,6 +118,7 @@ export function createDemoSignIn({ nodeEnv } = {}) {
     res.set('Cache-Control', 'no-store');
     if (!personaOf(req)) return res.redirect('/demo/');
     const tag = '<script src="/demo/banner.js"></script>';
+    html = withDevNotice(html);
     res.type('html').send(/<\/body>/i.test(html) ? html.replace(/<\/body>/i, `${tag}</body>`) : html + tag);
   }
 

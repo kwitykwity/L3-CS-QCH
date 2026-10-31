@@ -7,7 +7,7 @@
 //
 // It reads ONLY need categories, an age range, and a ZIP code. Notes,
 // Referral Context, worker identity, and anything else are never read,
-// even if a caller passes them (PRD 8.2).
+// even if a caller passes them (Handoff PRD: GPME matching inputs).
 //
 // For each active Program, each criterion gives PASS, FAIL, or NOT_CHECKED:
 //   - Need: the Program offers at least one picked need category -> PASS.
@@ -103,7 +103,7 @@ function byDepartmentThenProgram(a, b) {
 //            needCategories: [{ needCategoryId, name, lifecycleStatus }],
 //            ruleVersion }
 export function matchPrograms(input, { candidates, needCategories, ruleVersion = GPME_RULE_VERSION }) {
-  // Read only the three approved inputs (PRD 8.2).
+  // Read only the three approved inputs (Handoff PRD: GPME matching inputs).
   const picked = new Set(input.needCategoryIds);
   const ageRange = input.ageRange ?? null;
   const participantZip = input.participantZip ?? null;
