@@ -66,15 +66,11 @@ support or replace actual browser-zoom checks.
 
 ## Remaining work
 
-- Measure the viewport for any further reproduction, recording browser
-  version and zoom. Earlier viewport dimensions remain unknown.
-- Inspect saved screenshots for personal browser chrome and verify links
-  before publication.
-- Link this report from docs/README.md and prepare a defect issue draft
-  for F1.
-- Review the final documentation/evidence changes before staging,
-  committing, pushing or publishing.
-- Complete report review and merge before marking Task 203 complete.
+- Complete PR review and merge before marking Task 203 complete.
+- Track repair and retesting of F1 separately in
+  [issue #102](https://github.com/kwitykwity/L3-CS-QCH/issues/102).
+- For any further reproduction, record the current browser version,
+  zoom and measured viewport. Earlier viewport dimensions remain unknown.
 
 Completed follow-ups below cover the common Program information form,
 guided form/results, receiving response form and outcome-correction form.
