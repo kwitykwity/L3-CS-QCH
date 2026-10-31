@@ -2,6 +2,21 @@
 
 QCH Connect - L3 Capstone Project
 
+QCH Connect is an internal pre-intake referral system for Queens Community
+House employees. This repository is the Capstone demo application, which runs
+on in-memory stores with **synthetic data only**; it is not a production
+deployment. Start with the handoff documents in [`docs/`](docs/README.md):
+[known limitations](docs/known-limitations.md) (what does not work or is not
+verified yet), [handoff questions](docs/handoff-questions.md) (what QCH and
+QCH IT still have to decide) and the
+[confirmed production architecture](docs/production-architecture.md).
+
+The governing requirements are the Frozen Handoff PRD (October 28, 2026) and
+the Handoff MVP. Citations written `§n` in this file point to the Frozen
+Handoff PRD. Citations written with a decimal, such as "PRD 15.3", point to
+the earlier Final Technical PRD (October 14, 2026), the historical
+implementation baseline; where the two differ, the Frozen Handoff PRD governs.
+
 ## Database
 
 The Azure SQL schema, migrations, and synthetic development seed in
@@ -22,7 +37,10 @@ source or browser code (PRD §29).
 ## Stack
 
 - **Frontend** — plain HTML, CSS, and JavaScript. No framework, no build step.
-- **Backend** — Node.js with Express 5.
+- **Backend** — Node.js with Express 5. This is the current demo server. The
+  confirmed production server side is Azure Functions with a managed identity
+  (§29); no Azure Functions code exists in this repository yet
+  ([known-limitations.md](docs/known-limitations.md)).
 - **Tests** — Node's built-in runner (`node:test`) with supertest.
 
 ## Requirements
@@ -33,7 +51,7 @@ policy (decided Oct 11). `npm run check-runtime` verifies the running version.
 
 > **QCH's production Node version is unconfirmed.** 24.15.0 is the team's agreed
 > local development version only. The version QCH runs in production remains
-> pending QCH IT confirmation of the Azure App Service configuration.
+> pending QCH IT confirmation of the Azure Functions runtime configuration.
 
 ## Setup
 
@@ -45,26 +63,33 @@ cp .env.example .env
 
 `.env` is gitignored and must never be committed. Values marked
 `PROVIDED_BY_QCH_IT` have to come from QCH IT — do not guess them and do not
-reuse values from another project. In production, `AZURE_CLIENT_SECRET` and
-`DATABASE_URL` come from Azure Key Vault (PRD 15.2) rather than from a `.env`
-file.
+reuse values from another project. Under the confirmed production design the
+Azure Functions use a managed identity and no production secrets or long-lived
+keys go in source or browser code (§29); QCH IT decides what configuration
+production actually needs. Three placeholders in `.env.example` come from the
+earlier plan and are not instructions: `AZURE_CLIENT_SECRET` and
+`KEY_VAULT_URI` (the earlier plan kept the secret in Azure Key Vault) and
+`DATABASE_URL` (there is no separate production database, §27).
 
 ## Configuration
 
-Every variable in `.env.example`. "Read by code yet?" means this scaffold
-actually loads the value — `PORT` and `NODE_ENV` are the only two.
+Every variable in `.env.example`. "Read by code yet?" means the application
+actually loads the value — `PORT` and `NODE_ENV` (`src/config.js`) are the
+only two. The "Where it lives in production" column matches
+[docs/qch-it-requirements.md](docs/qch-it-requirements.md); nothing in it has
+been provisioned.
 
 | Variable               | What it's for                                           | Secret? | Provided by                                    | Where it lives in production                   | Read by code yet? |
 | ---------------------- | ------------------------------------------------------- | ------- | ---------------------------------------------- | ---------------------------------------------- | ----------------- |
-| `PORT`                 | Port the Express server listens on                      | no      | Set locally in `.env` (`.env.example` uses 3000) | App Service settings, to be confirmed by QCH IT | yes               |
-| `NODE_ENV`             | Run mode; exactly `development`, `test`, or `production` | no      | Set locally in `.env`                          | App Service settings, to be confirmed by QCH IT | yes               |
-| `AZURE_TENANT_ID`      | Entra ID tenant that sign-in authenticates against      | no      | QCH IT                                         | App Service settings, to be confirmed by QCH IT | no                |
-| `AZURE_CLIENT_ID`      | Identifier of the Entra ID app registration             | no      | QCH IT                                         | App Service settings, to be confirmed by QCH IT | no                |
-| `AZURE_CLIENT_SECRET`  | Secret for the Entra ID app registration                | **yes** | QCH IT                                         | Azure Key Vault (PRD 15.2)                     | no                |
-| `AZURE_REDIRECT_URI`   | Address Entra ID returns to after sign-in               | no      | QCH IT                                         | App Service settings, to be confirmed by QCH IT | no                |
-| `KEY_VAULT_URI`        | Address of the Key Vault holding the secrets            | no      | QCH IT                                         | App Service settings, to be confirmed by QCH IT | no                |
-| `DATABASE_URL`         | Database connection string                              | **yes** | QCH IT                                         | Azure Key Vault (PRD 15.2)                     | no                |
-| `NOTIFICATION_MAILBOX` | Shared mailbox that notifications are sent from         | no      | QCH IT                                         | App Service settings, to be confirmed by QCH IT | no                |
+| `PORT`                 | Port the Express server listens on                      | no      | Set locally in `.env` (`.env.example` uses 3000) | Supplied by the hosting platform; QCH IT to confirm how | yes               |
+| `NODE_ENV`             | Run mode; exactly `development`, `test`, or `production` | no      | Set locally in `.env`                          | Set by the deployment; must be exactly `production` | yes               |
+| `AZURE_TENANT_ID`      | Entra ID tenant that sign-in authenticates against      | no      | QCH IT                                         | QCH IT-approved production configuration; hosting details to be confirmed | no                |
+| `AZURE_CLIENT_ID`      | Identifier of the Entra ID app registration             | no      | QCH IT                                         | QCH IT-approved production configuration; hosting details to be confirmed | no                |
+| `AZURE_CLIENT_SECRET`  | Secret for the Entra ID app registration (earlier-plan placeholder) | **yes** | QCH IT, if it is needed at all                 | Not decided: the Functions use a managed identity (§29); QCH IT decides whether sign-in still needs a secret | no                |
+| `AZURE_REDIRECT_URI`   | Address Entra ID returns to after sign-in               | no      | QCH IT                                         | QCH IT-approved production configuration; hosting details to be confirmed | no                |
+| `KEY_VAULT_URI`        | Address of a Key Vault holding secrets (earlier-plan placeholder) | no      | QCH IT, if it is needed at all                 | Not named in the confirmed architecture; QCH IT decides | no                |
+| `DATABASE_URL`         | Database connection string (earlier-plan placeholder)   | **yes** | Not needed                                     | **Superseded**: no separate production database; data lives in SharePoint Lists (§27) | no                |
+| `NOTIFICATION_MAILBOX` | Shared mailbox that notifications are sent from         | no      | QCH IT                                         | Production configuration (QCH IT)              | no                |
 
 ## Run
 
@@ -73,7 +98,12 @@ npm start          # http://localhost:3000
 npm run dev        # same, restarts on file change
 ```
 
-`PORT` and `NODE_ENV` are the only environment variables this scaffold reads.
+`npm start` and `npm run dev` read only `PORT` and `NODE_ENV`. The synthetic
+development scripts (`npm run dev:synthetic`, `npm run dev:demo`) also read
+two switches that are not in `.env.example`: `QCH_DEMO_SIGN_IN=true` (demo
+sign-in personas; `dev:demo` sets it) and `QCH_TASK_C_SYNTHETIC_DEMO=true`
+(extra synthetic Program information). They are for synthetic demos only and
+are described in [docs/demo-environment.md](docs/demo-environment.md).
 
 `NODE_ENV` is **required** and must be exactly `development`, `test`, or
 `production`. There is no default: if it is missing or unrecognized, the server
@@ -200,21 +230,28 @@ An `INTERRUPTED` row means the last attempt's outcome is unknown: the email
 may or may not have gone out. The message is generic, so a duplicate only
 tells the Program twice.
 
-Remaining tasks, all waiting on QCH IT decisions (not assumed here):
+Remaining tasks. The production architecture is confirmed (§21, §29, §30,
+§37); what remains is building against it and QCH/QCH IT provisioning, listed
+in [docs/production-architecture.md](docs/production-architecture.md):
 
-- **The Microsoft Graph sender.** QCH IT has created the shared mailbox. Still
-  to confirm: the Entra app registration, the Graph permission and how the
-  app may send as that mailbox (Send As, application permission and any
-  access policy), and the production configuration values
-  (`NOTIFICATION_MAILBOX`, `AZURE_*`). The sender must meet the contract in
-  `simulatedOutbox.js` and use `categoryForHttpStatus()` for failures.
+- **The Microsoft Graph sender.** Production email is planned through
+  Microsoft Graph from the QCH shared mailbox, restricted through Exchange
+  RBAC for Applications (§21, §30). QCH IT reported the shared mailbox as
+  created; the Graph mail-sending permission and its RBAC restriction, the
+  Entra app registration and the production configuration values
+  (`NOTIFICATION_MAILBOX`, `AZURE_*`) are still outstanding. The sender must
+  meet the contract in `simulatedOutbox.js` and use `categoryForHttpStatus()`
+  for failures.
 - **The production store**, meeting the delivery contract in
   `memoryDeliveryStore.js`, plus each Program's notification email
-  (`programs.notification_email` in the current SQL design). Where data
-  lives is not decided yet.
-- **Production wiring**: `src/server.js` creates the notifier and starts
-  `startNotificationRetries()` once the sender and store exist, and stops
-  the timer on shutdown.
+  (`programs.notification_email` in the earlier SQL design). Production data
+  is planned for SharePoint Lists in a private QCH Connect site (§27); that
+  store has not been built or provisioned.
+- **Production wiring**: the production server entry point creates the
+  notifier and starts `startNotificationRetries()` once the sender and store
+  exist, and stops the timer on shutdown. Today that entry point is
+  `src/server.js`; the confirmed production server side is Azure Functions
+  (§29), which are not built.
 - **Who sets each Program's notification email.** No screen or route sets
   it yet.
 - **Monitoring**: alerts on final failures (`warn` lines, PRD 11.6) in the
@@ -265,10 +302,12 @@ follow the GPME Decision Proposal the team approved on Oct 18:
   with its matching facts; a save that leaves `languageIds` out keeps the
   saved languages. Schema: `db/migrations/004_language_of_service.sql`.
 - **Write-path requirement (open, for the production store):** matching facts are validated when a Program is edited
-  (`updateProgramMatchingFacts`). A relational production store must change the state
+  (`updateProgramMatchingFacts`). The earlier SQL design changes the state
   columns and `program_service_area_zips` rows in one transaction after that
   validation, because the database cannot CHECK the state/ZIP rule across
-  tables. Read-time fail-safe handling does not replace this.
+  tables. The production store (planned as SharePoint Lists, not built) must
+  keep that state/ZIP rule consistent when it saves. Read-time fail-safe
+  handling does not replace this.
 
 The database side (state columns, `program_service_area_zips`) is migration
 003 (merged in #15).
@@ -477,11 +516,16 @@ awaiting response, resulted in service, and the rates from PRD 12.4.
 
 ## Deployment and handoff
 
-[`docs/`](docs/README.md) holds the handoff documentation (PRD 18, 19):
-the confirmed production architecture and outstanding QCH IT dependencies,
-the earlier open decisions, architecture, data dictionary, admin guide,
-troubleshooting, operations, the deployment runbook, everything QCH IT needs
-to provide, the handoff checklist, and dependency licenses.
+[`docs/`](docs/README.md) holds the handoff documentation (PRD 18, 19).
+Current handoff guidance, in the order QCH IT will want it:
+[known limitations](docs/known-limitations.md),
+[handoff questions](docs/handoff-questions.md), the
+[confirmed production architecture and outstanding QCH IT dependencies](docs/production-architecture.md),
+[what QCH IT needs to provide](docs/qch-it-requirements.md), and the
+[handoff checklist](docs/handoff-checklist.md). The docs index also lists the
+architecture, data dictionary, admin guide, troubleshooting, operations, the
+deployment runbook (a draft, partly written for the earlier plan) and
+dependency licenses, and keeps historical documents in a separate section.
 `npm run licenses` lists every installed package's license.
 
 ## What is built and what is not
@@ -500,7 +544,13 @@ non-production demos (Task O, #60; `npm run dev:demo`), and the audit
 trail. The schema design and migrations are in `db/`.
 **Not built yet:** a production data store, Entra sign-in, a way to set
 a Program's notification email, the Microsoft Graph sender (notifications
-run on a simulated outbox in development), and any Azure resources. Some
-of these wait on QCH IT decisions;
+run on a simulated outbox in development), Azure Functions, and any Azure
+resources. Azure and Microsoft 365 provisioning is QCH/QCH IT work and is a
+production dependency, not completed Capstone infrastructure. The confirmed
+design and the outstanding items are in
+[`docs/production-architecture.md`](docs/production-architecture.md), and
+what is not done or not verified is in
+[`docs/known-limitations.md`](docs/known-limitations.md).
 [`docs/pending-qch-it-decisions.md`](docs/pending-qch-it-decisions.md)
-says which. Any data used for demos must be synthetic.
+predates the confirmed architecture and is kept as a historical record. Any
+data used for demos must be synthetic.
