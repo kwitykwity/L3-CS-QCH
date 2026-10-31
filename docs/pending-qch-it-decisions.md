@@ -17,7 +17,7 @@ This page keeps two things apart:
 | Privacy in the Lists | Production Lists must not store participant exact age, age range, or unnecessary discovery or interpretation inputs. | PRD 28; MVP 29 |
 | Server side | Azure Functions with a managed identity. No production secrets or long-lived service keys in source or browser code. | PRD 29; MVP 28 |
 | Microsoft Graph for the site | `Sites.Selected` on the dedicated site, not tenant-wide `Sites.ReadWrite.All`. | PRD 30; MVP 28 |
-| Email | Notifications are sent after the referral is saved, from the shared mailbox named in PRD 21, through Microsoft Graph `Mail.Send`, restricted to that mailbox by Exchange RBAC for Applications. The frozen PRD names the restriction (Exchange RBAC for Applications) and says "approved Microsoft Graph permissions"; the permission name `Mail.Send` comes from the Task 205 instructions, and QCH IT confirms the exact permission at configuration. | PRD 21, 30; MVP 21, 28 |
+| Email | Notifications are sent after the referral is saved, from the shared mailbox named in PRD 21, through Microsoft Graph. The frozen PRD says "approved Microsoft Graph permissions" restricted through Exchange RBAC for Applications. It does not name `Mail.Send`; that name comes from the Task 205 instructions. **To confirm with QCH IT:** these are two separate controls. An Entra Graph application permission (for example `Mail.Send`) is granted on the app registration; an Exchange RBAC for Applications role assignment is configured in Exchange. Exchange RBAC does not by itself restrict a separate tenant-wide `Mail.Send` grant that may also exist, so QCH IT must say which grants are in place and how the tenant-wide one is avoided or limited. **Required before production:** verify the effective mailbox scope, that the application can send from the approved shared mailbox and cannot send from any other mailbox. | PRD 21, 30; MVP 21, 28 |
 | Sign-in | Microsoft Entra ID single sign-on with MFA according to QCH policy. | PRD 22; MVP 22 |
 | Archival | When the active referral list reaches 2,500 records, the 500 oldest eligible closed/completed referrals are archived. Open and Awaiting Response referrals are never archived, even if fewer than 500 are eligible. Archived records stay read-only and available for authorized reporting and audit until QCH sets a retention/deletion policy. | PRD 31; MVP 30 |
 | AI | No external AI in the MVP. | PRD 7; MVP 26 |
@@ -33,11 +33,23 @@ This page used to list eight decisions as "Open". Their current state:
 | 3 | SharePoint site and access model | Dedicated private site; direct access for QCH IT administrators only; `Sites.Selected` (PRD 27, 30) | Site provisioning and Graph permission grants (dependencies 2, 4). |
 | 4 | Archive behavior | The rule above (PRD 31) | The archival process is not built. Who builds it is not stated in the frozen documents (question Q9 in [handoff-questions.md](handoff-questions.md)). |
 | 5 | Entra application registration | Entra ID SSO with MFA (PRD 22) | Application configuration, and the connection to the app (dependency 3). |
-| 6 | Graph and mail sending | Shared mailbox, Graph `Mail.Send`, Exchange RBAC for Applications (PRD 21, 30) | Graph permissions, Exchange RBAC and shared mailbox configuration (dependencies 4 to 6). No Graph sender exists in the code. Where a Program's notification address is held is open (known-limitations B5, question Q8). |
+| 6 | Graph and mail sending | Shared mailbox, Graph, Exchange RBAC for Applications (PRD 21, 30). The permission model (Entra Graph application permission versus Exchange RBAC role) is to be confirmed with QCH IT; see the Email row above | Graph permissions, Exchange RBAC and shared mailbox configuration (dependencies 4 to 6), plus verification of the effective mailbox scope. No Graph sender exists in the code. Where a Program's notification address is held is open (known-limitations B5, question Q8). |
 | 7 | AI boundary | Out of MVP scope (PRD 7, MVP 26) | Nothing. Not a pending item. |
 | 8 | Retention and audit | Application-level audit of workflow-changing actions (PRD 26) | The formal retention/deletion policy is QCH's to set (dependency 10). |
 
 The configuration values QCH IT will supply are listed in [qch-it-requirements.md](qch-it-requirements.md). That page and [deployment.md](deployment.md) still describe parts of the earlier App Service / Azure SQL plan; read them with [production-architecture.md](production-architecture.md) section 4.
+
+## Store guarantees the SharePoint Lists adapter must provide
+
+SharePoint Lists is confirmed (PRD 27), but the application depends on three guarantees that the in-memory stores provide today. The production adapter must implement each one, and each must be verified on the real Lists. None of this has been built or run against SharePoint.
+
+| Guarantee | What the application needs | Verification still required |
+| --- | --- | --- |
+| Atomic change plus audit | A change and its audit event commit together or not at all. If the audit write fails, the change does not happen (PRD 19, 26) | Show on the real Lists that a failed audit write leaves no change, and that a failed change leaves no audit event |
+| Concurrency and version checks | A stale update is refused when someone else changed the row first, and two simultaneous updates with the same version produce exactly one winner | Show on the real Lists that a stale version is refused and a concurrent pair has one winner |
+| Submission ID uniqueness | One referral per Submission ID, so a retry never creates a duplicate (PRD 20) | Show on the real Lists that a second create with the same Submission ID returns the first referral and creates none |
+
+If SharePoint Lists cannot provide a guarantee directly, the Azure Functions layer must, and that design is not written yet. The store contract is described in the header comments of `src/referrals/memoryReferralStore.js`. The earlier "Decision 1" text in this page's history named these needs; they are restored here.
 
 ## What in this repository depends on what
 

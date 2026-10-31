@@ -59,8 +59,8 @@ section 3.
 | 1 | Azure production resource provisioning (Azure Functions, managed identity) | QCH IT | Azure Functions with managed identity (PRD 29) | Outstanding |
 | 2 | SharePoint site and List provisioning (private QCH Connect site) | QCH IT | SharePoint Lists, private site, no separate database, privacy boundary (PRD 27, 28) | Outstanding |
 | 3 | Entra ID application configuration (single sign-on, MFA per QCH policy) | QCH IT | Entra ID SSO with MFA (PRD 22) | Outstanding |
-| 4 | Microsoft Graph permissions: `Sites.Selected` for the site; `Mail.Send` for sending | QCH IT | `Sites.Selected`, not `Sites.ReadWrite.All` (PRD 30). The `Mail.Send` name comes from the Task 205 instructions; QCH IT confirms the exact permission | Outstanding |
-| 5 | Exchange RBAC for Applications, limiting sending to the shared mailbox | QCH IT | Sending restricted through Exchange RBAC for Applications (PRD 21, 30) | Outstanding |
+| 4 | Microsoft Graph application permissions: `Sites.Selected` for the site; a Graph permission for sending mail (the name `Mail.Send` comes from the Task 205 instructions, not the frozen PRD) | QCH IT | `Sites.Selected`, not `Sites.ReadWrite.All` (PRD 30). QCH IT confirms the exact mail permission | Outstanding |
+| 5 | Exchange RBAC for Applications role assignment, limiting sending to the shared mailbox. This is separate from the Entra Graph permission in item 4 and does not by itself restrict a tenant-wide `Mail.Send` grant. **Effective mailbox-scope verification is required** | QCH IT | Sending restricted through Exchange RBAC for Applications (PRD 21, 30) | Outstanding |
 | 6 | Shared mailbox configuration | QCH IT | The shared mailbox named in PRD 21. Sending permission and its configuration are not in place | Outstanding |
 | 7 | Production users, groups and permissions, including the first permission administrators | QCH IT and QCH | Permissions are administered in QCH Connect by authorized administrators (PRD 24) | Outstanding |
 | 8 | Production Program Directory configuration | QCH | The internal Program Directory is never committed to a public repository (PRD 8, 35) | Outstanding |
