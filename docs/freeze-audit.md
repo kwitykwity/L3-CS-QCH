@@ -1,15 +1,56 @@
 # Freeze candidate audit (Task V)
 
-**Status: practice run, not the freeze decision.** Run on `main` at
-`36f6e82` on October 26, 2026. The Task V card says to run the audit after
-the integration batch is complete, and two pieces of code are still coming:
-PR #43 (Task D) and Task O (demo sign-in). This practice run finds problems
-early. The real run repeats every check on the freeze candidate before
-Nov. 2; see [Re-run on the freeze candidate](#re-run-on-the-freeze-candidate).
+> **Dated practice audit. Not the current freeze status.** The
+> [Findings](#findings) and [Checks](#checks) below record a practice run on
+> `main` at `36f6e82` on October 26, 2026, and are kept unchanged as that
+> record. Their test counts, "next steps" and references to open pull
+> requests describe that day only.
+>
+> **Current status:** each practice finding is re-checked against `main` at
+> `2746c83` (October 31, 2026) in
+> [Status of the practice findings on current `main`](#status-of-the-practice-findings-on-current-main).
+> **The final Task V audit of the freeze candidate has not been run.** The
+> freeze candidate commit, its test results and the freeze decision are
+> **PENDING TASK V**; see [Re-run on the freeze candidate](#re-run-on-the-freeze-candidate).
+>
+> Requirements: the Frozen Handoff PRD and the Handoff MVP (October 28, 2026)
+> govern. Section numbers such as "PRD 3.8" or "PRD 17.2" in the practice
+> tables refer to the earlier October 14 Final Technical PRD, which is a
+> historical reference only.
 
 The freeze decision belongs to Christina. This page gives her the evidence.
-It records a practice audit of `36f6e82` only. It does not approve the
-freeze for that revision or any later one.
+It does not approve the freeze for `36f6e82`, `2746c83` or any later
+revision.
+
+## Status of the practice findings on current `main`
+
+Checked on `main` at `2746c83` (October 31, 2026). Documentation only: no
+requirement is reopened or added, and nothing is marked resolved without the
+evidence named in its row. "Resolved" means resolved on `main`; it is not a
+Task V freeze result.
+
+| # | Practice finding (October 26) | Status on `2746c83` | Evidence on `main` | Governing text |
+| --- | --- | --- | --- | --- |
+| 1 | Permission administration not built | **Resolved.** The Permissions screen and API merged in #63 (Task Y), with security regression coverage in #79 (Task CC). The remaining policy choices are QCH's to make, not a freeze blocker | `src/permissions/`; `test/permissionAdministration.test.js`; `test/regression/permissionSecurity.test.js`; `e2e/permissions.spec.js`; question Q1 in [handoff-questions.md](handoff-questions.md) | Handoff PRD §23, §24; MVP §23; gate 28 |
+| 2 | PR #43 (describe the need) not merged | **Resolved.** Merged as `f3905cb` | `src/gpme/interpretation/`; `test/gpmeInterpretation.test.js`; `e2e/interpretationReview.spec.js` | Handoff PRD §5.1 to §5.3, §7; MVP §5, §26 |
+| 3 | Task O (demo sign-in) not merged | **Resolved.** Merged in #60 (`667266d`). Production still refuses demo sign-in | `scripts/demoSignIn.js`; `test/demoSignIn.test.js`; [demo-environment.md](demo-environment.md) | Handoff PRD §22, §35; MVP §22 |
+| 4 | XL text scrolls sideways on the New Referral entry screen at 375px (issues #46, #51) | **Resolved.** Fixed in #69 (`c88858b`); no `test.fixme` remains in `e2e/`; issues #46 and #51 were closed on October 30, 2026 | `e2e/accessibilityFinal.spec.js`; `e2e/gpme.spec.js`; item B1 in [known-limitations.md](known-limitations.md) | Handoff PRD §33; MVP §27 |
+| 5 | Home page link said "Make a Direct Referral" | **Resolved.** The start page link reads "New referral" | `public/index.html`; `e2e/accessibilityFinal.spec.js`; `e2e/referralNavigation.spec.js` | Handoff PRD §4 |
+| 6 | No way to set a Program's notification email | **Still open, documented.** A Program created in the app has no recipient, so its notification fails as `NO_RECIPIENT`; the referral is still saved. Where the address should live is a QCH/QCH IT question | `test/regression/notificationFailure.test.js`; item B5 in [known-limitations.md](known-limitations.md); question Q8 in [handoff-questions.md](handoff-questions.md) | Handoff PRD §21; MVP §21 |
+| 7 | Production pieces wait on QCH IT | **Still outstanding; practice wording superseded.** The practice text's choice of "Azure SQL or SharePoint", and "across Azure SQL", are superseded: the Frozen Handoff PRD confirms SharePoint Lists in a private site with no separate database, and Azure Functions with a managed identity. Provisioning them is a production dependency, not a Capstone failure and not completed Capstone infrastructure | [production-architecture.md](production-architecture.md) sections 1 and 3; items A1 to A8 and C3 in [known-limitations.md](known-limitations.md) | Handoff PRD §27, §29, §37; MVP §28, §31 |
+| 8 | Requests QCH confirmed on October 26 not built | **Built, except one default-configuration question.** Language of service: #62. Availability, wait-list and other current Program information in Find a Program: #64 (a separate primary-contact item is question Q4). Separate and shared multi-location listings: #78 (dedicated location screens are question Q2). "Important Information About Our Program": the Frozen Handoff PRD names it as an appropriate flexible-text field, and Program Management already lets a manager add a flexible text field that Find a Program then shows. It is not pre-created, and no code is added for the freeze to pre-create it; whether QCH's default configuration should include it is a handoff question. The practice text's "Oct 30 PRD revision" is superseded by the Frozen Handoff PRD (October 28) | `test/languageOfService.test.js`, `e2e/languageOfService.spec.js`; `test/findProgramInformation.test.js`, `e2e/findProgramInformation.spec.js`; `test/regression/multiLocation.test.js`; `test/programFields.test.js` (flexible text fields) | Handoff PRD §6.3, §8, §9, §13, §14; MVP §8 to §11, §14 |
+| 9 | A report request with a bad period answers "The referral is not valid." | **Still open, not a freeze blocker.** Re-checked: a bad `period` or `date` still answers 400 with that wording, because reporting reuses the referral error. Staff do not see it; the Reporting Center shows its own messages | `src/reporting/reportingService.js` (`referralErrors.invalidRequest`); `src/referrals/errors.js` | Handoff PRD §34 (secure error handling) |
+| 10 | Three handoff docs described merged work as not done | **Resolved** in the practice run's own pull request | This page's history | None |
+
+One related item from the Task 206 card, not a practice finding:
+
+| Item | Status on `2746c83` | Evidence | Governing text |
+| --- | --- | --- | --- |
+| A new-referral email whose delivery record cannot be saved is not retried later | **Known production limitation, documented.** No new retry design is added for the November 2 freeze. The referral stays saved and the failure is logged with its referral ID, so it is traceable. Production Graph email cannot be verified end to end yet | Item B4 (and A5, C4) in [known-limitations.md](known-limitations.md); `test/regression/notificationFailure.test.js` | Handoff PRD §20, §21; MVP §21 |
+
+The [Checks](#checks) table below is also a practice-run record: its test
+counts (Node 1427/1427; browser 158 passed, 1 skipped) are for `36f6e82`
+and are not current. Results for the freeze candidate are **PENDING TASK V**.
 
 How findings are classified (from the Task V card):
 
@@ -68,7 +109,8 @@ freeze, and every finding is re-checked on the freeze candidate.
 
 ## Re-run on the freeze candidate
 
-Once PR #43 and Task O are merged:
+PR #43 and Task O are both merged (`f3905cb`, `667266d`). **These steps
+have not yet been run on a freeze candidate; that run is Task V.**
 
 1. Record the `main` commit being frozen.
 2. `npm test` and `npm run test:e2e`. Every skipped test must have an open
@@ -79,8 +121,11 @@ Once PR #43 and Task O are merged:
 4. Re-run the secrets and real-data scan over the new commits.
 5. Confirm the Task F route inventory includes every new route (PR #43
    adds `POST /api/gpme/interpret`).
-6. Update this table: close findings 2 to 5 if fixed, and record the
-   decision on finding 1 with its date.
-7. Re-read the README "What is built" list and
-   [pending-qch-it-decisions.md](pending-qch-it-decisions.md) against what
-   merged.
+6. Update [Status of the practice findings on current `main`](#status-of-the-practice-findings-on-current-main)
+   for the freeze candidate, and record the freeze decision with its date.
+7. Re-read the README "What is built" list,
+   [known-limitations.md](known-limitations.md),
+   [handoff-questions.md](handoff-questions.md) and
+   [production-architecture.md](production-architecture.md) against what
+   merged. ([pending-qch-it-decisions.md](pending-qch-it-decisions.md)
+   predates the Frozen Handoff PRD.)
