@@ -1,129 +1,68 @@
 # Pending QCH IT Architecture Decisions
 
-**Status: draft.** Part of the handoff documentation. It does not complete production deployment, restore verification, or QCH handoff acceptance.
+**Status: draft.** Part of the handoff documentation. It does not complete production deployment, restore verification, or QCH handoff acceptance. Nothing here has run in QCH's environment: the application runs on in-memory stores with synthetic data.
 
-Production decisions that belong to QCH IT (or to QCH), are not settled,
-and change how QCH Connect is deployed or stored. Until each one is made,
-this repository does **not** assume an answer. The application code runs
-against an in-memory store with synthetic data; nothing here has run in
-QCH's environment.
+**Authority.** Frozen Handoff PRD (October 28, 2026) §21, §22, §26 to §32 and §37, and Handoff MVP §21, §22 and §28 to §31. The full architecture reference is [production-architecture.md](production-architecture.md); the dependency list is in [handoff-checklist.md](handoff-checklist.md).
 
-> **Superseded in part (October 28, 2026).** The Frozen Handoff PRD confirms
-> the planned production architecture: **SharePoint Lists** in a dedicated
-> private QCH Connect SharePoint site (no separate production database),
-> **Azure Functions** with managed identity as the server-side authority, Graph
-> `Sites.Selected` for the site, and the QCH shared mailbox named in PRD 21
-> through Exchange RBAC for Applications (PRD 21, 27 to 30). Decisions 1 to 3 and
-> 6 below were written before that and still say "open"; read them as
-> **confirmed decisions whose provisioning and production verification are still
-> outstanding**. Decision 7 (an AI service) is out of scope: no external AI is
-> delivered in the MVP (PRD 7, MVP 26). The body of this page has not been
-> rewritten; see [prd-traceability.md](prd-traceability.md) gate G-35.
+This page keeps two things apart:
 
-How to read this page:
+- **Confirmed architecture.** Decided in the frozen PRD/MVP. These are not open questions. Provisioning them is QCH/QCH IT work, which is a production dependency and not a Capstone failure (PRD 37; MVP 28, 31).
+- **Still outstanding.** What QCH or QCH IT has not yet provisioned, configured or decided.
 
-- **Decision**: what QCH IT or QCH needs to decide.
-- **Why it matters**: what in the application depends on it.
-- **Until then**: what the team does in the meantime.
-- **Status**: Open, or Answered (with the date and where the answer is
-  recorded). Update a row when QCH IT responds.
+## Confirmed architecture
 
-Configuration values QCH IT will supply once these are settled (Entra IDs,
-secrets, the mailbox, the database connection) are listed separately in
-[qch-it-requirements.md](qch-it-requirements.md).
+| Area | Confirmed | Source |
+| --- | --- | --- |
+| Data | SharePoint Lists in a dedicated, private QCH Connect SharePoint site. There is no separate production database. Direct access to the site is limited to appropriate QCH IT administrators; employees reach referral information through QCH Connect. | PRD 27; MVP 28 |
+| Privacy in the Lists | Production Lists must not store participant exact age, age range, or unnecessary discovery or interpretation inputs. | PRD 28; MVP 29 |
+| Server side | Azure Functions with a managed identity. No production secrets or long-lived service keys in source or browser code. | PRD 29; MVP 28 |
+| Microsoft Graph for the site | `Sites.Selected` on the dedicated site, not tenant-wide `Sites.ReadWrite.All`. | PRD 30; MVP 28 |
+| Email | Notifications are sent after the referral is saved, from the shared mailbox named in PRD 21, through Microsoft Graph. The frozen PRD says "approved Microsoft Graph permissions" restricted through Exchange RBAC for Applications. It does not name `Mail.Send`; that name comes from the Task 205 instructions. **To confirm with QCH IT:** these are two separate controls. An Entra Graph application permission (for example `Mail.Send`) is granted on the app registration; an Exchange RBAC for Applications role assignment is configured in Exchange. Exchange RBAC does not by itself restrict a separate tenant-wide `Mail.Send` grant that may also exist, so QCH IT must say which grants are in place and how the tenant-wide one is avoided or limited. **Required before production:** verify the effective mailbox scope, that the application can send from the approved shared mailbox and cannot send from any other mailbox. | PRD 21, 30; MVP 21, 28 |
+| Sign-in | Microsoft Entra ID single sign-on with MFA according to QCH policy. | PRD 22; MVP 22 |
+| Archival | When the active referral list reaches 2,500 records, the 500 oldest eligible closed/completed referrals are archived. Open and Awaiting Response referrals are never archived, even if fewer than 500 are eligible. Archived records stay read-only and available for authorized reporting and audit until QCH sets a retention/deletion policy. | PRD 31; MVP 30 |
+| AI | No external AI in the MVP. | PRD 7; MVP 26 |
 
-## The decisions
+## How each earlier decision stands
 
-### 1. Where production data lives: SharePoint Lists or the Azure SQL design
+This page used to list eight decisions as "Open". Their current state:
 
-| | |
-| --- | --- |
-| Decision | Whether QCH Connect stores its data in SharePoint Lists or in a relational database such as the Azure SQL design in [`db/migrations/`](../db/migrations/). |
-| Why it matters | Every stored thing depends on it: referrals and their three-part lifecycle, Programs, Departments, configurable fields, users and permission grants, audit events, notification deliveries. The application relies on transactions (a change and its audit event commit together or not at all), row versions for "someone else changed this" checks, and uniqueness rules (for example one referral per Submission ID). Whichever store is chosen has to provide those guarantees, or the application has to be redesigned where it cannot. |
-| Until then | The services talk to a store **contract**, implemented today only by the in-memory stores (`src/referrals/memoryReferralStore.js`, `src/affiliation/memoryStore.js`). Their header comments describe each operation and, where written, the SQL it would run. The SQL schema in `db/migrations/` is the team's **current design**, not a confirmed production store. No production store is built. |
-| Status | Open |
+| # | Earlier decision | Confirmed | Still outstanding |
+| --- | --- | --- | --- |
+| 1 | Where production data lives | SharePoint Lists, private site, no separate database (PRD 27) | The site and Lists are not provisioned (dependency 2). The Azure SQL design in `db/` is an earlier-plan record, not the production store. |
+| 2 | Server-side hosting and compute | Azure Functions with managed identity (PRD 29) | Azure resources are not provisioned (dependency 1). Where the frontend is hosted is a separate decision (dependency 12). |
+| 3 | SharePoint site and access model | Dedicated private site; direct access for QCH IT administrators only; `Sites.Selected` (PRD 27, 30) | Site provisioning and Graph permission grants (dependencies 2, 4). |
+| 4 | Archive behavior | The rule above (PRD 31) | The archival process is not built. Who builds it is not stated in the frozen documents (question Q9 in [handoff-questions.md](handoff-questions.md)). |
+| 5 | Entra application registration | Entra ID SSO with MFA (PRD 22) | Application configuration, and the connection to the app (dependency 3). |
+| 6 | Graph and mail sending | Shared mailbox, Graph, Exchange RBAC for Applications (PRD 21, 30). The permission model (Entra Graph application permission versus Exchange RBAC role) is to be confirmed with QCH IT; see the Email row above | Graph permissions, Exchange RBAC and shared mailbox configuration (dependencies 4 to 6), plus verification of the effective mailbox scope. No Graph sender exists in the code. Where a Program's notification address is held is open (known-limitations B5, question Q8). |
+| 7 | AI boundary | Out of MVP scope (PRD 7, MVP 26) | Nothing. Not a pending item. |
+| 8 | Retention and audit | Application-level audit of workflow-changing actions (PRD 26) | The formal retention/deletion policy is QCH's to set (dependency 10). |
 
-### 2. Server-side hosting and compute
+The configuration values QCH IT will supply are listed in [qch-it-requirements.md](qch-it-requirements.md). That page and [deployment.md](deployment.md) still describe parts of the earlier App Service / Azure SQL plan; read them with [production-architecture.md](production-architecture.md) section 4.
 
-| | |
-| --- | --- |
-| Decision | Where the Node.js server runs in production (the earlier plan named Azure App Service), its Node version, and how its port and settings are provided. |
-| Why it matters | QCH Connect is a server application: authorization, validation and every state change happen on the server (PRD 3.7, 6.4). It cannot run as static pages alone. The Node version is pinned to 24.15.0 for development; production may differ. |
-| Until then | `npm start` runs `node src/server.js` on any Node host. [deployment.md](deployment.md) keeps hosting-specific steps marked **PROVIDED BY QCH IT**. |
-| Status | Open |
+## Store guarantees the SharePoint Lists adapter must provide
 
-### 3. SharePoint site and access model
+SharePoint Lists is confirmed (PRD 27), but the application depends on three guarantees that the in-memory stores provide today. The production adapter must implement each one, and each must be verified on the real Lists. None of this has been built or run against SharePoint.
 
-| | |
-| --- | --- |
-| Decision | If SharePoint is used, which site holds the lists, who can open them directly, and which identity the application uses to read and write them. |
-| Why it matters | QCH Connect enforces "who may see or change what" itself (capability, resource and scope, PRD 3.6). If staff can also open the lists directly in SharePoint, those rules can be bypassed: for example a receiving worker editing a referral's decision without an audit event, or anyone reading Not Appropriate explanations. The access model must keep the application as the only way to change referral data. |
-| Until then | No SharePoint code exists. Access rules live in `src/authorization/referralAccess.js` and the services. |
-| Status | Open |
+| Guarantee | What the application needs | Verification still required |
+| --- | --- | --- |
+| Atomic change plus audit | A change and its audit event commit together or not at all. If the audit write fails, the change does not happen (PRD 19, 26) | Show on the real Lists that a failed audit write leaves no change, and that a failed change leaves no audit event |
+| Concurrency and version checks | A stale update is refused when someone else changed the row first, and two simultaneous updates with the same version produce exactly one winner | Show on the real Lists that a stale version is refused and a concurrent pair has one winner |
+| Submission ID uniqueness | One referral per Submission ID, so a retry never creates a duplicate (PRD 20) | Show on the real Lists that a second create with the same Submission ID returns the first referral and creates none |
 
-### 4. Archive behavior
+If SharePoint Lists cannot provide a guarantee directly, the Azure Functions layer must, and that design is not written yet. The store contract is described in the header comments of `src/referrals/memoryReferralStore.js`. The earlier "Decision 1" text in this page's history named these needs; they are restored here.
 
-| | |
-| --- | --- |
-| Decision | Whether and when referrals (and their audit history) are archived or moved out of the working store, and what staff can still see afterwards. |
-| Why it matters | Committed referrals are never hard-deleted (PRD 6.5; the SQL design blocks deletes with a trigger). Reports count by date ranges back to 2000 (`src/reporting/periods.js`). Moving records elsewhere would change what reports and "my referrals" lists show. |
-| Until then | Nothing is archived or deleted. No archive code exists. |
-| Status | Open |
-
-### 5. Entra application registration
-
-| | |
-| --- | --- |
-| Decision | The Microsoft Entra ID app registration for staff sign-in: who creates it, its allowed sign-in addresses, and which Entra group or assignment gives access to the app. |
-| Why it matters | Identity must come from the server's sign-in, never from the browser (PRD 3.2). Today the app has a single seam for this, `resolveIdentity(req)` in `src/app.js`, and production passes none, so every `/api` route answers 401 (fails closed). |
-| Until then | Development uses a fixed synthetic identity (`npm run dev:synthetic`); tests pass their own `resolveIdentity`. Entra sign-in is not built. |
-| Status | Open |
-
-### 6. Microsoft Graph and Send As configuration
-
-| | |
-| --- | --- |
-| Decision | How QCH Connect sends the "new referral" email: the shared mailbox it sends from, the Graph permission QCH IT approves (Send As or equivalent), and whether mail sending shares the sign-in app registration. |
-| Why it matters | The notification module (`src/notifications/`) is built and tested with a simulated outbox, and is started after each referral commits (Task E), but there is no Graph sender, so production sends nothing yet. Recipients come from each Program's `notification_email`, which has no management screen yet. |
-| Until then | The simulated outbox, which refuses to start outside development and test. |
-| Status | Open |
-
-### 7. Approved AI or language-processing boundary
-
-| | |
-| --- | --- |
-| Decision | Whether any AI or language-processing service may be used, where it would run (for example inside QCH's own Microsoft tenant), and what data may be sent to it. |
-| Why it matters | Earlier guidance was no outside AI services for referral data, and Guided Program Matching is rules-based (`src/gpme/matchPrograms.js`, rule version `gpme-v1`). At the Oct 23 midpoint check-in, QCH program staff asked for open-ended, AI-assisted matching. Any change to matching has to be reconciled with the Final Technical PRD first, and must keep participant data inside the approved boundary. |
-| Until then | Rules-based matching only. The options are compared, without code, in [ai-interpretation-options.md](ai-interpretation-options.md) (Trello Task I). |
-| Status | Open |
-
-### 8. Retention and audit policy
-
-| | |
-| --- | --- |
-| Decision | How long referral data and audit history are kept, who may read audit history, and whether anything is ever purged. |
-| Why it matters | Audit events are append-only and written in the same transaction as each change (PRD 6.5, 9.6). The team will not invent a deletion rule (PRD 9.11). |
-| Until then | Everything is kept. No route returns audit events; no purge exists. |
-| Status | Open (QCH policy) |
-
-## Engineering gaps vs external dependencies
-
-What is not done yet, split by who can move it forward. **Engineering**
-means the team can do it now with no QCH answer. **Waits on** names the
-decision above (or another QCH input) it depends on.
+## What in this repository depends on what
 
 | Not done yet | Kind | Waits on |
 | --- | --- | --- |
-| A production data store (anything other than the in-memory stores) | External | Decision 1, then the team builds it |
-| Migration-history handling and a database readiness check | External, then engineering | Decision 1 |
-| Staff sign-in through Entra ID | External, then engineering | Decision 5 |
-| Demo sign-in for non-production demos (PRD 16.1) | Done (Task O, #60, merged) | Nothing |
-| Permission administration screens | Done (Task Y, #63, merged) | Remaining policy questions are documented in the README's Permission administration section |
-| Microsoft Graph sender, and starting the notifier and retry timer in the hosted app | External, then engineering | Decisions 2 and 6 |
-| Managing a Program's notification email (routing) | Engineering | Nothing; Program creation says routing is set up separately, and no screen or route sets it yet |
-| Describe-the-need step | Requirement | Governed by Frozen Handoff PRD §§5.1–5.3 and §7; Handoff MVP §§5–6 and §26 |
-| Language of service, availability, Program information, contact guidance and multiple locations | Requirement | Governed by Frozen Handoff PRD §§6.3–6.4 and §§8–14; Handoff MVP §§8–14 |
-| AI-assisted matching | External | Decision 7, and the PRD reconciliation above |
-| Hosting, monitoring (Application Insights) and alerts | External | Decision 2 |
-| Backup, restore, and one restore test in an isolated environment (PRD 19.5) | External | Decisions 1 and 2 |
-| Archive and retention behavior | Policy | Decisions 4 and 8 |
+| A production data store on SharePoint Lists (the code has only in-memory stores) | External, then engineering | Site and Lists provisioned (dependency 2) |
+| Staff sign-in through Entra ID | External, then engineering | Entra configuration (dependency 3) |
+| Demo sign-in for non-production demos | Done (Task O, #60, merged) | Nothing |
+| Permission administration screens | Done (Task Y, #63, merged) | Remaining policy questions are in the README's Permission administration section |
+| Microsoft Graph sender, and starting the notifier and retry timer in the hosted app | External, then engineering | Dependencies 1, 4, 5, 6 |
+| Managing a Program's notification address | Open | Question Q8; no screen or route sets it yet |
+| Describe-the-need step | Requirement | Frozen Handoff PRD 5.1 to 5.3 and 7; Handoff MVP 5, 6 and 26 |
+| Language of service, availability, Program information, contact guidance, multiple locations | Requirement | Frozen Handoff PRD 6.3, 6.4 and 8 to 14; Handoff MVP 8 to 14 |
+| Hosting, monitoring and alerts | External | Azure provisioning (dependency 1) and frontend hosting (dependency 12); the frozen documents do not specify a monitoring approach |
+| Backup, restore, and one restore test in an isolated environment (PRD 19.5) | External | Provisioned SharePoint and Azure (dependencies 1, 2), then QCH IT's backup approach |
+| Archival process | External or engineering (unassigned) | Question Q9; retention policy (dependency 10) for what happens to archived records |
