@@ -26,7 +26,7 @@ signed in (step 19).
 | --- | --- | --- |
 | Run 1 | **Scripted** (a one-off Playwright script acting as the user, Chromium) | Done on `main` at `36f6e82` plus the fixes below |
 | Run 3 | **Scripted** (a one-off Playwright script, three demo people, Chromium) | Done on `main` at `cd22455` |
-| Run 2 | **Manual**, by a person in Safari | **Outstanding** (started; see Run 2) |
+| Run 2 | **Manual**, by a person in Safari 27.0 | Done: steps 1–6 on `eea57fd`, 7–16 on `e7a0b48`, 17–19 on `2746c83`; three findings recorded (see Run 2) |
 
 Each run's results apply only to the revision it names. A scripted run
 shows that the screens and the server work; it does not show that a person
@@ -131,18 +131,55 @@ SharePoint Lists with Azure Functions as the server-side authority are
 QCH/QCH IT production dependencies (Frozen Handoff PRD §21, §22, §27, §29,
 §37). They are not part of this rehearsal and not Capstone gaps.
 
-### Run 2: by hand on a Mac (manual, outstanding)
+### Run 2: by hand on a Mac (manual), October 28–30, 2026
 
-Not finished, so it gives no pass for the rehearsal yet. Nothing in Run 1
-or Run 3 stands in for it.
+All 19 steps were run by hand in Safari, on three revisions of `main`.
+Each result applies only to the revision named for it. Synthetic data only.
 
 | | |
 | --- | --- |
-| Date / tester | Started October 28–29, 2026, Jimmy Ong |
-| `main` commit | `eea57fd` |
-| Browser | Safari 27.0 |
-| Steps passed | 1 to 6, by hand. Steps 7 to 19 not yet run |
-| Problems | Under review; recorded here when the run is finished |
+| Date / tester | October 28–30, 2026, Jimmy Ong |
+| Browser | Safari 27.0 on macOS |
+| Steps 1 to 6 | `main` at `eea57fd`, `npm run dev:synthetic` |
+| Steps 7 to 16 | `main` at `e7a0b48`, `npm run dev:synthetic` (application code the same as `eea57fd`) |
+| Steps 17 to 19 | `main` at `2746c83`, `npm run dev:synthetic`, `npm run dev:demo` and `NODE_ENV=production npm start` |
+
+| # | Result |
+| --- | --- |
+| 1–6 | Pass, by hand (`eea57fd`) |
+| 7–16 | Pass, by hand (`e7a0b48`) |
+| 17 | Pass for the six pages checked, with one finding on a seventh page (below). At XL, window at its narrowest, pressing the left and right arrow keys moved nothing sideways on New Referral, Program Management, Find a Program results, Received referrals, Referrals I sent and the Reporting Center. On Find a Program, the checkboxes and age boxes grew with the text, and the status box border was fully visible. Keeping typed work across a size change was not separately checked in this pass |
+| 18 | Pass. **Address bar** (full address, seen by clicking into it): `/referral/` after Find Programs (Housing, ages 30–40), `/receiving/`, `/receiving/referral.html?id=1`, `/sent/referral.html?id=1`. No name, need, age or Program in any of them; only the referral ID. **`dev:synthetic` storage** (Web Inspector → Storage): Cookies empty; Local Storage only `qchConnect.textSize` = `M`; Session Storage empty. **`dev:demo`**: `/demo/` shows "Demo sign-in. Production uses QCH Microsoft sign-in.", "Choose a demo person" and three preset synthetic people (Referring Worker, Housing Help Desk Staff, Older Adult Wellness Center Staff), with **no username or password field**. After choosing Referring Worker, one cookie, `qch_demo_session`: a random token (no name or referral data), HttpOnly, session-only. Not marked Secure, which is expected on plain `http://127.0.0.1` in local development |
+| 19 | Pass. `NODE_ENV=production npm start`: "QCH Connect listening on http://localhost:3000 (production)". `/referral/` says "You are not signed in, so nothing can be shown. Sign in, then reload this page." and shows no Programs or referrals. `/demo/` answers `{"error":"Not Found"}`: the demo identity choice is unavailable. `/health` answers ok. `NODE_ENV=production npm run dev:demo` and `NODE_ENV=production npm run dev:synthetic` both print "Refusing to start." and exit |
+
+**The boundary seen in Safari:** demo mode offers only preconfigured
+synthetic people and no manual username or password; production offers no
+demo identity choice and serves nothing without sign-in. Production sign-in
+itself (Microsoft Entra ID single sign-on) is not built or connected here;
+it is a QCH IT production dependency (Frozen Handoff PRD §22, §37), so this
+run does not verify it.
+
+**Findings from Run 2 (recorded only; nothing was changed in Task 202):**
+
+1. **Permissions page text-size buttons (step 17).** On `/permissions/`,
+   the S, M, L and XL buttons stay small at every size and the selected
+   size is not shown. Their markup lacks `class="text-size__btn"`, which
+   the other pages' buttons have (`public/permissions/index.html`, the
+   four buttons under "Text size"). The text size itself still changes.
+   Relates to PRD §33 (accessibility); for the lead to decide whether a
+   fix is needed.
+2. **Footer wording in production (step 19).** New Referral still shows
+   "Development build. Use synthetic data only." under
+   `NODE_ENV=production`; the line is fixed text in the page. Cosmetic;
+   recorded for the lead.
+3. **Refusal message wording (step 19).** `npm run dev:demo` refuses with
+   "dev:synthetic runs only when NODE_ENV=development." because it reuses
+   the same starter. The refusal works; only the name in the message is
+   the other script's.
+
+Not covered by Run 2: Microsoft Entra sign-in, production email, SharePoint
+Lists and Azure Functions (production dependencies), and browsers other
+than Safari.
 
 ## Found and fixed in this rehearsal
 
