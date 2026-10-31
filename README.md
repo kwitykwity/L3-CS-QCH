@@ -477,6 +477,11 @@ awaiting response, resulted in service, and the rates from PRD 12.4.
 
 ## Deployment and handoff
 
+**Release notes for the Capstone handoff:**
+[`docs/release-notes-capstone-handoff.md`](docs/release-notes-capstone-handoff.md)
+(what is delivered, production status, how to run and verify; the frozen
+commit and final verification are pending Task V).
+
 [`docs/`](docs/README.md) holds the handoff documentation (PRD 18, 19):
 the confirmed production architecture and outstanding QCH IT dependencies,
 the earlier open decisions, architecture, data dictionary, admin guide,
