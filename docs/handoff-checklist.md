@@ -65,7 +65,7 @@ section 3.
 | 7 | Production users, groups and permissions, including the first permission administrators | QCH IT and QCH | Permissions are administered in QCH Connect by authorized administrators (PRD 24) | Outstanding |
 | 8 | Production Program Directory configuration | QCH | The internal Program Directory is never committed to a public repository (PRD 8, 35) | Outstanding |
 | 9 | Authoritative Department taxonomy | QCH | The demo seed's four Departments are demo values only (PRD 11) | Outstanding |
-| 10 | Formal retention/deletion policy after archival | QCH | Archival rule: 2,500 active records, 500 oldest eligible closed/completed; archived records stay read-only (PRD 31) | Outstanding |
+| 10 | Formal retention/deletion policy after archival | QCH | Archival rule: Approximately 2,500 active records, 500 oldest eligible closed/completed; archived records stay read-only (PRD 31) | Outstanding |
 | 11 | Supported production browser and version baseline | QCH IT | None. The team's test browsers are not QCH policy ([browser-verification.md](browser-verification.md)) | Outstanding |
 | 12 | Production frontend/browser hosting decision | QCH IT | The frontend is presentation only (PRD 32). Azure Functions are the server side, not the frontend host | Outstanding |
 
