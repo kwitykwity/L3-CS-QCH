@@ -1,6 +1,6 @@
 // Task 204: Program Description, Schedule and Eligibility notes in Find a
 // Program results, in real Chromium (Handoff PRD 8, 9; Handoff MVP 10).
-// Cost notes is not named in those sections, so it must never appear.
+// The fixed costNotes property is not displayed (Task 204 scoping decision).
 // Matching must be unchanged. SYNTHETIC data only.
 import { test, expect } from '@playwright/test';
 import { createApp } from '../src/app.js';
@@ -69,7 +69,7 @@ const resultOrder = (page) => page.locator('li.match button').evaluateAll(
   (buttons) => buttons.map((b) => b.getAttribute('aria-label') || b.textContent.trim()),
 );
 
-test('Description, Schedule and Eligibility notes appear, labeled; Cost notes never does', async ({ page }) => {
+test('Description, Schedule and Eligibility notes appear, labeled; the fixed costNotes property does not', async ({ page }) => {
   const { server, base } = await startServer({ withFixedFields: true });
   try {
     await search(page, base);
@@ -81,9 +81,8 @@ test('Description, Schedule and Eligibility notes appear, labeled; Cost notes ne
     await expect(info).toContainText(ELIG_LABEL);
     await expect(info).toContainText(ELIG);
 
-    // Cost notes is not named in Handoff PRD 8, 9 or MVP 10: never shown.
+    // The fixed costNotes property is excluded (not named in Handoff PRD 8, 9 or MVP 10).
     await expect(page.locator('#match-results')).not.toContainText(COST);
-    await expect(page.locator('#match-results')).not.toContainText('Cost');
 
     // A Program with none of these set keeps the neutral empty state.
     await expect(card(page, JOB_READINESS)).toContainText(NONE);

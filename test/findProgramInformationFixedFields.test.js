@@ -1,6 +1,6 @@
 // Task 204: fixed Program fields in Find a Program results.
 // Supported by Handoff PRD 8, 9 and Handoff MVP 10: Program Description,
-// Schedule, Eligibility notes. Cost notes is not named there: not shown.
+// Schedule, Eligibility notes. The fixed costNotes property is not displayed (Task 204 scoping decision).
 // All data is SYNTHETIC.
 import { test, describe } from 'node:test';
 import assert from 'node:assert/strict';
@@ -53,7 +53,7 @@ describe('toResultInformation: fixed fields', () => {
     assert.deepEqual(toResultInformation({ ...base, description: DESC }).map((r) => r.label), ['Program Description']);
   });
 
-  test('Cost notes is never shown (not named in Handoff PRD 8, 9 or MVP 10)', () => {
+  test('the fixed costNotes property is not displayed (Task 204 scoping decision; not named in Handoff PRD 8, 9 or MVP 10)', () => {
     const rows = toResultInformation({ ...base, description: DESC, costNotes: COST });
     assert.equal(JSON.stringify(rows).includes(COST), false);
     assert.equal(FIXED_INFORMATION.some((f) => /cost/i.test(f.key + f.label)), false);
@@ -72,7 +72,7 @@ describe('toResultInformation: fixed fields', () => {
 });
 
 describe('Find a Program API: fixed fields', () => {
-  test('required information appears; Cost notes does not; matching is unchanged', async () => {
+  test('required information appears; the fixed costNotes property does not; matching is unchanged', async () => {
     const before = (await match(setup().app)).body;
     const { app } = setup({ description: DESC, scheduleNotes: SCHED, eligibilityNotes: ELIG, costNotes: COST });
     const res = await match(app);
@@ -91,5 +91,21 @@ describe('Find a Program API: fixed fields', () => {
     // Matching untouched: same Programs, order, explanations, rule version.
     assert.deepEqual(withoutInfo(res.body), withoutInfo(before));
     assert.equal(res.body.ruleVersion, before.ruleVersion);
+  });
+});
+
+describe('flexible fields are unaffected by the costNotes exclusion', () => {
+  test('a flexible field labeled "Cost notes" still appears; only the fixed property is excluded', () => {
+    const FLEX = 'Synthetic flexible cost text: sliding scale.';
+    const rows = toResultInformation({
+      description: DESC,
+      costNotes: COST,
+      fields: [{ label: 'Cost notes', dataType: 'TEXT', value: FLEX, options: [] }],
+    });
+    assert.deepEqual(rows, [
+      { label: 'Program Description', value: DESC },
+      { label: 'Cost notes', value: FLEX },
+    ]);
+    assert.equal(JSON.stringify(rows).includes(COST), false);
   });
 });

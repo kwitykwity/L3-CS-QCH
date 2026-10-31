@@ -13,8 +13,11 @@
 //      A blank one is OMITTED, never shown as "none" or guessed.
 //   2. Flexible fields, with the label staff maintain. Field meaning is
 //      never inferred from a label.
-// Cost notes is NOT shown: neither the Handoff PRD (8, 9) nor the Handoff
-// MVP (10) names it, and no approval is recorded (Task 204 reconciliation).
+// The fixed costNotes property is not displayed here. This is a Task 204
+// scoping decision, not a prohibition: Handoff PRD 8, 9 and Handoff MVP 10
+// name description, schedule and eligibility information but not cost, and
+// no approval for cost is recorded. A flexible field that staff label
+// "Cost notes" is shown like any other flexible field.
 //
 // This is descriptive only: it is attached AFTER matching and never adds,
 // removes, or reorders a result. A full, limited, or wait-listed Program
