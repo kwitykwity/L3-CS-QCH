@@ -54,6 +54,7 @@ proof that the documents contain no secrets; reviewers still check by eye.
 | [screen-reader-check.md](screen-reader-check.md) | VoiceOver script and record sheet: labels, required fields, errors, announcements, dialogs, focus |
 | [browser-verification.md](browser-verification.md) | Browser matrix (team baseline, pending QCH IT), critical journeys run in Edge, Chromium, Firefox and WebKit, and what they found |
 | [demo-rehearsal.md](demo-rehearsal.md) | Demo dress rehearsal: one connected synthetic journey through every feature, its record, and what it found (Task R) |
+| [desktop-browser-check.md](desktop-browser-check.md) | Task 203 manual Windows/Edge desktop verification: synthetic workflows, application text size and browser zoom, demo-banner finding F1, screenshot evidence, and coverage limits |
 
 Elsewhere in the repository:
 
