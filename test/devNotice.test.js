@@ -28,17 +28,58 @@ async function start(script, nodeEnv, extraEnv = {}) {
   const port = String(36000 + Math.floor(Math.random() * 900));
   const child = spawn(process.execPath, [script], {
     cwd: ROOT,
-    env: { PATH: process.env.PATH, NODE_ENV: nodeEnv, PORT: port, DOTENV_CONFIG_PATH: '/nonexistent', ...extraEnv },
+    env: {
+      PATH: process.env.PATH,
+      NODE_ENV: nodeEnv,
+      PORT: port,
+      DOTENV_CONFIG_PATH: '/nonexistent',
+      ...extraEnv,
+    },
   });
+
   let stderr = '';
   child.stderr.on('data', (d) => { stderr += d; });
-  await new Promise((resolve, reject) => {
-    const timer = setTimeout(() => reject(new Error(`${script} did not start`)), 10000);
-    child.stdout.on('data', (d) => {
-      if (/listening on|SYNTHETIC DATA ONLY/.test(String(d))) { clearTimeout(timer); resolve(); }
+
+  try {
+    await new Promise((resolve, reject) => {
+      const cleanup = () => {
+        clearTimeout(timer);
+        child.stdout.off('data', onData);
+        child.off('exit', onExit);
+        child.off('error', onError);
+      };
+      const onData = (d) => {
+        if (/listening on|SYNTHETIC DATA ONLY/.test(String(d))) {
+          cleanup();
+          resolve();
+        }
+      };
+      const onExit = (code) => {
+        cleanup();
+        reject(new Error(`${script} exited ${code}: ${stderr}`));
+      };
+      const onError = (err) => {
+        cleanup();
+        reject(err);
+      };
+      const timer = setTimeout(() => {
+        cleanup();
+        reject(new Error(`${script} did not start`));
+      }, 10000);
+
+      child.stdout.on('data', onData);
+      child.once('exit', onExit);
+      child.once('error', onError);
     });
-    child.once('exit', (code) => { clearTimeout(timer); reject(new Error(`${script} exited ${code}: ${stderr}`)); });
-  });
+  } catch (err) {
+    if (child.pid !== undefined &&
+        child.exitCode === null &&
+        child.signalCode === null) {
+      await stop({ child });
+    }
+    throw err;
+  }
+
   return { child, base: `http://127.0.0.1:${port}` };
 }
 
@@ -51,6 +92,7 @@ async function page(base, pagePath, headers = {}) {
   const res = await fetch(`${base}${pagePath}`, { headers, redirect: 'manual' });
   assert.equal(res.status, 200, `${pagePath} -> ${res.status}`);
   assert.match(res.headers.get('content-type') ?? '', /text\/html/);
+  assert.equal(res.headers.get('x-powered-by'), null, `${pagePath}: no framework header`);
   return res.text();
 }
 

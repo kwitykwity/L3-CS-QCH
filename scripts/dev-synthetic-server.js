@@ -81,6 +81,7 @@ const app = createApp({
 // Pages are served with the synthetic-data notice filled in (Task 221);
 // production serves them without it.
 const server = express();
+server.disable('x-powered-by');
 if (demoSignIn) demoSignIn.mount(server);
 server.use(devNoticePages({ publicDir: PUBLIC_DIR }));
 server.use(app);
