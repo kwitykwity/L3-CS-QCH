@@ -1,13 +1,20 @@
-// Current Program information shown with Find a Program results (Task X).
+// Current Program information shown with Find a Program results (Task X;
+// fixed fields added in Task 204).
 //
 // QCH confirmed (Kyle) that Programs with limited availability or a wait
 // list still appear, with that information visible, and that the primary
 // Program contact may be shown while staff still send the referral through
 // QCH Connect first.
 //
-// Reuses the Task C read model (readCurrentProgramInformation). Fields are
-// shown with the label staff maintain. Field meaning is never inferred
-// from a label, so no availability or contact taxonomy is invented here.
+// Reuses the Task C read model (readCurrentProgramInformation). Two kinds
+// of rows are shown, in this order:
+//   1. Fixed Program fields the frozen documents name (Handoff PRD 8, 9;
+//      Handoff MVP 10): Program Description, Schedule, Eligibility notes.
+//      A blank one is OMITTED, never shown as "none" or guessed.
+//   2. Flexible fields, with the label staff maintain. Field meaning is
+//      never inferred from a label.
+// Cost notes is NOT shown: neither the Handoff PRD (8, 9) nor the Handoff
+// MVP (10) names it, and no approval is recorded (Task 204 reconciliation).
 //
 // This is descriptive only: it is attached AFTER matching and never adds,
 // removes, or reorders a result. A full, limited, or wait-listed Program
@@ -17,6 +24,15 @@
 // versions, option IDs, notification routing, permissions, or participant
 // or referral data.
 import { readCurrentProgramInformation } from '../programs/currentProgramInformation.js';
+
+// The fixed fields that may appear, in display order. The eligibility label
+// says plainly that this is information: QCH Connect never decides
+// eligibility (Handoff PRD 6.6).
+export const FIXED_INFORMATION = Object.freeze([
+  { key: 'description', label: 'Program Description' },
+  { key: 'scheduleNotes', label: 'Schedule' },
+  { key: 'eligibilityNotes', label: 'Eligibility notes (information only, not an eligibility decision)' },
+]);
 
 function optionLabels(field, ids) {
   const labels = new Map(field.options.map((option) => [option.optionId, option.label]));
@@ -42,8 +58,16 @@ export function displayValue(field) {
   }
 }
 
+function noteText(value) {
+  return typeof value === 'string' && value.trim() !== '' ? value.trim() : null;
+}
+
 export function toResultInformation(information) {
-  return information.fields.map((field) => ({ label: field.label, value: displayValue(field) }));
+  const fixed = FIXED_INFORMATION
+    .map(({ key, label }) => ({ label, value: noteText(information[key]) }))
+    .filter((row) => row.value !== null);
+  const flexible = information.fields.map((field) => ({ label: field.label, value: displayValue(field) }));
+  return [...fixed, ...flexible];
 }
 
 // Adds programInformation to every result item: an array of
