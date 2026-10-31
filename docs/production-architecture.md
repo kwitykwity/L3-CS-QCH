@@ -1,10 +1,10 @@
 # Production architecture and handoff dependencies
 
-**Status: confirmed design, not provisioned.** This page states the
-production architecture that the Frozen Handoff PRD confirms, and lists what
-QCH and QCH IT still have to provision before QCH Connect can run in
-production. It does not complete production deployment, and nothing here has
-run in QCH's environment.
+**Status: confirmed design; production provisioning unverified.**
+This page states the architecture confirmed by the Frozen Handoff PRD
+and records outstanding production dependencies. Production provisioning
+and integration have not been confirmed or verified by the team.
+This document does not establish production readiness.
 
 **Authority.** Frozen Handoff PRD (October 28, 2026) §21, §22, §23, §26 to §32
 and §37, and the Handoff MVP §21, §22 and §28 to §31. Where an older page in
@@ -140,7 +140,13 @@ here, because this is a documentation-only change:
 
 ## 5. Planned production integration responsibilities (not built)
 
-**Status: planned, not provisioned.** Nothing in this section exists in QCH's environment, and none of it is built in this repository. It records what the Frozen Handoff PRD assigns to the production server side and what the current code shows about the kind of work involved. It does not design the production system.
+**Status: planned production integration; provisioning unverified.**
+Production provisioning and integration have not been confirmed or
+verified by the team. The application responsibilities below already
+exist in the local implementation, but their Azure Functions integration
+is not built in this repository. This section records the planned
+server-side responsibilities and the kinds of work shown by the current
+code; it does not design the production system.
 
 **Sources used:** Frozen Handoff PRD §21, §27, §28, §29 and §30, and the current code. The task that requested this section also cites Handoff PRD §38 and §43 (gate 30). The PRD text available when this was written ends at §37, so those two sections were **not verified and are not used**.
 
@@ -169,7 +175,7 @@ The Frozen Handoff PRD does not name triggers. The kinds below come from how the
 | The first notification after a referral is saved | Follows the committed referral. PRD §21 requires that notification happens after the referral is committed. How it is started is not specified here | `src/notifications/` |
 | Retrying notifications that have not been sent | Scheduled or queued | `src/notifications/retryTimer.js` |
 
-What `src/notifications/retryTimer.js` shows: it runs the notifier's retry on a fixed interval (60 seconds by default), one run at a time, never throws, and leaves bounded, duplicate-safe retrying to the notification service. It is evidence that retry is **periodic background work**. It is an in-process timer in the Node.js application. It is not evidence of how Azure Functions will schedule or queue that work.
+What `src/notifications/retryTimer.js` shows: it runs the notifier's retry on a fixed interval (60 seconds by default), one run at a time, never throws, and leaves bounded, at-least-once retrying to the notification service; duplicate delivery remains possible after provider timeouts. It is evidence that retry is **periodic background work**. It is an in-process timer in the Node.js application. It is not evidence of how Azure Functions will schedule or queue that work.
 
 ### 5.3 Outbound dependencies
 
