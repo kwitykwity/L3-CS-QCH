@@ -72,8 +72,8 @@ there:
 
 ## 4. Production status
 
-**The application is not running in production, and no production
-infrastructure has been provisioned.** Everything in section 2 runs on
+**Production provisioning and deployment have not been confirmed or
+verified by the team.** Everything in section 2 runs on
 in-memory stores with synthetic data. In production mode the server fails
 closed: without real sign-in, every `/api` route answers 401.
 
@@ -150,7 +150,8 @@ commits. They are not Task V results and do not verify the frozen commit.
 | --- | --- | --- |
 | VoiceOver with Safari 27.0 (macOS), 33 steps across New Referral, Find a Program, Program Management and text size | **Pass**, after four fixes found in that run. October 24 to 25, 2026, Jimmy Ong, on branch `jimmy/screen-reader-check` | [screen-reader-check.md](screen-reader-check.md) |
 | Demo rehearsal Run 2, by hand in Safari 27.0 | **Not finished.** See item C1 for the latest recorded progress; the rehearsal page still shows earlier progress until the run ends | [known-limitations.md](known-limitations.md) C1; [demo-rehearsal.md](demo-rehearsal.md) Run 2 |
-| Real browsers other than Safari, and any mobile browser | **Not run by hand.** Other browsers were run only as automated Playwright engines | [browser-verification.md](browser-verification.md); [known-limitations.md](known-limitations.md) C2 |
+| Windows/Edge desktop verification (Task 203) | Recorded October 30–31, 2026, on application baseline `2746c83d40d1b8c0ef5a21cd0adf618b0a2e4a0d`; report merged in PR #101. Selected synthetic workflows, text-size and actual browser-zoom checks completed, with documented coverage limits. Demo-banner overlap F1 remains open in issue #102 | [desktop-browser-check.md](desktop-browser-check.md); [issue #102](https://github.com/kwitykwity/L3-CS-QCH/issues/102) |
+| Other manual browser coverage | No additional manual browser coverage is established by the records cited here. Mobile-device use is outside the project lead's intended production scope; desktop narrow-width checks do not establish mobile support | [browser-verification.md](browser-verification.md); [desktop-browser-check.md](desktop-browser-check.md) |
 
 No result on this page covers QCH's production environment
 ([known-limitations.md](known-limitations.md) C3).
