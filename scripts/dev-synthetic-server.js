@@ -18,6 +18,7 @@
 //   [notification] line with IDs and the outcome only.
 
 import 'dotenv/config';
+import { fileURLToPath } from 'node:url';
 import express from 'express';
 import { loadConfig } from '../src/config.js';
 import { createApp } from '../src/app.js';
@@ -26,6 +27,9 @@ import { createNotificationService } from '../src/notifications/notificationServ
 import { startNotificationRetries } from '../src/notifications/retryTimer.js';
 import { createSimulatedOutboxSender } from '../src/notifications/simulatedOutbox.js';
 import { DEV_USER_ID, syntheticSeed } from './syntheticSeed.js';
+import { devNoticePages } from './devNotice.js';
+
+const PUBLIC_DIR = fileURLToPath(new URL('../public/', import.meta.url));
 
 let config;
 try {
@@ -74,12 +78,12 @@ const app = createApp({
   notifier,
 });
 
-let server = app;
-if (demoSignIn) {
-  server = express();
-  demoSignIn.mount(server);
-  server.use(app);
-}
+// Pages are served with the synthetic-data notice filled in (Task 221);
+// production serves them without it.
+const server = express();
+if (demoSignIn) demoSignIn.mount(server);
+server.use(devNoticePages({ publicDir: PUBLIC_DIR }));
+server.use(app);
 
 server.listen(config.port, '127.0.0.1', () => {
   console.log(`QCH Connect (LOCAL DEV, SYNTHETIC DATA ONLY) on http://127.0.0.1:${config.port}/${demoSignIn ? 'demo/' : 'referral/'}`);
