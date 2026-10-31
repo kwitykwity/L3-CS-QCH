@@ -212,7 +212,7 @@ describe('Journey 8: GPME-assisted referral (#16, #27; PRD 2.2, 5.3, 8.1 to 8.8)
     const intake = as(INTAKE);
     await chooseAffiliation(worker, P_FAMILY);
 
-    // The guided form offers the active need categories (PRD 8.2).
+    // The guided form offers the active need categories (Handoff PRD: GPME matching inputs).
     const categories = await worker.get('/api/gpme/need-categories');
     assert.equal(categories.status, 200);
     assert.deepEqual(categories.body.needCategories.map((c) => c.name), ['Employment', 'Food']);

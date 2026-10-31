@@ -239,7 +239,7 @@ never return secrets, connection strings, config values, or error details.
 `POST /api/gpme/match` accepts only `needCategoryIds` (required),
 `ageRange: {min, max}` (optional), and `participantZip` (optional). Anything
 else is rejected, so Notes and Referral Context can never reach matching
-(PRD 8.2). It uses POST because the inputs describe a participant and must not
+(Handoff PRD: GPME matching inputs). It uses POST because the inputs describe a participant and must not
 appear in a URL (PRD 5.5). Nothing is stored.
 
 The rules live in `src/gpme/matchPrograms.js` (rule version `gpme-v1`) and
