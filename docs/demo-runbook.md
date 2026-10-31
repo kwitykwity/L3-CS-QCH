@@ -175,7 +175,7 @@ Nobody should say any of these is finished. Full list:
    provisioned). Where the frontend is hosted is still a QCH IT decision.
 3. **SharePoint site access:** direct access for QCH IT administrators only,
    Graph `Sites.Selected` (confirmed, not provisioned).
-4. **Archive behavior:** confirmed (2,500 active referrals, archive the 500
+4. **Archive behavior:** confirmed (approximately 2,500 active referrals, archive the 500
    oldest eligible closed ones, never open or Awaiting Response), not built.
 5. **QCH Microsoft (Entra) sign-in with MFA:** confirmed, not configured or
    built. Production currently refuses every request without sign-in (it

@@ -48,7 +48,7 @@ Frontend  ->  Azure Functions  ->  SharePoint Lists / approved Microsoft service
 
 From PRD §31 and MVP §30:
 
-1. When the **active referral list reaches 2,500 records**, the planned
+1. When the **active referral list reaches approximately 2,500 records**, the planned
    process archives the **500 oldest eligible closed/completed referrals**.
 2. **Open and Awaiting Response referrals are never archived.**
 3. If fewer than 500 referrals are safely eligible, the process archives only
