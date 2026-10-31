@@ -1,5 +1,5 @@
 // Trello Task W: language of service (Kyle Butler, QCH, Oct 26, 2026;
-// requirements register R7). A Program can have one or more languages of
+// Handoff PRD and Handoff MVP: Language of Service). A Program can have one or more languages of
 // service, Program Management maintains them, and Find a Program shows
 // them to staff. Matching never uses them (rule gpme-v1).
 //

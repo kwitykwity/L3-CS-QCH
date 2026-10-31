@@ -3,7 +3,7 @@
    Target: Azure SQL Database (T-SQL).
    Requirement: Kyle Butler (QCH), Oct 26, 2026: Programs list their
    language(s) of service, and a Program may select more than one
-   (Trello Task W; requirements register R7).
+   (Trello Task W; Handoff PRD and Handoff MVP: Language of Service).
 
    MODEL: versioned, run-once migration, like 002 and 003. Run it exactly
    one time per database, after 001 to 003, with sqlcmd -I -b. It is

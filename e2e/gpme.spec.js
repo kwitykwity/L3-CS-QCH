@@ -223,7 +223,7 @@ test.describe('selection and submission (PRD 2.1, 2.2, 7.1 to 7.4)', () => {
     expect(referrals).toHaveLength(1);
     const [body] = referrals;
     expect(body.receivingProgramId).not.toBeUndefined();
-    // Only the three approved matching inputs ride along (PRD 8.2); the
+    // Only the three approved matching inputs ride along (Handoff PRD: GPME matching inputs); the
     // browser cannot choose the source or an evaluation (PRD 10.3).
     expect(body.gpme).toEqual({ needCategoryIds: [2, 3], ageRange: { min: 19, max: 30 } });
     expect(body).not.toHaveProperty('source');

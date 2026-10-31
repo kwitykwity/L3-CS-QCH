@@ -1,6 +1,6 @@
 // Server-side check of a replaceable interpreter's COMPLETE output, before
-// anything from it reaches the worker's screen or GPME (Task D; PRD 8.2,
-// 10.3, 15.4).
+// anything from it reaches the worker's screen or GPME (Task D; Handoff PRD:
+// Find a Program interpretation, GPME matching inputs; PRD 10.3, 15.4).
 //
 // An interpreter may be swapped for another implementation, so its output is
 // untrusted. Only these shapes cross the boundary:
