@@ -137,3 +137,52 @@ here, because this is a documentation-only change:
 | 6. Graph and Send As configuration | **Confirmed**: shared mailbox, Graph, Exchange RBAC for Applications (PRD §21, §30). Configuration outstanding (items 4 to 6) |
 | 7. AI boundary | **Confirmed out of MVP scope**: no external AI (PRD §7) |
 | 8. Retention and audit policy | Retention/deletion policy **outstanding** (item 10); application audit confirmed (PRD §26) |
+
+## 5. Planned production integration responsibilities (not built)
+
+**Status: planned, not provisioned.** Nothing in this section exists in QCH's environment, and none of it is built in this repository. It records what the Frozen Handoff PRD assigns to the production server side and what the current code shows about the kind of work involved. It does not design the production system.
+
+**Sources used:** Frozen Handoff PRD §21, §27, §28, §29 and §30, and the current code. The task that requested this section also cites Handoff PRD §38 and §43 (gate 30). The PRD text available when this was written ends at §37, so those two sections were **not verified and are not used**.
+
+### 5.1 Responsibilities assigned to Azure Functions (PRD §29)
+
+PRD §29 says Azure Functions may provide:
+
+| Responsibility | Status |
+| --- | --- |
+| Authorization | Planned, not provisioned |
+| Business logic | Planned, not provisioned |
+| Validation | Planned, not provisioned |
+| Referral transactions | Planned, not provisioned |
+| GPME execution | Planned, not provisioned |
+| Notification orchestration | Planned, not provisioned |
+| Reporting support | Planned, not provisioned |
+| Audit handling | Planned, not provisioned |
+
+### 5.2 Kinds of triggers these responsibilities will need
+
+The Frozen Handoff PRD does not name triggers. The kinds below come from how the current code works and from the task that requested this section. They are descriptions of the work, not a trigger design.
+
+| Work | Kind of trigger | Evidence |
+| --- | --- | --- |
+| The application API: authorization, validation, business logic, referral transactions, GPME execution, reporting and audit handling on each request | Request-driven | The `/api` routes registered in `src/app.js` and the route modules under `src/`, each answering one request |
+| The first notification after a referral is saved | Follows the committed referral. PRD §21 requires that notification happens after the referral is committed. How it is started is not specified here | `src/notifications/` |
+| Retrying notifications that have not been sent | Scheduled or queued | `src/notifications/retryTimer.js` |
+
+What `src/notifications/retryTimer.js` shows: it runs the notifier's retry on a fixed interval (60 seconds by default), one run at a time, never throws, and leaves bounded, duplicate-safe retrying to the notification service. It is evidence that retry is **periodic background work**. It is an in-process timer in the Node.js application. It is not evidence of how Azure Functions will schedule or queue that work.
+
+### 5.3 Outbound dependencies
+
+The Frozen Handoff PRD names the dependencies below but does not map them to individual responsibilities. The "typically needs" column is the documentation's reading of the current code, not a PRD statement.
+
+| Dependency | Source | Responsibilities that typically need it | Status |
+| --- | --- | --- | --- |
+| SharePoint Lists in the private QCH Connect site, reached through Microsoft Graph with `Sites.Selected` (not tenant-wide `Sites.ReadWrite.All`). No separate production database | PRD §27, §30 | Everything that reads or writes referral and application data: authorization, referral transactions, GPME execution, reporting support, audit handling, notification orchestration | Planned, not provisioned |
+| The approved shared mailbox named in PRD §21, through Microsoft Graph, restricted by Exchange RBAC for Applications. The permission model is to be confirmed with QCH IT; see [pending-qch-it-decisions.md](pending-qch-it-decisions.md) | PRD §21, §30 | Notification orchestration (first send and retry) | Planned, not provisioned |
+| Managed identity, with no production secrets or long-lived service keys in source or browser code | PRD §29 | Every responsibility that calls Microsoft Graph | Planned, not provisioned |
+
+Production Lists must also keep to the privacy boundary in PRD §28: no participant exact age, age range, or unnecessary discovery or interpretation inputs.
+
+### 5.4 What this section does not decide
+
+**How these responsibilities are split into individual Functions is a QCH IT design decision and is not specified here.** This section does not choose triggers, Function boundaries, queues, schedules, hosting plans or infrastructure, and it adds no product behavior or QCH policy.
