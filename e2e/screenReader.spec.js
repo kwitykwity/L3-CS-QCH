@@ -312,7 +312,7 @@ test.describe('Program Management: what a screen reader is told', () => {
 test('the page text a screen reader starts from: every page has one h1 and a main landmark', async ({ page }) => {
   for (const path of [
     '/', '/referral/', '/program-management/', '/program-management/organization.html',
-    '/program-management/organization-programs.html',
+    '/program-management/organization-programs.html', '/help/',
   ]) {
     await page.goto(path);
     await expect(page.getByRole('heading', { level: 1 }), path).toHaveCount(1);
@@ -328,7 +328,7 @@ test('the skip link moves keyboard focus into the main content on every page (fo
     '/program-management/matching.html', '/program-management/organization.html',
     '/program-management/organization-programs.html', '/program-management/reuse-field.html',
     '/program-management/replace-field.html',
-    '/receiving/', '/receiving/referral.html?id=1', '/sent/', '/sent/referral.html?id=1', '/reporting/',
+    '/receiving/', '/receiving/referral.html?id=1', '/sent/', '/sent/referral.html?id=1', '/reporting/', '/help/',
   ]) {
     await page.goto(path);
     // Some pages move focus to a message on load, so focus the link directly.
