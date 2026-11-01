@@ -276,7 +276,7 @@ never return secrets, connection strings, config values, or error details.
 `POST /api/gpme/match` accepts only `needCategoryIds` (required),
 `ageRange: {min, max}` (optional), and `participantZip` (optional). Anything
 else is rejected, so Notes and Referral Context can never reach matching
-(PRD 8.2). It uses POST because the inputs describe a participant and must not
+(Handoff PRD: GPME matching inputs). It uses POST because the inputs describe a participant and must not
 appear in a URL (PRD 5.5). Nothing is stored.
 
 The rules live in `src/gpme/matchPrograms.js` (rule version `gpme-v1`) and
@@ -516,8 +516,13 @@ awaiting response, resulted in service, and the rates from PRD 12.4.
 
 ## Deployment and handoff
 
-[`docs/`](docs/README.md) holds the handoff documentation (PRD 18, 19).
-Current handoff guidance, in the order QCH IT will want it:
+**Release notes for the Capstone handoff:**
+[`docs/release-notes-capstone-handoff.md`](docs/release-notes-capstone-handoff.md)
+(what is delivered, production status, how to run and verify; the frozen
+commit and final verification are pending Task V).
+
+[`docs/`](docs/README.md) holds the handoff documentation.
+Current handoff guidance:
 [known limitations](docs/known-limitations.md),
 [handoff questions](docs/handoff-questions.md), the
 [confirmed production architecture and outstanding QCH IT dependencies](docs/production-architecture.md),

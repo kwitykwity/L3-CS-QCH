@@ -114,11 +114,17 @@ export function summaryRow(term, value, id) {
   return row;
 }
 
+// QCH business time. Same zone as REPORTING_TIME_ZONE in
+// src/reporting/periods.js and public/reporting/format.js, with
+// daylight-saving rules. Team robustness hardening (Task 208): without it,
+// the time shown depends on the viewing device's own time zone.
+export const DISPLAY_TIME_ZONE = 'America/New_York';
+
 export function formatDate(iso) {
   if (!iso) return '';
   const date = new Date(iso);
   if (Number.isNaN(date.getTime())) return '';
-  return date.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short' });
+  return date.toLocaleString('en-US', { dateStyle: 'medium', timeStyle: 'short', timeZone: DISPLAY_TIME_ZONE });
 }
 
 // One status box per page (role="status"). Focus moves to it so the

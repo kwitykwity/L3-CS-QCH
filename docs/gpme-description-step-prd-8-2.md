@@ -1,5 +1,18 @@
 # Describe-the-need step and PRD 8.2 (proposed reconciliation)
 
+> **Historical document.** This page was written under the October 14, 2026
+> Final Technical PRD, before the Frozen Handoff PRD. It is kept as a record
+> of that discussion and does **not** describe current requirements. "PRD 8.2"
+> below means the October 14 document, not the Handoff PRD.
+>
+> **The current Handoff PRD includes the Describe the Need workflow.** In the
+> Handoff PRD (Find a Program; Find a Program Interpretation), the employee
+> may describe the participant's need in natural language; the interpretation
+> layer proposes structured matching information; the employee reviews,
+> corrects, removes or adds to it before matching; and GPME then matches on
+> the confirmed, approved inputs only. The "PROPOSED. Not approved" status
+> below is therefore superseded.
+
 **Status: PROPOSED. Not approved.** This is the team's reading of how the
 free-text step (Task D) sits with Final Technical PRD 8.2. A reading in a
 pull request is not a reconciliation. It becomes one only when the PRD

@@ -33,6 +33,7 @@ For QCH and QCH IT, in reading order.
 | --- | --- |
 | [known-limitations.md](known-limitations.md) | **Known limitations and outstanding verification**: what does not work yet, is not built here, or is not yet verified, with the repository evidence for each (Task TT) |
 | [handoff-questions.md](handoff-questions.md) | **Handoff questions for QCH and QCH IT**: the decisions still open, each tied to the Frozen Handoff PRD or Handoff MVP (Task SS) |
+| [release-notes-capstone-handoff.md](release-notes-capstone-handoff.md) | **Capstone handoff release notes**: delivered behavior, production status, running and verification instructions; frozen commit and final Task V results remain pending (Task 219) |
 | [production-architecture.md](production-architecture.md) | **Confirmed production architecture** from the Frozen Handoff PRD (SharePoint Lists, Azure Functions, Graph, Exchange RBAC, Entra ID with MFA), confirmed archival behavior, and the full checklist of QCH/QCH IT production dependencies still outstanding (Task PP/QQ) |
 | [qch-it-requirements.md](qch-it-requirements.md) | Everything QCH IT needs to provide, and which part of the app needs it |
 | [handoff-checklist.md](handoff-checklist.md) | Every handoff deliverable, where it lives, and what it waits on |

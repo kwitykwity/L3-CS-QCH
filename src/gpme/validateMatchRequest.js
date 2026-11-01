@@ -1,9 +1,9 @@
-// Server-side validation for a GPME match request (PRD 5.3, 8.2, 8.3,
-// 10.3, 10.7).
+// Server-side validation for a GPME match request (Handoff PRD: GPME matching inputs;
+// PRD 5.3, 8.3, 10.3, 10.7).
 //
 // - Explicit allowlist: only need categories, an age range, and a ZIP.
 //   Notes, Referral Context, identity, or anything else is rejected, so
-//   hidden factors can never reach the engine (PRD 8.2, 10.3).
+//   hidden factors can never reach the engine (Handoff PRD: GPME matching inputs; PRD 10.3).
 // - Need is required on the guided path (team decision, Oct 18). Without
 //   it, the screen offers Direct Referral.
 // - Age range and ZIP are optional. Leaving them out never blocks

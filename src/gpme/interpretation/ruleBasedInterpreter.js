@@ -19,7 +19,8 @@
 // and GPME never learns which implementation ran. The output is only a
 // PROPOSAL: the worker sees it, corrects it, and confirms it before
 // anything is matched. Only the three approved criteria (need categories,
-// age range, ZIP) can ever come out of an interpreter (PRD 8.2).
+// age range, ZIP) can ever come out of an interpreter (Handoff PRD: Find a
+// Program interpretation; GPME matching inputs).
 //
 // No external service is called: it is a pure function over the text, the
 // current need categories, and the tables below. The text is never stored,
