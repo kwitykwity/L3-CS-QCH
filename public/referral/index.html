@@ -37,6 +37,17 @@
         <button type="button" id="start-new" class="btn btn--primary" hidden>Start a new referral</button>
       </div>
 
+      <!-- Referral confirmation (Task 226; Written Wireframe Page 11). Shown
+           only after the server confirms a new referral. Built from the
+           server's confirmation (IDs and time) and the Program names this
+           page already has; no participant information. -->
+      <section id="confirmation" class="panel" aria-labelledby="confirmation-heading" hidden>
+        <h2 id="confirmation-heading">Referral confirmation</h2>
+        <dl id="confirmation-list" class="summary"></dl>
+        <p id="confirmation-notification">QCH Connect notifies the receiving Program that a new referral is waiting. If that notification cannot be sent, your referral is still saved, and the notification can be retried.</p>
+        <p class="confirmation-links"><a id="confirmation-view" href="/sent/">View referral</a> <a href="/sent/">Referrals I sent</a></p>
+      </section>
+
       <!-- Program affiliation (PRD 3.9): staff select their own; never preselected -->
       <section class="panel" aria-labelledby="affiliation-heading">
         <h2 id="affiliation-heading" tabindex="-1">Your Program affiliation</h2>
