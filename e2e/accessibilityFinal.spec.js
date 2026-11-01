@@ -130,6 +130,9 @@ function screens({ id, fields }) {
     ['Reporting Center', '/reporting/', null, async (p) => {
       await expect(status(p)).toHaveText(/^Report loaded for /);
     }],
+    ['Help and Guidance', '/help/', null, async (p) => {  // Task 225
+      await expect(p.getByRole('heading', { level: 2 })).toHaveCount(10);
+    }],
     ['Program Management', '/program-management/', null, async (p) => {
       await expect(p.locator('#program-select option')).not.toHaveCount(1);
     }],
@@ -165,6 +168,11 @@ async function open(page, [, path, act, ready]) {
 // The only screens allowed to have no S/M/L/XL control, by name, with the
 // reason above. Any other screen without the controls is a failure.
 const NO_SIZE_CONTROL = new Set(['Start page']);
+
+// Screens with no form controls in their main content, by name: the Help
+// and Guidance page is text only (Task 225). Its text and its S/M/L/XL
+// buttons are checked by the other sweeps here and by e2e/helpGuidance.spec.js.
+const NO_FORM_CONTROLS = new Set(['Help and Guidance']);
 
 // Before a screen's text-size checks: the four size controls must be there
 // (Frozen Handoff PRD 33: text size applies consistently to relevant
@@ -235,6 +243,11 @@ test('every screen, populated: the text size reaches every form control, includi
     if (!(await expectSizeControls(page, name))) continue; // explicit exception only (NO_SIZE_CONTROL)
     await page.locator('[data-size="S"]').click();
     const small = await controlSizes();
+    if (NO_FORM_CONTROLS.has(name)) {
+      // Explicit exception: assert it really has none, so it cannot outlive its reason.
+      expect(Object.keys(small), `${name} has no form controls in main`).toEqual([]);
+      continue;
+    }
     await page.locator('[data-size="XL"]').click();
     const large = await controlSizes();
     expect(Object.keys(small).length, `${name} has controls`).toBeGreaterThan(0);
