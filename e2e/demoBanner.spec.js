@@ -57,15 +57,23 @@ async function expectUnobscured(locator, { scroll = true } = {}) {
   await expect(locator).toBeVisible();
   await expect.poll(() => locator.evaluate((element) => {
     const box = element.getBoundingClientRect();
-    const x = Math.max(0, Math.min(innerWidth - 1, box.left + box.width / 2));
-    const y = Math.max(0, Math.min(innerHeight - 1, box.top + box.height / 2));
-    const hit = document.elementFromPoint(x, y);
+    const fragments = [...element.getClientRects()]
+      .map(r => ({
+        left: Math.max(0, r.left), right: Math.min(innerWidth, r.right),
+        top: Math.max(0, r.top), bottom: Math.min(innerHeight, r.bottom),
+      }))
+      .filter(r => r.right > r.left && r.bottom > r.top);
+    const hit = fragments.length > 0 && fragments.every(r => {
+      const target = document.elementFromPoint(
+        (r.left + r.right) / 2, (r.top + r.bottom) / 2);
+      return target === element || element.contains(target);
+    });
     const bar = document.querySelector('.demo-bar');
     const banner = bar?.getBoundingClientRect();
     const overlap = bar && !bar.contains(element) && !element.classList.contains('skip-link') && banner.bottom > Math.max(0, box.top)
       && banner.top < Math.min(innerHeight, box.bottom)
       && banner.right > box.left && banner.left < box.right;
-    return !overlap && (hit === element || element.contains(hit));
+    return !overlap && hit;
   }), { message: 'The visible target must receive hit testing instead of being covered by the demo banner' }).toBe(true);
 }
 
