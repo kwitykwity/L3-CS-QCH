@@ -12,12 +12,13 @@ const NAV = [
   { name: 'New referral', href: '/referral/' },
   { name: 'Referrals I sent', href: '/sent/' },
   { name: 'Received referrals', href: '/receiving/' },
+  { name: 'Help', href: '/help/' },  // Task 225
 ];
 
 const mainNav = (page) => page.getByRole('navigation', { name: 'Main navigation' });
 
 test.describe('New Referral main navigation (Task RR)', () => {
-  test('has the same three links as the other workflow pages, with New referral marked as the current page', async ({ page }) => {
+  test('has the same links as the other workflow pages, with New referral marked as the current page', async ({ page }) => {
     await page.goto('/referral/');
     const links = mainNav(page).getByRole('link');
     await expect(links).toHaveCount(NAV.length);

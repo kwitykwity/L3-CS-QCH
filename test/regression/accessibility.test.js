@@ -37,6 +37,10 @@ const attr = (attrs, name) => attrs.match(new RegExp(`\\b${name}="([^"]*)"`, 'i'
 const ids = (html) => [...html.matchAll(/\bid="([^"]+)"/g)].map((m) => m[1]);
 const isFormPage = (html) => /<(input|select|textarea)\b/i.test(html);
 
+// Pages that only show text and have no status updates (Task 225: Help
+// and Guidance). Everything else on such a page is still checked below.
+const TEXT_ONLY_PAGES = new Set([path.join('help', 'index.html')]);
+
 describe('every page', () => {
   test('there are pages to check', () => {
     assert.ok(pages.length >= 2, pages.map((p) => p.name).join(', '));
@@ -110,6 +114,15 @@ describe('every page', () => {
       });
 
       test('status updates are announced to screen readers (PRD 14.4)', () => {
+        if (TEXT_ONLY_PAGES.has(name)) {
+          // Explicit exception: a text-only page has no status updates to
+          // announce. Assert it really is text only (no form controls, and
+          // its one script is the text-size script), so the exception
+          // cannot outlive its reason.
+          assert.equal(isFormPage(html), false, `${name} has form controls`);
+          assert.deepEqual([...html.matchAll(/<script\b[^>]*src="([^"]+)"/g)].map((m) => m[1]), ['help.js']);
+          return;
+        }
         assert.match(html, /role="status"/);
       });
 
