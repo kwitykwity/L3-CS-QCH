@@ -34,6 +34,7 @@ For QCH and QCH IT, in reading order.
 | [known-limitations.md](known-limitations.md) | **Known limitations and outstanding verification**: what does not work yet, is not built here, or is not yet verified, with the repository evidence for each (Task TT) |
 | [handoff-questions.md](handoff-questions.md) | **Handoff questions for QCH and QCH IT**: the decisions still open, each tied to the Frozen Handoff PRD or Handoff MVP (Task SS) |
 | [release-notes-capstone-handoff.md](release-notes-capstone-handoff.md) | **Capstone handoff release notes**: delivered behavior, production status, running and verification instructions; frozen commit and final Task V results remain pending (Task 219) |
+| [pending-qch-it-decisions.md](pending-qch-it-decisions.md) | Confirmed architecture and outstanding configuration, integration and verification work; production-store guarantees and mail-permission boundaries |
 | [production-architecture.md](production-architecture.md) | **Confirmed production architecture** from the Frozen Handoff PRD (SharePoint Lists, Azure Functions, Graph, Exchange RBAC, Entra ID with MFA), confirmed archival behavior, and the full checklist of QCH/QCH IT production dependencies still outstanding (Task PP/QQ) |
 | [qch-it-requirements.md](qch-it-requirements.md) | Everything QCH IT needs to provide, and which part of the app needs it |
 | [handoff-checklist.md](handoff-checklist.md) | Every handoff deliverable, where it lives, and what it waits on |
@@ -78,10 +79,9 @@ the current guidance govern.
 
 | File | What it is |
 | --- | --- |
-| [pending-qch-it-decisions.md](pending-qch-it-decisions.md) | Pending QCH IT Architecture Decisions as they stood **before** the frozen PRD. Most are now confirmed; see [production-architecture.md](production-architecture.md) and [handoff-questions.md](handoff-questions.md) |
 | [historical-oct14-implementation-map.md](historical-oct14-implementation-map.md) | The earlier audit against the Oct 14 Final Technical PRD. Historical only: not a source of requirements |
 | [stale-pr-verification.md](stale-pr-verification.md) | Security dependency update and stale pull requests (Task P), checked against `main` on October 25, 2026 |
-| [gpme-description-step-prd-8-2.md](gpme-description-step-prd-8-2.md) | A **proposed** reading of the describe-the-need step against Final Technical PRD 8.2. Not approved |
+| [gpme-description-step-prd-8-2.md](gpme-description-step-prd-8-2.md) | Historical discussion under the October 14 PRD; its proposed status is superseded by the Frozen Handoff PRD's Describe the Need workflow |
 | [ai-interpretation-options.md](ai-interpretation-options.md) | Research only: three ways an open-ended "Find a Program" box could work, compared for pending decision 7. No external AI is part of the MVP |
 
 ## Elsewhere in the repository

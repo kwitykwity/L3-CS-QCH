@@ -76,8 +76,8 @@ earlier plan and are not instructions: `AZURE_CLIENT_SECRET` and
 Every variable in `.env.example`. "Read by code yet?" means the application
 actually loads the value — `PORT` and `NODE_ENV` (`src/config.js`) are the
 only two. The "Where it lives in production" column matches
-[docs/qch-it-requirements.md](docs/qch-it-requirements.md); nothing in it has
-been provisioned.
+[docs/qch-it-requirements.md](docs/qch-it-requirements.md); production provisioning and configuration have not been confirmed or
+verified by the team.
 
 | Variable               | What it's for                                           | Secret? | Provided by                                    | Where it lives in production                   | Read by code yet? |
 | ---------------------- | ------------------------------------------------------- | ------- | ---------------------------------------------- | ---------------------------------------------- | ----------------- |
@@ -247,11 +247,12 @@ in [docs/production-architecture.md](docs/production-architecture.md):
   (`programs.notification_email` in the earlier SQL design). Production data
   is planned for SharePoint Lists in a private QCH Connect site (§27); that
   store has not been built or provisioned.
-- **Production wiring**: the production server entry point creates the
-  notifier and starts `startNotificationRetries()` once the sender and store
-  exist, and stops the timer on shutdown. Today that entry point is
-  `src/server.js`; the confirmed production server side is Azure Functions
-  (§29), which are not built.
+- **Production wiring:** connect notification processing to committed
+  referrals and provide retry execution in the production integration.
+  The local synthetic server uses `startNotificationRetries()`, an
+  in-process interval timer. This does not prescribe an Azure Functions
+  trigger, queue or schedule; the production design remains to be decided.
+  See [planned production integration responsibilities](docs/production-architecture.md#5-planned-production-integration-responsibilities-not-built).
 - **Who sets each Program's notification email.** No screen or route sets
   it yet.
 - **Monitoring**: alerts on final failures (`warn` lines, PRD 11.6) in the
@@ -557,5 +558,6 @@ design and the outstanding items are in
 what is not done or not verified is in
 [`docs/known-limitations.md`](docs/known-limitations.md).
 [`docs/pending-qch-it-decisions.md`](docs/pending-qch-it-decisions.md)
-predates the confirmed architecture and is kept as a historical record. Any
+distinguishes confirmed architecture from outstanding configuration,
+integration and verification work. Any
 data used for demos must be synthetic.
