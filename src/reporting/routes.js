@@ -32,6 +32,7 @@
 import express from 'express';
 import { AffiliationError, errors as affiliationErrors } from '../affiliation/errors.js';
 import { ReferralError, referralErrors } from '../referrals/errors.js';
+import { reportingErrors } from './errors.js';
 import { createReportingService } from './reportingService.js';
 import { createReferralActivityService } from './referralActivityService.js';
 import { PERIOD_TYPES, parseDateText } from './periods.js';
@@ -46,22 +47,22 @@ const toId = (text) => {
 function readQuery(query) {
   const allowed = ['period', 'date', 'programId', 'departmentId'];
   if (Object.keys(query).some((k) => !allowed.includes(k))) throw referralErrors.unexpectedField();
-  if (!PERIOD_TYPES.includes(query.period)) throw referralErrors.invalidRequest(['period']);
+  if (!PERIOD_TYPES.includes(query.period)) throw reportingErrors.invalidRequest(['period']);
   const result = { periodType: query.period };
   if ('date' in query) {
     const date = parseDateText(query.date);
-    if (!date) throw referralErrors.invalidRequest(['date']);
+    if (!date) throw reportingErrors.invalidRequest(['date']);
     result.date = date;
   }
-  if ('programId' in query && 'departmentId' in query) throw referralErrors.invalidRequest(['programId', 'departmentId']);
+  if ('programId' in query && 'departmentId' in query) throw reportingErrors.invalidRequest(['programId', 'departmentId']);
   if ('programId' in query) {
     const id = toId(query.programId);
-    if (id === null) throw referralErrors.invalidRequest(['programId']);
+    if (id === null) throw reportingErrors.invalidRequest(['programId']);
     result.programId = id;
   }
   if ('departmentId' in query) {
     const id = toId(query.departmentId);
-    if (id === null) throw referralErrors.invalidRequest(['departmentId']);
+    if (id === null) throw reportingErrors.invalidRequest(['departmentId']);
     result.departmentId = id;
   }
   return result;

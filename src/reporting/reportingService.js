@@ -2,7 +2,7 @@
 // store, never in the browser. Responses are aggregate only: no referral
 // IDs, names, contact details, or per-person data (PRD 12.1, 12.3).
 
-import { referralErrors } from '../referrals/errors.js';
+import { reportingErrors } from './errors.js';
 import { PERIOD_TYPES, REPORTING_TIME_ZONE, periodContaining, localDateOf, parseDateText, isoDate } from './periods.js';
 import { computeTimingMetrics } from './timingMetrics.js';
 
@@ -24,7 +24,7 @@ export function resolveReportDay(date, asOf) {
   const today = localDateOf(asOf);
   const day = date ?? today;
   if (dayNumber(day) > dayNumber(today) || dayNumber(day) < dayNumber(EARLIEST_REPORT_DATE)) {
-    throw referralErrors.invalidRequest(['date']);
+    throw reportingErrors.invalidRequest(['date']);
   }
   return day;
 }
@@ -35,12 +35,12 @@ export function resolveReportDay(date, asOf) {
 // response context ("data as of"). All of it happens before any referral
 // data is read.
 export async function resolveReportQuery(store, asOf, { periodType, date, programId, departmentId }) {
-  if (!PERIOD_TYPES.includes(periodType)) throw referralErrors.invalidRequest(['period']);
+  if (!PERIOD_TYPES.includes(periodType)) throw reportingErrors.invalidRequest(['period']);
   const day = resolveReportDay(date, asOf);
   const period = periodContaining(periodType, day);
   // An unknown Program or Department is "Unknown", not "Zero" (PRD 12.6).
-  if (programId !== undefined && !(await store.getProgram(programId))) throw referralErrors.invalidRequest(['programId']);
-  if (departmentId !== undefined && !(await store.getDepartment(departmentId))) throw referralErrors.invalidRequest(['departmentId']);
+  if (programId !== undefined && !(await store.getProgram(programId))) throw reportingErrors.invalidRequest(['programId']);
+  if (departmentId !== undefined && !(await store.getDepartment(departmentId))) throw reportingErrors.invalidRequest(['departmentId']);
   return {
     cohort: { from: period.start.toISOString(), to: period.end.toISOString(), programId, departmentId },
     context: {
