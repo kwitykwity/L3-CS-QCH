@@ -21,6 +21,7 @@ import {
 import { interpretCheckResponse, interpretSubmitResponse, sendingState } from './submission.js';
 import { interpretAffiliationSave } from './affiliation.js';
 import { SIZES, loadSize, saveSize } from './textSize.js';
+import { formatDate } from '/receiving/common.js';
 import {
   DESCRIBE_MESSAGES, GUIDED_FIELD_MESSAGES, GUIDED_MESSAGES, firstGuidedError, interpretCategoriesResponse,
   interpretInterpretResponse, interpretMatchResponse, notCheckedNote, programInformationOf, serviceLanguagesText,
@@ -125,6 +126,33 @@ function hideStatus() {
   $('check-again').hidden = true;
   $('start-new').hidden = true;
   $('new-submission').hidden = true;
+  $('confirmation').hidden = true;
+}
+
+// Referral confirmation (Task 226): what was sent, where, from where and
+// when, with links to it. Program names come from this page's own lists and
+// are shown only when they match the IDs the server confirmed.
+function showConfirmation(referral) {
+  const name = (programs, id) => programs.find((p) => p?.programId === id)?.name;
+  const receiving = name([...state.programs, state.selectedProgram], referral.receivingProgramId);
+  const referring = name([state.affiliation?.program], referral.referringProgramId);
+  const rows = [
+    ['Referral ID', String(referral.referralId)],
+    ['Receiving Program', receiving],
+    ['Referring Program', referring],
+    ['Sent', formatDate(referral.createdAt)],
+  ].filter(([, value]) => value);
+  $('confirmation-list').replaceChildren(...rows.map(([term, value]) => {
+    const row = document.createElement('div');
+    const dt = document.createElement('dt');
+    const dd = document.createElement('dd');
+    dt.textContent = term;
+    dd.textContent = value;
+    row.append(dt, dd);
+    return row;
+  }));
+  $('confirmation-view').href = `/sent/referral.html?id=${encodeURIComponent(referral.referralId)}`;
+  $('confirmation').hidden = false;
 }
 
 // ---------------------------------------------------------------------------
@@ -864,6 +892,7 @@ async function applyResult(result) {
     state.afterConflict = false;
     const id = result.referral?.referralId;
     if (id) showStatus(`${result.message} Referral ID: ${id}.`, result.tone);
+    if (id && result.state === 'RECEIVED') showConfirmation(result.referral);
     $('start-new').hidden = false;
     $('send').disabled = true;
     return;
