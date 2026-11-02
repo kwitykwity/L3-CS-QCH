@@ -189,4 +189,4 @@ them.
 | Logs and monitoring | Logs sent to the monitoring service carry no participant data, recipient addresses or secrets; final notification failures alert | Decision 2 |
 | Notifications | The Graph sender sends only as the shared mailbox and is limited to it (least-privilege permission or access policy); provider errors are stored and logged as categories only | Decisions 6 and 2 |
 | Secrets | Secrets come from Key Vault (or QCH's choice); none in the repository, configuration files or logs | Decision 2 |
-| Demo sign-in | When demo sign-in (PRD 16.1) is built: it cannot be turned on in production, and demo identities cannot reach production data | Engineering (not built) |
+| Demo sign-in | When demo sign-in (Handoff PRD 22, demo identity separated from production authentication) is built: it cannot be turned on in production, and demo identities cannot reach production data | Engineering (not built) |

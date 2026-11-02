@@ -6,10 +6,10 @@ with the Task O demo people at `cd22455`, October 28, 2026** (fresh clone,
 reset between runs: identical every time). Everything below was run, not
 just read.
 
-This is the team-controlled "Plan B" demo from Final Technical PRD 16.4:
-synthetic people, referrals and Programs only, a simulated notification
-outbox, no QCH data and no production credentials. It is never promoted to
-production (PRD 16.4, 18.1).
+This is the team-controlled "Plan B" demo (Handoff PRD 35, development and
+demo data): synthetic people, referrals and Programs only, a simulated
+notification outbox, no QCH data and no production credentials. It is never
+promoted to production (Handoff PRD 22, 34, 35).
 
 ## Start the demo
 
@@ -43,7 +43,7 @@ the starting state below. This works because all demo data lives in the
 server's memory and is rebuilt from `scripts/syntheticSeed.js` on every
 start. Nothing is written to disk or to any database.
 
-Why this reset is safe (PRD 16.2, 17.4):
+Why this reset is safe (Handoff PRD 34, 35):
 
 - **Synthetic only.** The only data it can produce is the invented seed.
 - **Environment-guarded and fail closed.** The demo server refuses to start

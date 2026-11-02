@@ -3,8 +3,7 @@
 One page for whoever presents. Follow it top to bottom; nothing else
 needs to be known. About **15 minutes** for the main journey, plus
 optional extras. Every person, Program and referral in the demo is
-**synthetic**. Final Technical PRD 16.4 ("Plan B" demo), 2.1 to 2.4, 6, 8,
-11, 12.
+**synthetic** (Handoff PRD 35, development and demo data).
 
 Verified on `main` at `36f6e82` (October 26, 2026): every checkpoint below
 was run, and the text in the "You should see" column is copied from the
@@ -133,8 +132,8 @@ counts include earlier practice referrals.
 
 | Problem | Do this |
 | --- | --- |
-| Find a Program shows "Unable to perform matching right now. This is a technical problem, not a result." (step 3 or 4) | That is the designed fallback (PRD 8.8); say so. Click **Use Direct Referral**, tick **Housing Help Desk (sample)**, **Continue to referral details**, then do **step 5** as written from "Participant name". It is still Referral ID 1, and steps 6 to 16 and section 5 stay exactly the same. The only difference is that the referral is saved as a Direct Referral instead of Find a Program, which the Reporting counts don't show. If matching is still down at step 17, skip step 17 and say the Program change applies to the next search once matching is back |
-| The browser asks "Leave page?" when you change pages | That's the unsaved-work protection (PRD 7.6). Choose **Leave** |
+| Find a Program shows "Unable to perform matching right now. This is a technical problem, not a result." (step 3 or 4) | That is the designed fallback (Handoff PRD 4.2); say so. Click **Use Direct Referral**, tick **Housing Help Desk (sample)**, **Continue to referral details**, then do **step 5** as written from "Participant name". It is still Referral ID 1, and steps 6 to 16 and section 5 stay exactly the same. The only difference is that the referral is saved as a Direct Referral instead of Find a Program, which the Reporting counts don't show. If matching is still down at step 17, skip step 17 and say the Program change applies to the next search once matching is back |
+| The browser asks "Leave page?" when you change pages | That's the unsaved-work protection. Choose **Leave** |
 | A send says "Referral not confirmed !" | Click **Check whether it was received**. It confirms without sending twice. Never press Send again until it answers |
 | A list or report won't load | Click the page's **Try again** or **Reload** button. If it still fails, reset (section 1) and resume from step 2 |
 | No notification line appears | Not critical. The referral is still in Received referrals; continue |
