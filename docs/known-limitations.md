@@ -1,6 +1,6 @@
 # Known limitations and outstanding verification
 
-**Status: as of `main` at `2cab0f0852a686901c3b5a0322a26612c175275b` (November 2, 2026).** Trello Task 231 (refresh of Task TT).
+**Status: as of `main` at `24966d5a0d53f7d247428e0dfd9f78f03cc9b288` (November 2, 2026).** Trello Task 231 (refresh of Task TT).
 Documentation only.
 
 This page lists **what is known not to work yet, not to be built here, or
@@ -62,13 +62,33 @@ stores with synthetic data, and the production server fails closed: every
 
 | # | Outstanding verification | PRD / MVP | Evidence | Status |
 | --- | --- | --- | --- | --- |
-| C1 | **Manual Safari Run 2 remains partial.** Jimmy Ong recorded Safari 27.0 on macOS: steps 1–6 passed on `eea57fd`, 7–16 passed on `e7a0b48`, and steps 17–19 observations on `2746c83`. Step 17 overflow and preservation of typed work, and step 18 address-bar checks on every page, remain incomplete. Step 19 passed within the recorded local production-mode boundary; this does not verify all-route authorization or Entra ID. Permissions sizing and production footer findings were fixed separately in #97 and #98, without recorded Safari retests | PRD §33, §36; MVP §27 | Merged PR #94; `docs/demo-rehearsal.md` Run 2 | Partial; remaining checks and later-fix retests outstanding |
+| C1 | **Manual Safari Run 2 remains partial.** Steps 17 overflow/typed-work preservation and step 18 every-page address checks remain incomplete. Step 19 passed within the recorded local production-mode boundary, not all-route authorization or Entra ID. The separate Task 242 retests of #97 Permissions sizing/selected treatment and #98 absence of development-build wording on Home, New Referral and Reporting both passed in production mode, signed out, on main `2cab0f0`: Jimmy Ong, macOS 26.7.1 build 25G241, Safari 27.0 (21625.1.29.18.28). Those specific passes do not complete Run 2 or verify later changes | PRD §33, §36; MVP §27 | Merged PR #94; `docs/demo-rehearsal.md` Run 2; [Task 242 evidence](https://trello.com/c/yGzKRBYQ) | Specific #97/#98 Safari retests passed; remaining Run 2 checks outstanding |
 | C2 | **Browser evidence is revision- and environment-specific.** The additional-browser suite includes installed Edge plus Playwright Chromium, Firefox and WebKit. Separate manual Safari/VoiceOver and Edge desktop checks are recorded. These do not establish the final QCH browser baseline or verification of every later change. Mobile-device support is not established; narrow-width desktop reflow checks do not establish it | PRD §33, §36, §37 item 10; MVP §31 item 11 | `docs/browser-verification.md`; `docs/demo-rehearsal.md`; `docs/screen-reader-check.md`; `docs/desktop-browser-check.md` | QCH IT baseline and final-candidate verification outstanding (Q13) |
 | C3 | **Every verification ran on in-memory stores with synthetic data.** None of the test evidence shows behavior on SharePoint Lists, Azure Functions, Entra ID or Graph; the security and store-contract checks must be rerun on the production setup | PRD §36; MVP §28, §33 | `docs/security-regression.md` ("Re-run once QCH IT confirms the production architecture") | Outstanding (needs section A first) |
 | C4 | **The production Graph email check in the deployment runbook has never been run**: one test referral to a QCH-approved Program arriving in that Program's inbox, generic, with the delivery ending `SENT` | PRD §21, §34; MVP §21 | `docs/deployment.md` step 5 ("Not built yet") | Outstanding (needs A4, A5) |
 | C5 | **Page 18, the dedicated Multi-Location Program Management screen, was not delivered and is deferred for this release.** Handoff PRD §13 multi-location capability remains delivered through current Program information: separate listings or a shared listing with configurable Locations information. Regression coverage exists for both models and updated locations through /api/gpme/match. It does not verify the dedicated management screen or a dedicated browser journey for shared-location display | PRD §13; MVP §14 | Merged PR #78; `test/regression/multiLocation.test.js`; release scope decision above; Q2 | Existing capability and API regression delivered; dedicated screen deferred; browser verification remains outstanding |
-| C6 | Help & Guidance and Referral Confirmation are implemented, but Task 229 manual verification of the new handoff screens remains outstanding. Automated coverage does not establish manual keyboard, focus, text-size, browser zoom/reflow or screen-reader results | Approved Current Handoff Written Wireframes Pages 22 and 11; PRD §33, §36; MVP §27 | Merged PRs #106 and #107; `e2e/helpGuidance.spec.js`; `e2e/referralConfirmation.spec.js`; [Task 229](https://trello.com/c/v8ih5huf) | Implementation delivered; manual verification outstanding |
-| C7 | **Task 203 finding F1 remains open:** the demo identity banner obscures content on Referrals I sent and Reporting Center at XL text and 400% Edge zoom. Developer-mode passes do not close a demo-mode finding. The report’s pending-review/merge wording predates its merge in #101; the recorded defect and verification boundaries remain applicable | PRD §33; MVP §27 | Merged PR #101; `docs/desktop-browser-check.md`; [issue #102](https://github.com/kwitykwity/L3-CS-QCH/issues/102) | Repair and demo-mode retest outstanding; disposition required in Task V |
+| C6 | Help & Guidance and Referral Confirmation are implemented. Task 229 found that the Help skip-link destination heading was obscured by the demo banner in Chrome at S text / 100% zoom. PR #110 repaired it; Christina confirmed the heading remained visible after keyboard activation on repair SHA `49677be76172bc24920debeee86c6c899f3d825b` in Chrome 156.0.8078.74. The new demo-mode regression also passes. This closes that specific finding only: the remaining Task 229 keyboard/focus, S/M/L/XL, zoom/reflow, accessible-name and actual screen-reader checks, including Referral Confirmation, are still outstanding | Approved Current Handoff Written Wireframes Pages 22 and 11; PRD §33, §36; MVP §27 | Merged PRs #106, #107 and [#110](https://github.com/kwitykwity/L3-CS-QCH/pull/110); `e2e/helpGuidance.spec.js`; `e2e/referralConfirmation.spec.js`; `e2e/demoBanner.spec.js`; [Task 229](https://trello.com/c/v8ih5huf) | Help skip-link finding repaired and specifically retested; full Task 229 manual verification outstanding |
+| C7 | **Task 203 finding F1 is repaired in merged PR #110.** The demo banner now stays in normal document flow instead of covering content. Christina reported Referrals I sent and Reporting Center readable and unobscured in demo mode at XL text and actual 100%, 200% and 400% zoom in Edge 156.0.4314.58 on repair SHA `49677be76172bc24920debeee86c6c899f3d825b`; identity and Switch person checks passed. Both pages measured 219 × 192 CSS pixels with DevTools docked at 400%; these are not measurements of the earlier DevTools-closed checks. All four new demo regressions fail with the old layout and pass with the repair. Switch person is available at the top of the page and scrolls away with the banner | PRD §33; MVP §27 | [Merged PR #110 and repair evidence](https://github.com/kwitykwity/L3-CS-QCH/pull/110); `e2e/demoBanner.spec.js`; original `docs/desktop-browser-check.md` and [issue #102](https://github.com/kwitykwity/L3-CS-QCH/issues/102) remain dated finding evidence | Repaired; recorded manual and automated repair verification passed; final candidate audit remains outstanding |
+
+## Integrated baseline and repair validation
+
+[Task 240](https://trello.com/c/MZxRWGWg) ran a fresh clone of main at
+`2cab0f0852a686901c3b5a0322a26612c175275b` on November 2, 2026:
+Debian 13 x86_64, Node 24.15.0, Playwright 1.63.0 and installed Chromium
+154.0.8037.57 through the supported `CHROMIUM_PATH` option.
+`npm ci` and `npm run check-runtime` passed. Node: 1,752 passed across
+248 suites, zero failures or skips. Chromium: 233 passed, zero failures
+or skips. The specifically requested `mvpJourney.spec.js` (5 tests) and
+`programManagement.spec.js` (8 tests) both passed. No reproduction rerun
+was needed and no code or tests were changed.
+
+PR #110 repair validation on `49677be76172bc24920debeee86c6c899f3d825b`
+used the same Node/Playwright/Chromium environment: 1,752 Node tests and
+237 Chromium tests passed, with zero failures or skips, including four
+new demo-mode regressions. Manual repair checks are recorded in C6/C7.
+These counts belong to their named revisions. They do not constitute a
+new Chromium run on the post-merge main SHA or the final Task V candidate.
+Production verification and the remaining manual checks remain open.
 
 ## How to keep this page honest
 

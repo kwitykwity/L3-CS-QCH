@@ -11,7 +11,7 @@
 
   const style = document.createElement('style');
   style.textContent = `
-    .demo-bar { position: fixed; top: 0; left: 0; right: 0; z-index: 1000; display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; justify-content: space-between; padding: 6px 16px; background: #fff3cd; color: #1a1d21; border-bottom: 2px solid #7a5b00; font: 600 14px/1.4 system-ui, sans-serif; }
+    .demo-bar { display: flex; flex-wrap: wrap; gap: 4px 16px; align-items: center; justify-content: space-between; padding: 6px 16px; background: #fff3cd; color: #1a1d21; border-bottom: 2px solid #7a5b00; font: 600 14px/1.4 system-ui, sans-serif; }
     .demo-bar a { color: #1f3a78; }
     .demo-bar a:focus-visible { outline: 3px solid #1a1d21; outline-offset: 2px; }
     @media (prefers-color-scheme: dark) {
@@ -35,5 +35,6 @@
   who.append(link);
   bar.append(label, who);
   document.body.prepend(bar);
-  document.documentElement.style.paddingTop = `${bar.offsetHeight}px`;
+  // Keep the banner in normal flow: wrapping and focus/anchor scrolling must
+  // not leave content behind a fixed overlay (issue #102, Task 241).
 })();

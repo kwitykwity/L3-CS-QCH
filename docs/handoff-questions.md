@@ -1,6 +1,6 @@
 # Handoff questions for QCH and QCH IT
 
-**Status: open questions, as of `main` at `2cab0f0852a686901c3b5a0322a26612c175275b` (November 2, 2026).**
+**Status: open questions, as of `main` at `24966d5a0d53f7d247428e0dfd9f78f03cc9b288` (November 2, 2026).**
 Trello Task 231 (refresh of Task SS). Documentation only.
 
 This page lists **questions that QCH or QCH IT still has to decide**,
