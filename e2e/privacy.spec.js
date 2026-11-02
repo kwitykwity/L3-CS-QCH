@@ -29,7 +29,7 @@
 // emails.
 
 import { test, expect } from '@playwright/test';
-import { ensureAffiliation } from './helpers.js';
+import { ensureAffiliation, openReview } from './helpers.js';
 
 const RUN = Date.now().toString(36);
 const MARK = {
@@ -112,6 +112,10 @@ test('participant data stays out of addresses, browser storage, cookies and the 
   // Active-form data may live in memory, never in storage (data
   // minimization, Handoff PRD 34).
   await expectCleanBrowserState(page, '2. details form filled in, before sending');
+  // The Review step shows it all, still only in the page (Task 227).
+  await openReview(page);
+  await expect(page.locator('#review-list')).toContainText(MARK.notes);
+  await expectCleanBrowserState(page, '2a. on the Review step, before sending');
   await page.locator('#send').click();
   await expect(status(page)).toContainText('Referral received');
   await expectCleanBrowserState(page, '3. after sending');

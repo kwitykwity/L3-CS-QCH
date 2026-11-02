@@ -9,7 +9,7 @@
 // SYNTHETIC data only.
 
 import { test, expect } from '@playwright/test';
-import { chooseDirect, ensureAffiliation } from './helpers.js';
+import { chooseDirect, ensureAffiliation, openReview } from './helpers.js';
 
 const status = (page) => page.locator('#status .status__text');
 
@@ -21,7 +21,8 @@ function recordReferralPosts(page) {
   return posts;
 }
 
-// Direct Referral to the Housing Help Desk with the given name filled in.
+// Direct Referral to the Housing Help Desk with the given name filled in,
+// open on the Review step, where Submit referral (#send) is (Task 227).
 async function directReferral(page, name) {
   await page.goto('/referral/');
   await ensureAffiliation(page);
@@ -34,6 +35,7 @@ async function directReferral(page, name) {
   await page.locator('#participantName').fill(name);
   await page.locator('input[name="contactMethod"][value="NOT_AVAILABLE"]').check();
   await page.locator('#referralContext').fill(`Synthetic need for ${name}`);
+  await openReview(page);
 }
 
 // How many referrals the server holds for this name, from the sender's list.
@@ -68,6 +70,9 @@ test.describe('Direct Referral: failures never lose work or send twice (PRD 7.2 
     expect(await page.locator('#referralContext').inputValue()).toBe(`Synthetic need for ${name}`);
     await expect(page.locator('#send')).toBeEnabled();
     expect(await savedCount(page, name)).toBe(0);
+    // The resend is made from the same Review step.
+    await expect(page.locator('#step-review')).toBeVisible();
+    await expect(page.locator('#review-list')).toContainText(name);
 
     await page.locator('#send').click();
     await expect(status(page)).toContainText('Referral received !');

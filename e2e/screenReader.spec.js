@@ -113,7 +113,8 @@ test.describe('New Referral page: what a screen reader is told', () => {
   test('errors: the summary is announced, each invalid field says so and why, focus goes to the first (PRD 14.3)', async ({ page }) => {
     await recordAnnouncements(page);
     await openDirectForm(page);
-    await page.getByRole('button', { name: 'Send referral' }).click();
+    // Review referral runs the same checks before anything is sent (Task 227).
+    await page.getByRole('button', { name: 'Review referral' }).click();
 
     // The tone word ("Attention:") is visual only (aria-hidden); the message
     // itself says what happened.
@@ -143,7 +144,7 @@ test.describe('New Referral page: what a screen reader is told', () => {
 
     // When the first problem is the contact choice, focus lands on a radio,
     // and the group carries the summary until a choice is made.
-    await page.getByRole('button', { name: 'Send referral' }).click();
+    await page.getByRole('button', { name: 'Review referral' }).click();
     const contactGroup = page.getByRole('group', { name: 'Best way to reach them' });
     await expect(contactGroup.getByRole('radio').first()).toBeFocused();
     await expect(contactGroup).toHaveAccessibleDescription(/^Some information needs attention\. Nothing was sent\./);
@@ -157,7 +158,9 @@ test.describe('New Referral page: what a screen reader is told', () => {
     await page.getByRole('textbox', { name: 'Participant name' }).fill('Synthetic Person Reader');
     await page.getByRole('radio', { name: 'No reliable contact' }).check();
     await page.getByRole('textbox', { name: 'What do they need?' }).fill('Synthetic need');
-    await page.getByRole('button', { name: 'Send referral' }).click();
+    await page.getByRole('button', { name: 'Review referral' }).click();
+    await expect(page.getByRole('heading', { name: '3. Review and submit' })).toBeFocused();
+    await page.getByRole('button', { name: 'Submit referral' }).click();
     await expect(page.locator('#status .status__text')).toContainText('Referral received !');
 
     const texts = await announced(page);

@@ -9,7 +9,7 @@
 // receiving Program through the API. SYNTHETIC data only.
 
 import { test, expect } from '@playwright/test';
-import { chooseDirect, ensureAffiliation, expectNoAxeViolations, focused } from './helpers.js';
+import { chooseDirect, ensureAffiliation, expectNoAxeViolations, focused, reviewAndSubmit } from './helpers.js';
 
 const RUN = Date.now().toString(36);
 const JOBS = 5;      // Job Readiness Workshop (sample): not received by the developer
@@ -59,7 +59,7 @@ test.describe('Referrals I sent', () => {
     await page.locator('#contactMethod-options input[value="PHONE_CALL"]').check();
     await page.locator('#contactValue').fill(CONTACT);
     await page.locator('#referralContext').fill('Synthetic need for Task L');
-    await page.locator('#send').click();
+    await reviewAndSubmit(page);
     await expect(status(page)).toContainText('Referral received');
 
     // Find it later from the home page.

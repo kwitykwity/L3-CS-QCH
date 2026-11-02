@@ -112,6 +112,22 @@ function screens({ id, fields }) {
       await expect(p.locator('#step-details')).toBeVisible();
       await expect(p.locator('#participantName')).toBeVisible();
     }],
+    ['Review and submit', '/referral/', async (p) => {  // Task 227
+      await p.locator('#path-direct').click();
+      await p.locator('#program-options input').first().check();
+      await p.locator('#program-continue').click();
+      await p.locator('#participantName').fill('Synthetic Person Review Sweep');
+      await p.locator('#contactMethod-options input[value="EMAIL"]').check();
+      await p.locator('#contactValue').fill('synthetic.review.sweep.with.a.long.address@example.org');
+      await p.locator('#referralContext').fill('Synthetic need for the review sweep, long enough to wrap across lines on a narrow screen');
+      await p.locator('#participantZip').fill('11101');
+      await p.locator('#notes').fill('Synthetic note');
+      await p.locator('#review').click();
+    }, async (p) => {
+      await expect(p.locator('#step-review')).toBeVisible();
+      await expect(p.locator('#review-list')).toContainText('Synthetic Person Review Sweep');
+      await expect(p.locator('#send')).toBeVisible();
+    }],
     ['Received referrals', '/receiving/', null, async (p) => {
       await expect(status(p)).toHaveText('Referrals loaded.');
       await expect(p.locator('.queue-item')).not.toHaveCount(0);

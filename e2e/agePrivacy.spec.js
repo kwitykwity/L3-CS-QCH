@@ -19,7 +19,7 @@
 // matches it, and the synthetic developer identity can receive for it.
 
 import { test, expect } from '@playwright/test';
-import { ensureAffiliation, expectNoAxeViolations } from './helpers.js';
+import { ensureAffiliation, expectNoAxeViolations, openReview } from './helpers.js';
 
 const HOUSING = 'Housing Help Desk (sample)';
 const EXACT_AGE = 97;
@@ -99,6 +99,13 @@ async function chooseAgeAndSend(page, { mode, name }) {
   await page.locator('#participantName').fill(name);
   await page.locator('input[name="contactMethod"][value="NOT_AVAILABLE"]').check();
   await page.locator('#referralContext').fill('Synthetic need for the privacy test (no participant details)');
+  // The Review step never shows the age (Task 227).
+  await openReview(page);
+  const review = await page.locator('#step-review').innerText();
+  expect(review, 'Review mentions age').not.toMatch(/\bage\b|age range|exact age/i);
+  for (const n of mode === 'exact' ? [EXACT_AGE] : [RANGE.min, RANGE.max]) {
+    expect(hasNumber(review, n), `Review shows age ${n}`).toBe(false);
+  }
   await page.locator('#send').click();
   await expect(status(page)).toContainText('Referral received !');
   return Number((await status(page).textContent()).match(/Referral ID: (\d+)/)[1]);

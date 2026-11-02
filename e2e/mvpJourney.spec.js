@@ -114,6 +114,9 @@ test.describe('one referral through every MVP feature', () => {
     await page.keyboard.press('Space');
     await page.locator('#referralContext').focus();
     await page.keyboard.type('Synthetic need for the Task G journey');
+    await tabTo(page, 'review');
+    await page.keyboard.press('Enter');
+    expect(await focused(page)).toBe('step-review-heading');
     await tabTo(page, 'send');
     await page.keyboard.press('Enter');
     await expect(page.locator('#status .status__text')).toContainText('Referral received');

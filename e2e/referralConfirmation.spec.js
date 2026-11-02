@@ -12,7 +12,7 @@
 // SYNTHETIC data only.
 
 import { test, expect } from '@playwright/test';
-import { chooseDirect, ensureAffiliation } from './helpers.js';
+import { chooseDirect, ensureAffiliation, reviewAndSubmit } from './helpers.js';
 
 const RUN = Date.now().toString(36);
 let n = 0;
@@ -45,7 +45,7 @@ async function sendDirect(page) {
 
   const created = page.waitForResponse((r) => r.request().method() === 'POST'
     && new URL(r.url()).pathname === '/api/referrals');
-  await page.locator('#send').click();
+  await reviewAndSubmit(page);
   const response = await created;
   expect(response.status()).toBe(201);
   const { status: outcome, referral } = await response.json();

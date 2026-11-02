@@ -20,7 +20,7 @@
 // Synthetic seed: Housing Help Desk (sample) is Program 4.
 
 import { test, expect } from '@playwright/test';
-import { chooseDirect, ensureAffiliation } from './helpers.js';
+import { chooseDirect, ensureAffiliation, openReview } from './helpers.js';
 
 const HOUSING_ID = '4';
 const RECEIVED = 'Referral received !';
@@ -37,7 +37,8 @@ function recordReferralPosts(page) {
   return posts;
 }
 
-// Opens Direct Referral to Housing Help Desk with the details filled in.
+// Opens Direct Referral to Housing Help Desk with the details filled in,
+// on the Review step, where Submit referral (#send) is (Task 227).
 async function directDetails(page, name) {
   await page.goto('/referral/');
   await ensureAffiliation(page);
@@ -49,6 +50,7 @@ async function directDetails(page, name) {
   await page.locator('#participantName').fill(name);
   await page.locator('input[name="contactMethod"][value="NOT_AVAILABLE"]').check();
   await page.locator('#referralContext').fill('Synthetic need for the double-submit test');
+  await openReview(page);
 }
 
 // How many referrals the server holds for this synthetic person.
@@ -77,6 +79,7 @@ test.describe('one referral, however many times Send is pressed (Handoff PRD 20)
     await page.locator('#send').click();
     await expect(status(page)).toHaveText('Sending referral ...');
     await expect(page.locator('#send')).toBeDisabled();
+    await expect(page.locator('#review-edit'), 'no editing while it is sending').toBeDisabled();
     // Everything an impatient person (or a stuck mouse) might do.
     await page.locator('#send').click({ force: true, clickCount: 3 });
     await page.locator('#send').focus();
@@ -171,6 +174,7 @@ test.describe('interrupted sends recover without duplicates (Handoff PRD 20)', (
     await expect(status(page)).toContainText(NOT_CONFIRMED);
     await expect(page.locator('#check-again')).toBeVisible();
     await expect(page.locator('#send')).toBeDisabled();
+    await expect(page.locator('#review-edit'), 'no editing while the outcome is unknown').toBeDisabled();
     await expect(page.locator('#participantName')).toHaveValue(name);
 
     // The connection comes back; checking again finds the saved referral.
@@ -197,6 +201,7 @@ test('a new referral after a successful one gets its own Submission ID and is sa
   await page.locator('#participantName').fill(second);
   await page.locator('input[name="contactMethod"][value="NOT_AVAILABLE"]').check();
   await page.locator('#referralContext').fill('Synthetic need for the double-submit test');
+  await openReview(page);
   await page.locator('#send').click();
   await expect(status(page)).toContainText(RECEIVED);
 

@@ -209,7 +209,7 @@
         </div>
       </section>
 
-      <!-- Step 2: referral details and submission -->
+      <!-- Step 2: referral details -->
       <section id="step-details" class="panel" aria-labelledby="step-details-heading" hidden>
         <h2 id="step-details-heading" tabindex="-1">2. Referral details</h2>
         <dl class="summary">
@@ -276,11 +276,25 @@
           </fieldset>
 
           <div class="actions">
-            <button type="submit" id="send" class="btn btn--primary">Send referral</button>
-            <button type="button" id="send-direct" class="btn btn--secondary" hidden>Send as a Direct Referral instead</button>
+            <button type="button" id="review" class="btn btn--primary">Review referral</button>
             <button type="button" id="cancel" class="btn btn--secondary">Cancel</button>
           </div>
         </form>
+      </section>
+
+      <!-- Step 3: review and submit (Task 227; Written Wireframe Page 8).
+           Shown in the browser only, from the form above. Submit referral
+           submits #referral-form, so it runs the same send code. Participant
+           age and the Find a Program description are never shown here. -->
+      <section id="step-review" class="panel" aria-labelledby="step-review-heading" hidden>
+        <h2 id="step-review-heading" tabindex="-1">3. Review and submit</h2>
+        <p class="muted">Check the referral before you submit it. Choose Edit to change the details.</p>
+        <dl id="review-list" class="summary summary--review"></dl>
+        <div class="actions">
+          <button type="submit" id="send" form="referral-form" class="btn btn--primary">Submit referral</button>
+          <button type="button" id="send-direct" class="btn btn--secondary" hidden>Send as a Direct Referral instead</button>
+          <button type="button" id="review-edit" class="btn btn--secondary">Edit</button>
+        </div>
       </section>
 
       <dialog id="discard-dialog" aria-labelledby="discard-title" aria-describedby="discard-desc">

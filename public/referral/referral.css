@@ -165,6 +165,8 @@ fieldset.plain:disabled { opacity: 0.75; }
 .summary div { display: grid; gap: 0.125rem; }
 .summary dt { color: var(--muted); font-size: 0.875rem; }
 .summary dd { margin: 0; font-weight: 600; }
+/* Review step: keep the worker's line breaks; long words wrap (reflow). */
+.summary--review dd { white-space: pre-wrap; overflow-wrap: anywhere; }
 
 .actions { display: flex; flex-wrap: wrap; gap: 0.75rem; margin-top: 0.5rem; }
 

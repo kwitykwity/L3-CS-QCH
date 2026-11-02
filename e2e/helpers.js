@@ -62,3 +62,17 @@ export async function chooseDirect(page) {
   await expect(page.locator('#direct')).toBeVisible();
 }
 
+// Referral details are checked on the Review step before they are sent
+// (Task 227). Opens Review from the details and waits for it, with focus
+// on its heading. Submit referral (#send) is then on screen.
+export async function openReview(page) {
+  await page.locator('#review').click();
+  await expect(page.locator('#step-review')).toBeVisible();
+  await expect(page.locator('#step-review-heading')).toBeFocused();
+}
+
+// Review, then Submit referral: the path every send from New Referral takes.
+export async function reviewAndSubmit(page) {
+  await openReview(page);
+  await page.locator('#send').click();
+}

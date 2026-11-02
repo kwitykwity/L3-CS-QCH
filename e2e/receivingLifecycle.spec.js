@@ -208,6 +208,8 @@ test.describe('authorized staff', () => {
     await referrer.locator('#participantName').fill(`Synthetic Loop ${RUN}`);
     await referrer.locator('input[name="contactMethod"][value="NOT_AVAILABLE"]').check();
     await referrer.locator('#referralContext').fill('Synthetic need for the full loop');
+    await referrer.locator('#review').click(); // Review, then Submit referral (Task 227)
+    await expect(referrer.locator('#step-review-heading')).toBeFocused();
     await referrer.locator('#send').click();
     await expect(referrer.locator('#status .status__text')).toContainText('Referral received !');
     const id = Number(/Referral ID: (\d+)/.exec(await referrer.locator('#status .status__text').textContent())[1]);

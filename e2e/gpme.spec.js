@@ -14,7 +14,7 @@
 //   Childcare, ages 40 to 45 -> no plausible match (Childcare is for ages 0 to 5)
 
 import { test, expect } from '@playwright/test';
-import { ensureAffiliation, expectNoAxeViolations, focused, tabTo } from './helpers.js';
+import { ensureAffiliation, expectNoAxeViolations, focused, openReview, tabTo } from './helpers.js';
 
 const EVENING = 'Adult Evening Classes (sample)';
 const JOB_READINESS = 'Job Readiness Workshop (sample)';
@@ -47,12 +47,14 @@ async function findPrograms(page) {
   await page.locator('#find-programs').click();
 }
 
-// The details form that follows choosing a Program.
+// The details form that follows choosing a Program, then the Review step,
+// where Submit referral (#send) is (Task 227).
 async function fillReferral(page, name = 'Synthetic Person Guided') {
   await expect(page.locator('#step-details')).toBeVisible();
   await page.locator('#participantName').fill(name);
   await page.locator('input[name="contactMethod"][value="NOT_AVAILABLE"]').check();
   await page.locator('#referralContext').fill('Synthetic need for the guided matching test');
+  await openReview(page);
 }
 
 // Records every POST /api/referrals body the page sends.
@@ -546,6 +548,7 @@ test.describe('preserved work and recovery after choosing a matched Program (PRD
     expect(await page.locator('#participantName').inputValue()).toBe('Synthetic Person Changed');
 
     await page.getByRole('button', { name: `Choose ${EVENING}` }).click();
+    await openReview(page); // re-choosing returns to the details; review again
     await page.locator('#send').click();
     await expect(status(page)).toContainText('Referral received !');
     expect(referrals).toHaveLength(2);
@@ -628,6 +631,10 @@ test.describe('keyboard and accessibility of the guided journey (PRD 14.2, 14.3,
     await page.keyboard.press('Space');
     await tabTo(page, 'referralContext');
     await page.keyboard.type('Synthetic need');
+    await tabTo(page, 'review');
+    await page.keyboard.press('Enter');
+    expect(await focused(page)).toBe('step-review-heading');
+    expect(referrals, 'Review referral sent the referral').toHaveLength(0);
     await tabTo(page, 'send');
     await page.keyboard.press('Enter');
     await expect(status(page)).toContainText('Referral received !');
@@ -762,6 +769,9 @@ test.describe('describe what the participant needs', () => {
     await expect(page.locator('#match-results')).toBeVisible();
     await page.getByRole('button', { name: `Choose ${EVENING}` }).click();
     await fillReferral(page);
+    // The Review step does not show the description (Task 227).
+    await expect(page.locator('#step-review')).not.toContainText(marker);
+    await expect(page.locator('#step-review')).not.toContainText('25 year old');
     await page.locator('#send').click();
     await expect(status(page)).toContainText('Referral received !');
 

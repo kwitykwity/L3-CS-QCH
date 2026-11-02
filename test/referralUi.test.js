@@ -18,6 +18,7 @@ import {
   CONFLICT_NOT_FOUND, MESSAGES, interpretCheckResponse, interpretSubmitResponse, isConfirmation, sendingState,
 } from '../public/referral/submission.js';
 import { interpretAffiliationSave } from '../public/referral/affiliation.js';
+import { reviewRows } from '../public/referral/review.js';
 import { DEFAULT_SIZE, SIZES, loadSize, normalizeSize, saveSize } from '../public/referral/textSize.js';
 import { syntheticSeed, DEV_USER_ID } from '../scripts/syntheticSeed.js';
 
@@ -417,6 +418,81 @@ describe('text size preference (PRD 14.5)', () => {
   });
 });
 
+describe('review and submit step (Task 227)', () => {
+  const names = { receiving: 'Synthetic Receiving Program', referring: 'Synthetic Referring Program' };
+  const terms = (rows) => rows.map(([term]) => term);
+
+  test('shows both Programs, the name, contact, ZIP, referral context and notes, in form order', () => {
+    const rows = reviewRows(validForm({ notes: 'Synthetic note' }), names);
+    assert.deepEqual(rows, [
+      ['Receiving Program', 'Synthetic Receiving Program'],
+      ['Referring Program', 'Synthetic Referring Program'],
+      ['Participant name', 'Synthetic Person Alpha'],
+      ['Best way to reach them', 'Phone call'],
+      ['Phone number', '(555) 010-0147'],
+      ['ZIP code', '11375'],
+      ['Referral context', 'Synthetic context: needs evening classes'],
+      ['Notes', 'Synthetic note'],
+    ]);
+  });
+
+  test('ZIP and notes appear only when entered', () => {
+    const rows = reviewRows(validForm({ participantZip: '  ', notes: '' }), names);
+    assert.ok(!terms(rows).includes('ZIP code'));
+    assert.ok(!terms(rows).includes('Notes'));
+  });
+
+  test('No reliable contact is shown as such, with no contact value', () => {
+    const rows = reviewRows(validForm({ contactMethod: 'NOT_AVAILABLE', contactValue: '(555) 010-0147' }), names);
+    assert.deepEqual(rows[3], ['Best way to reach them', 'No reliable contact']);
+    assert.ok(!terms(rows).includes('Phone number'));
+    assert.ok(!rows.some(([, value]) => value.includes('010-0147')));
+  });
+
+  test('email is labelled as an email address', () => {
+    const rows = reviewRows(validForm({ contactMethod: 'EMAIL', contactValue: 'synthetic@example.org' }), names);
+    assert.deepEqual(rows[4], ['Email address', 'synthetic@example.org']);
+  });
+
+  test('values are trimmed the way the request body trims them', () => {
+    const values = validForm({ participantName: '  Synthetic Person Alpha  ', notes: ' Synthetic note ' });
+    const body = toRequestBody(values, { submissionId: randomUUID(), receivingProgramId: 1 });
+    const rows = Object.fromEntries(reviewRows(values, names));
+    assert.equal(rows['Participant name'], body.participantName);
+    assert.equal(rows.Notes, body.notes);
+    assert.equal(rows['Referral context'], body.referralContext);
+  });
+
+  test('never shows age or the Find a Program description, even if handed them', () => {
+    const rows = reviewRows({ ...validForm(), ageExact: '17', ageMin: '16', ageMax: '24', describe: 'Synthetic described need' }, names);
+    const text = rows.flat().join(' ');
+    assert.doesNotMatch(text, /\bage\b|17|16|24|Synthetic described need/i);
+  });
+
+  const app = read('app.js');
+  const fn = (name) => app.match(new RegExp(`\\nfunction ${name}\\([^)]*\\) \\{[\\s\\S]*?\\n\\}`))?.[0] ?? '';
+
+  test('a Submission ID is created only when details start or by "Send as a new referral" (PRD 7.3)', () => {
+    assert.equal((app.match(/crypto\.randomUUID\(\)/g) ?? []).length, 2);
+    assert.match(fn('continueToDetails'), /if \(!state\.submissionId\) state\.submissionId = crypto\.randomUUID\(\)/);
+    assert.match(fn('startNewSubmission'), /state\.submissionId = crypto\.randomUUID\(\)/);
+    for (const name of ['openReview', 'editReferral', 'renderReview', 'hideReview', 'showDetails']) {
+      assert.ok(fn(name), `${name} exists`);
+      assert.doesNotMatch(fn(name), /submissionId|api\./, `${name} must not touch the Submission ID or the server`);
+    }
+  });
+
+  test('Submit referral submits the referral form, so the existing send code runs', () => {
+    const html = read('index.html');
+    assert.match(html, /<button type="submit" id="send" form="referral-form"[^>]*>Submit referral<\/button>/);
+    assert.match(html, /<button type="button" id="review"[^>]*>Review referral<\/button>/);
+    assert.match(html, /<button type="button" id="review-edit"[^>]*>Edit<\/button>/);
+    assert.match(html, /<section id="step-review"[^>]*aria-labelledby="step-review-heading"[^>]*hidden>/);
+    assert.match(html, /<h2 id="step-review-heading" tabindex="-1">/);
+    assert.match(app, /\$\('referral-form'\)\.addEventListener\('submit', submitReferral\)/);
+  });
+});
+
 describe('page structure, accessibility and privacy', () => {
   const html = read('index.html');
   // Code only: comments that explain what NOT to use must not trip the scan.
@@ -514,7 +590,7 @@ describe('page structure, accessibility and privacy', () => {
     const page = await request(app).get('/referral/');
     assert.equal(page.status, 200);
     assert.match(page.text, /Direct Referral/);
-    for (const file of ['app.js', 'api.js', 'affiliation.js', 'validation.js', 'submission.js', 'textSize.js', 'referral.css']) {
+    for (const file of ['app.js', 'api.js', 'affiliation.js', 'validation.js', 'submission.js', 'review.js', 'textSize.js', 'referral.css']) {
       const res = await request(app).get(`/referral/${file}`);
       assert.equal(res.status, 200, file);
     }

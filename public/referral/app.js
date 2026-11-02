@@ -20,6 +20,7 @@ import {
 } from './validation.js';
 import { interpretCheckResponse, interpretSubmitResponse, sendingState } from './submission.js';
 import { interpretAffiliationSave } from './affiliation.js';
+import { reviewRows } from './review.js';
 import { SIZES, loadSize, saveSize } from './textSize.js';
 import { formatDate } from '/receiving/common.js';
 import {
@@ -170,6 +171,8 @@ function renderAffiliation() {
   if (set) $('affiliation-name').textContent = state.affiliation.program.name;
   if (!set) openAffiliationForm({ cancellable: false });
   $('summary-referring').textContent = set ? state.affiliation.program.name : 'Not set: choose your Program affiliation above';
+  // An affiliation saved while Review is open changes the Referring Program shown there.
+  if (!$('step-review').hidden) renderReview();
 }
 
 function fillAffiliationOptions() {
@@ -340,6 +343,7 @@ function updateSummarySource() {
 
 function backToProgramChoice() {
   // Entered referral details are kept in the form (PRD 7.5).
+  hideReview();
   $('step-details').hidden = true;
   $('step-program').hidden = false;
   renderProgramOptions();
@@ -833,12 +837,15 @@ function setLocked(locked) {
   $('change-program').disabled = locked;
   $('cancel').disabled = locked;
   $('send-direct').disabled = locked;
+  // Review step (Task 227): no editing while the outcome is unknown or after it is received.
+  $('review').disabled = locked;
+  $('review-edit').disabled = locked;
 }
 
 function setSendButton({ enabled, sending = false }) {
   const send = $('send');
   send.disabled = !enabled;
-  send.textContent = sending ? 'Sending referral ...' : 'Send referral';
+  send.textContent = sending ? 'Sending referral ...' : 'Submit referral';
   send.setAttribute('aria-busy', String(sending));
 }
 
@@ -867,9 +874,70 @@ function resetReferral() {
   setLocked(false);
   setSendButton({ enabled: true });
   $('program-search').value = '';
+  hideReview();
   $('step-details').hidden = true;
   $('step-program').hidden = false;
   renderProgramOptions();
+}
+
+// ---------------------------------------------------------------------------
+// Step 3: review and submit (Task 227; Written Wireframe Page 8)
+// ---------------------------------------------------------------------------
+
+// Built from the form fields each time it opens; nothing is stored. Never
+// includes participant age or the Find a Program description.
+function renderReview() {
+  const rows = reviewRows(readForm(), {
+    receiving: state.selectedProgram?.name ?? '',
+    referring: $('summary-referring').textContent,
+  });
+  $('review-list').replaceChildren(...rows.map(([term, value]) => {
+    const row = document.createElement('div');
+    const dt = document.createElement('dt');
+    const dd = document.createElement('dd');
+    dt.textContent = term;
+    dd.textContent = value;
+    row.append(dt, dd);
+    return row;
+  }));
+}
+
+// Clears the Review list too: it holds participant information.
+function hideReview() {
+  $('step-review').hidden = true;
+  $('review-list').replaceChildren();
+}
+
+function showDetails() {
+  hideReview();
+  $('step-details').hidden = false;
+}
+
+// Review referral: the same checks as sending. Nothing is sent here, and
+// the Submission ID is not touched (it was set when details started).
+function openReview() {
+  // After a Submission ID conflict, "Send as a new referral" stays on
+  // screen: it is the only way to replace the ID (PRD 7.3, 7.4).
+  if ($('new-submission').hidden) hideStatus();
+  const errors = validateReferralForm(readForm());
+  if (Object.keys(errors).length > 0) {
+    // Nothing is sent; entered work is kept (PRD 14.3).
+    showStatus('Some information needs attention. Nothing was sent.', 'error', { focus: false });
+    showFieldErrors(errors);
+    linkSummaryToFocused('status-text');
+    return;
+  }
+  clearFieldErrors();
+  renderReview();
+  $('step-details').hidden = true;
+  $('step-review').hidden = false;
+  $('step-review-heading').focus();
+}
+
+// Edit: back to the details with everything as entered (PRD 7.5).
+function editReferral() {
+  showDetails();
+  $('step-details-heading').focus();
 }
 
 // Applies a result from submission.js to the page.
@@ -888,6 +956,8 @@ async function applyResult(result) {
     $('referral-form').reset();
     clearGuided();
     updateContactField();
+    // As before Review existed: the emptied, locked details stay on screen.
+    showDetails();
     state.submissionId = null;
     state.afterConflict = false;
     const id = result.referral?.referralId;
@@ -904,6 +974,7 @@ async function applyResult(result) {
     const errors = {};
     for (const field of result.fieldErrors) errors[field] = SERVER_FIELD_MESSAGES[field] ?? 'Check this field.';
     showStatus(result.message, result.tone, { focus: false });
+    showDetails(); // the fields to fix are on the details step
     showFieldErrors(errors);
     linkSummaryToFocused('status-text');
     return;
@@ -941,6 +1012,7 @@ async function reviewMatchesAgain() {
   const answers = state.gpmeAnswers;
   state.selectedProgram = null;
   state.gpmeAnswers = null;
+  hideReview();
   $('step-details').hidden = true;
   $('step-program').hidden = false;
   choosePath('GUIDED', { focus: false });
@@ -1113,6 +1185,8 @@ function init() {
     $(field).addEventListener('input', () => setFieldError(field, `${field}-error`, null));
   }
 
+  $('review').addEventListener('click', openReview);
+  $('review-edit').addEventListener('click', editReferral);
   $('referral-form').addEventListener('submit', submitReferral);
   $('referral-form').addEventListener('keydown', blockImplicitSubmit);
   $('cancel').addEventListener('click', confirmDiscard);

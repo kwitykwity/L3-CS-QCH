@@ -14,7 +14,7 @@
 // open both pages. SYNTHETIC data only. Tests only.
 
 import { test, expect } from '@playwright/test';
-import { chooseDirect, ensureAffiliation } from './helpers.js';
+import { chooseDirect, ensureAffiliation, openReview } from './helpers.js';
 
 const RUN = Date.now().toString(36);
 const NO_CONTACT = 'No reliable contact';
@@ -63,6 +63,13 @@ async function sendWithNoContact(page) {
 
   const created = page.waitForResponse((r) => r.request().method() === 'POST'
     && new URL(r.url()).pathname === '/api/referrals');
+  // Review reads "No reliable contact" and not the abandoned number (Task 227).
+  await openReview(page);
+  const review = page.locator('#review-list');
+  await expect(review.locator('div').filter({ has: page.locator('dt', { hasText: /^Best way to reach them$/ }) }).locator('dd'))
+    .toHaveText(NO_CONTACT);
+  await expect(review).not.toContainText(ABANDONED_PHONE);
+  await expect(review).not.toContainText('Phone number');
   await page.locator('#send').click();
   const response = await created;
   expect(response.status()).toBe(201);
