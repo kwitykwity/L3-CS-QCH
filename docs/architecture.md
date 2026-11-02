@@ -53,7 +53,9 @@ Requirements: Node.js 24.15.0 for development (pinned in `.nvmrc` and
 
 1. **Page.** The browser loads a page from `public/` and calls the API with
    `fetch`. Participant data only ever travels in a request body, never in
-   a URL or browser storage (PRD 5.5). Only the text-size preference is
+   a URL or browser storage (data minimization: Frozen Handoff PRD §3.2, §34;
+   the URL and browser-storage rule itself is from the October 14 Final Technical PRD
+   5.5, historical). Only the text-size preference is
    stored in the browser.
 2. **Router** (`src/*/routes.js`). Marks the response `Cache-Control:
    no-store`, asks `resolveIdentity(req)` who is calling (no identity:
@@ -71,14 +73,15 @@ Requirements: Node.js 24.15.0 for development (pinned in `.nvmrc` and
 4. **Store** (the contract). Today only the in-memory stores implement it.
    Their header comments list every operation and, where written, the SQL
    it would run.
-5. **Response.** Only the fields the screen needs (PRD 10.5). Errors carry
+5. **Response.** Only the fields the screen needs (data minimization: Frozen
+   Handoff PRD §3.2, §34). Errors carry
    a stable `code` and never echo values back.
 
 ## Who may do what
 
 Entra ID (once built) decides who can open the app. What a person may do
 inside it is decided by **grants** stored in QCH Connect (`user_grants`),
-each a capability at a scope (PRD 3.4, 3.6). Every check happens on the
+each a capability at a scope (Frozen Handoff PRD §23, §24). Every check happens on the
 server; the pages only hide buttons the server says are not available.
 
 | Capability | Scope used today | Lets a person |
@@ -121,7 +124,7 @@ details are in the README sections and the header comment of each
 
 | Page | What it does | State |
 | --- | --- | --- |
-| `/` | Start page with links and a backend status | Temporary; to be replaced by navigation (PRD 13.5) |
+| `/` | Start page with links and a backend status | Temporary; to be replaced by navigation (October 14 Final Technical PRD 13.5, historical) |
 | `/referral/` | Choose a Program (guided matching or Direct Referral) and send a referral | Built |
 | `/program-management/` | Program information and lifecycle, matching facts, fields and options, field reuse and replacement, Departments, creating and moving Programs | Built |
 | `/sent/` | Referrals I sent: the creator's own referrals and each one's Response, Decision and Service outcome, read-only | Built (Trello Task L) |

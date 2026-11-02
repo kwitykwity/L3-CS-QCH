@@ -1,7 +1,8 @@
 # Deployment runbook
 
-**Status: draft, not yet exercised.** The steps follow the order PRD 18.2
-requires: known source, approved configuration, controlled migrations,
+**Status: draft, not yet exercised.** The steps follow the release order in the
+October 14 Final Technical PRD 18.2 (historical; the frozen documents do not set a
+release procedure): known source, approved configuration, controlled migrations,
 deployment, verification. Every blank marked **PROVIDED BY QCH IT** waits on
 the items in [qch-it-requirements.md](qch-it-requirements.md). No resource
 names or deployment tools are guessed here.
@@ -21,7 +22,8 @@ production store exists yet: `npm start` today serves the pages and
 
 ## Environments
 
-Production and development or demo are kept apart (PRD 18.1, 16.4).
+Production and development or demo are kept apart (Frozen Handoff PRD §34,
+environment separation; §35, synthetic data only outside production).
 Production is always a fresh deployment into QCH-owned Azure, never a copy of
 a demo environment.
 
@@ -39,7 +41,7 @@ a demo environment.
 ## 1. Pick a known version of the source
 
 Deploy only a specific, reviewed commit or tag from the QCH-owned repository
-(PRD 18.2, 19.3). Record which one.
+(October 14 Final Technical PRD 18.2, 19.3, historical). Record which one.
 
 ```bash
 git fetch
@@ -93,7 +95,7 @@ separate production database (PRD §27), so the Azure SQL migrations in `db/`
 are not run in production. The text below is the earlier plan, kept for
 reference. Whatever store is chosen, the same rule holds: its
 structure is changed on purpose, before the new app version starts, never
-by the app on its own (PRD 9.8, 18.3).
+by the app on its own (October 14 Final Technical PRD 9.8, 18.3, historical).
 
 - Follow [`db/README.md`](../db/README.md) for run order, the required
   `sqlcmd -I -b` flags, and what to do if a run fails partway. The current
@@ -108,7 +110,9 @@ by the app on its own (PRD 9.8, 18.3).
 
 ## 4. Deploy the app
 
-The deployment tool or pipeline is **PROVIDED BY QCH IT** (PRD 22). Whatever
+The deployment tool or pipeline is **PROVIDED BY QCH IT**. The frozen documents
+do not name one; the related dependency is production Azure resource
+provisioning (Frozen Handoff PRD §37 item 1). Whatever
 the tool, a deployment must:
 
 - deploy the exact commit chosen in step 1;
@@ -118,7 +122,8 @@ the tool, a deployment must:
 
 ## 5. Verify the release
 
-A release counts as successful only after these checks pass (PRD 18.4).
+A release counts as successful only after these checks pass (October 14 Final Technical PRD
+18.4, historical).
 
 | Check | Expected | Today |
 | --- | --- | --- |
@@ -129,7 +134,8 @@ A release counts as successful only after these checks pass (PRD 18.4).
 | Notification delivery | A test referral to a QCH-approved test Program sends one email **from** the shared mailbox that **arrives in that Program's configured, authorized recipient inbox** (not just leaves the mailbox). The email is generic with no participant data, and the delivery row ends `SENT`. Use synthetic referral data only. | Not built yet |
 
 `/health` reports only that the app is up. It never returns secrets,
-connection strings, or error details (PRD 9.12, 15.3).
+connection strings, or error details (Frozen Handoff PRD §34, secure error
+handling; §29, no secrets in source).
 
 ## 6. If verification fails
 
@@ -138,7 +144,7 @@ connection strings, or error details (PRD 9.12, 15.3).
 3. Otherwise, consider redeploying the last known-good commit. **First
    confirm that commit works with the schema already applied to the
    database.** Rolling back the app does **not** roll back the database
-   (PRD 18.4), so the older app must run correctly against any migrations
+   (October 14 Final Technical PRD 18.4, historical), so the older app must run correctly against any migrations
    this release already applied.
    - Compatible (for example the new migrations only added columns or
      tables the older app ignores): redeploy it and verify again.
@@ -152,5 +158,8 @@ connection strings, or error details (PRD 9.12, 15.3).
 - Demo sign-in, synthetic reset or seed, or the simulated notification outbox.
 - Secrets in source code, in a committed file, or in the browser.
 - Direct SQL edits as a normal way to change data. Any exceptional correction
-  must be authorized, documented, and auditable (PRD 9.12).
-- Production data copied to a developer machine or outside service (PRD 15.5).
+  must be authorized, documented, and auditable (audit: Frozen Handoff PRD §26;
+  the exceptional-correction rule itself is from the October 14 Final Technical PRD
+  9.12, historical).
+- Production data copied to a developer machine or outside service (Frozen
+  Handoff PRD §34, §35).

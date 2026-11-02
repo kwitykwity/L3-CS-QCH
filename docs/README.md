@@ -51,7 +51,7 @@ For QCH and QCH IT, in reading order.
 | [admin-guide.md](admin-guide.md) | Program Management and organization tasks for administrators |
 | [troubleshooting.md](troubleshooting.md) | Start-up problems, error codes, test problems, what is logged |
 | [operations.md](operations.md) | Monitoring expectations, verification procedures, recovery concepts, known dependencies |
-| [deployment.md](deployment.md) | The release procedure in PRD 18.2 order, with QCH IT steps marked. A draft: steps that name App Service, Azure SQL or Key Vault come from the earlier plan and are superseded |
+| [deployment.md](deployment.md) | The release procedure in the order of the October 14 Final Technical PRD 18.2 (historical), with QCH IT steps marked. A draft: steps that name App Service, Azure SQL or Key Vault come from the earlier plan and are superseded |
 | [dependencies.md](dependencies.md) | Direct dependencies and how to list every license |
 | [task-c-program-information.md](task-c-program-information.md) | Task C: current Program information: scope, reconciliation, and storage-independent interface |
 

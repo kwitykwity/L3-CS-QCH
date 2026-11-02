@@ -72,7 +72,8 @@ These hold whatever store and hosting QCH IT chooses.
 - **Mistakes in referrals are corrected, not deleted.** Use the audited
   corrections (decision, outcome). Direct edits to stored data are not a
   normal fix; any exceptional correction must be authorized, documented
-  and auditable (PRD 9.12).
+  and auditable (audit: Frozen Handoff PRD §26; the exceptional-correction
+  rule itself is from the October 14 Final Technical PRD 9.12, historical).
 - **Every change is all-or-nothing.** A change and its audit event commit
   together. A failed save leaves no half-written record, and the screens
   never retry a save on their own, so a dropped connection cannot
@@ -81,8 +82,10 @@ These hold whatever store and hosting QCH IT chooses.
   notification never undoes a referral. Delivery is "at least once while
   attempts remain", so a duplicate generic email is possible and harmless.
 - **Backups and restore** are QCH IT's, and depend on the storage
-  decision. PRD 19.5 requires one successful restore in an isolated,
-  QCH-approved environment before handoff.
+  decision. The October 14 Final Technical PRD 19.5 asked for one successful
+  restore in an isolated, QCH-approved environment before handoff. The frozen
+  documents do not restate it; whether it is an acceptance condition is for
+  QCH to confirm (see [handoff-checklist.md](handoff-checklist.md)).
 
 ## Known dependencies
 

@@ -1,6 +1,7 @@
 # Dependencies and licenses
 
-Handoff deliverable from PRD 19.2. The app has 2 direct runtime dependencies and 3
+Handoff deliverable first listed in the October 14 Final Technical PRD 19.2 (historical;
+the frozen documents do not restate the deliverables list). The app has 2 direct runtime dependencies and 3
 direct development dependencies.
 
 The license information below is the **license metadata each package declares
@@ -57,4 +58,5 @@ Run it again after any dependency change.
 ## Open item
 
 The repository has no license file of its own. Which license, if any, QCH
-Connect's source carries is a QCH decision for handoff (PRD 19.3).
+Connect's source carries is a QCH decision for handoff (October 14 Final Technical PRD
+19.3, historical).
