@@ -29,6 +29,8 @@ Approved Current Handoff Written Wireframes. The historical R1–R25
 register and October 14 Technical PRD are not current authority.
 Final candidate verification and Task V remain outstanding.
 
+Christina Ruiz also deferred the dashboard and dedicated correction-history screen for this release. Existing navigation and referral entry paths remain available. The application continues to preserve correction history, but a dedicated screen for viewing it was not delivered. These deferrals do not establish final release readiness; verification and Task V remain outstanding.
+
 ## A. Product questions for QCH
 
 | # | Question | Why it is open (frozen text) | Evidence in the repository | Who decides |
