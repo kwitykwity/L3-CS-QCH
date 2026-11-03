@@ -81,7 +81,7 @@ Every item on the card, and where it is verified:
 
 | Found | Cause | Fix | Retest |
 | --- | --- | --- | --- |
-| Reporting Center scrolled sideways by 60 px at XL text on a 390 px wide screen (WCAG 1.4.10 reflow, PRD 14.5) | The text-size buttons did not wrap, and the filter fields and the report grids had a 14rem minimum width, wider than the screen at XL | `public/reporting/reporting.css`: the size control wraps; fields and grid columns use `min(14rem, 100%)` | 0 px sideways scroll; axe still passes in both themes |
+| Reporting Center scrolled sideways by 60 px at XL text on a 390 px wide screen (WCAG 1.4.10 reflow, Handoff PRD 33) | The text-size buttons did not wrap, and the filter fields and the report grids had a 14rem minimum width, wider than the screen at XL | `public/reporting/reporting.css`: the size control wraps; fields and grid columns use `min(14rem, 100%)` | 0 px sideways scroll; axe still passes in both themes |
 
 Two first-run failures were mistakes in the new test, not the app, and
 were corrected in the test: a search with no matching Program correctly

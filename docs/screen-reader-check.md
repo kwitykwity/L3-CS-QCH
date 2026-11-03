@@ -1,6 +1,6 @@
 # Screen-reader check (VoiceOver)
 
-Trello: "Testing: Screen reader" (Final Technical PRD 14.3, 14.4, 17.7).
+Trello: "Testing: Screen reader" (Handoff PRD 33, 36).
 Done when: the reader and browser used are recorded, and labels, required
 fields, errors, status announcements, dialogs and focus changes have been
 verified by listening.
@@ -14,7 +14,7 @@ Two parts:
    order. It runs in Chromium on every change.
 2. **Manual** (this page): a person listens with a real screen reader,
    because how a reader actually speaks and when it interrupts can only
-   be checked by ear (PRD 17.7).
+   be checked by ear (manual verification, Handoff PRD 36).
 
 Synthetic data only. Never use real participant information.
 
@@ -140,7 +140,7 @@ so it cannot come back unnoticed.
    back to the Text size buttons. `<main>` can now take focus, on New
    Referral and every Program Management page.
 3. **"Nothing was sent." was never heard** (A12). The message appears at
-   the same moment focus moves to the first problem (PRD 14.3), and
+   the same moment focus moves to the first problem (accessible errors, Handoff PRD 33), and
    VoiceOver drops it. The first problem field now also carries the
    message until it is fixed.
 4. **"Nothing was searched." was never heard** (B4). On a checkbox or
