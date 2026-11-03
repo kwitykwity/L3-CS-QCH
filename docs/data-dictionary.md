@@ -186,7 +186,10 @@ keyed by `referral_id`. **Not used by the application yet.**
 ### user_grants
 
 What each person may do (Frozen Handoff PRD §23). Granted and removed inside QCH Connect
-by designated administrators (Frozen Handoff PRD §24); no screen does this yet.
+by designated administrators (Frozen Handoff PRD §24). The Permissions screen and server-side
+permission-administration API are implemented; see `src/permissions/`,
+`test/permissionAdministration.test.js` and `e2e/permissions.spec.js`.
+Production permission configuration remains a QCH/QCH IT dependency.
 
 | Column | Type | Meaning |
 | --- | --- | --- |
