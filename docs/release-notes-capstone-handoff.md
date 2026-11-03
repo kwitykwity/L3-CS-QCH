@@ -1,10 +1,11 @@
 # QCH Connect: Capstone handoff release notes
 
-**Status: prepared before the freeze. Not final.** Trello Task 219 (card
-"Task 213: Prepare capstone handoff release notes"). Prepared on `main` at
-`2746c83` (October 31, 2026). The frozen commit and the final verification
-results are **PENDING TASK V** and are filled in only after Task V
-establishes them ([freeze-audit.md](freeze-audit.md)).
+**Status: finalized after Task V.** Prepared in Trello Task 219 (card
+"Task 213: Prepare capstone handoff release notes") on `main` at `2746c83`
+(October 31, 2026); the Task V fields were filled in by Task 230. The frozen
+commit, final verification results and freeze decision below come from
+Task V ([freeze-audit.md](freeze-audit.md)). Nothing else on this page was
+re-verified by Task 230.
 
 **Nothing on this page is a new requirement.** It summarizes what the
 repository delivers and points to the evidence. The requirements are the
@@ -19,11 +20,11 @@ All data in this repository, its tests and its demo is synthetic.
 | | |
 | --- | --- |
 | Release name | QCH Connect, Capstone Handoff MVP |
-| Planned code freeze | November 2, 2026 ([freeze-audit.md](freeze-audit.md)). Confirmed by Task V |
+| Code freeze | November 2, 2026. Task V decision: **FREEZE APPROVED WITH DOCUMENTED LIMITATIONS** (Christina Ruiz, November 2, 2026, America/New_York; [freeze-audit.md](freeze-audit.md)) |
 | Synthetic demo | November 9, 2026 ([demo-runbook.md](demo-runbook.md)) |
 | Handoff date | Not recorded in this repository. To be set by the project lead |
-| Frozen commit (SHA) | **PENDING TASK V** |
-| Final verification | **PENDING TASK V** (section 6) |
+| Frozen commit (SHA) | `a5ccc5e68da3b32ae99883022b6334f8967d10f7` |
+| Final verification | Node and Chromium suites passed on the frozen commit (section 6) |
 | Suggested tag | Section 7. No tag has been created |
 
 ## 2. What is delivered
@@ -137,11 +138,32 @@ refuses every API request by design; it is not a demo mode.
 
 | Item | Result |
 | --- | --- |
-| Frozen commit (SHA) | **PENDING TASK V** |
-| `npm test` on the frozen commit | **PENDING TASK V** |
-| `npm run test:e2e` on the frozen commit | **PENDING TASK V** |
-| Other browsers on the frozen commit | **PENDING TASK V** |
-| Task V freeze findings and decision | **PENDING TASK V** ([freeze-audit.md](freeze-audit.md)) |
+| Frozen commit (SHA) | `a5ccc5e68da3b32ae99883022b6334f8967d10f7` |
+| Test environment | Task V decision run: Christina Ruiz, Windows, clean working tree, commit confirmed separately (exact Windows build and browser version not reconfirmed). Supporting run: fresh clone, Ubuntu 24.04.5 LTS, Node 24.15.0, npm 10.9.9, Playwright 1.63.0, Chromium 153.0.8010.12 |
+| `npm test` on the frozen commit | Windows (Task V decision run): **1,752 passed**, 248 suites, 0 failed, 0 skipped. Ubuntu (supporting): 1,752 passed, 248 suites, 0 failed |
+| `npm run test:e2e` (Chromium) on the frozen commit | Windows (Task V decision run): **237 passed** (3.5 min). Ubuntu (supporting): run 2, 237 passed; run 1, 236 passed and 1 intermittent failure (`e2e/screenReader.spec.js:323`, skip link on `organization-programs.html`) that passed on rerun (12/12) and 20/20 alone, recorded on Task V as a test-timing race, not a reproduced product defect |
+| Other browsers on the frozen commit | **Not run on the frozen commit.** The last recorded multi-browser run (Edge, Chromium, Firefox, WebKit: 160 passed, 1 skipped each) was on `9fd179b` plus PR #61, October 27, 2026, and predates later changes ([browser-verification.md](browser-verification.md)). QCH's supported production browser baseline is a QCH IT dependency (PRD §37 item 10) |
+| Task V freeze findings and decision | **FREEZE APPROVED WITH DOCUMENTED LIMITATIONS** (Christina Ruiz, November 2, 2026, America/New_York; [Task V](https://trello.com/c/6KBxus4K)). Findings and proposed dispositions: [freeze-audit.md](freeze-audit.md), "Task V closeout review" |
+
+Christina's decision accepts these named limitations for this freeze:
+incomplete actual screen-reader and accessible-name verification; older
+Narrator, Safari and age/shared-location display verification gaps;
+notification-recipient configuration and delivery-record retry limitations;
+human-paced rehearsal and recording still outstanding; and the documented
+QCH/QCH IT production dependencies, including unimplemented production
+archival with ownership unresolved. Existing release screen deferrals remain
+in effect. In her words, this is "approval of the named candidate with
+limitations, not full MVP completion, WCAG conformance or production
+readiness." No git tag or production deployment was created or authorized
+([Task V](https://trello.com/c/6KBxus4K)). The limitations themselves are kept
+in [known-limitations.md](known-limitations.md),
+[handoff-questions.md](handoff-questions.md) and
+[production-architecture.md](production-architecture.md), not redefined here.
+
+Between the earlier application candidate `f35c754` and the frozen commit,
+only documentation changed (PRs #113 to #116); application and test files
+are the same. Earlier full-suite evidence for `f35c754` and PR #112 head
+`073cc50` is recorded in [freeze-audit.md](freeze-audit.md).
 
 **Manual verification recorded so far.** These records were made on earlier
 commits. They are not Task V results and do not verify the frozen commit.
@@ -150,7 +172,8 @@ commits. They are not Task V results and do not verify the frozen commit.
 | --- | --- | --- |
 | VoiceOver with Safari 27.0 (macOS), 33 steps across New Referral, Find a Program, Program Management and text size | **Pass**, after four fixes found in that run. October 24 to 25, 2026, Jimmy Ong, on branch `jimmy/screen-reader-check` | [screen-reader-check.md](screen-reader-check.md) |
 | Demo rehearsal Run 2, by hand in Safari 27.0 | **Not finished.** See item C1 for the latest recorded progress; the rehearsal page still shows earlier progress until the run ends | [known-limitations.md](known-limitations.md) C1; [demo-rehearsal.md](demo-rehearsal.md) Run 2 |
-| Windows/Edge desktop verification (Task 203) | Recorded October 30–31, 2026, on application baseline `2746c83d40d1b8c0ef5a21cd0adf618b0a2e4a0d`; report merged in PR #101. Selected synthetic workflows, text-size and actual browser-zoom checks completed, with documented coverage limits. Demo-banner overlap F1 remains open in issue #102 | [desktop-browser-check.md](desktop-browser-check.md); [issue #102](https://github.com/kwitykwity/L3-CS-QCH/issues/102) |
+| Windows/Edge desktop verification (Task 203) | Recorded October 30–31, 2026, on application baseline `2746c83d40d1b8c0ef5a21cd0adf618b0a2e4a0d`; report merged in PR #101. Selected synthetic workflows, text-size and actual browser-zoom checks completed, with documented coverage limits. Demo-banner overlap F1 was later repaired in PR #110 and retested in Edge at XL and actual 100%, 200% and 400% zoom on repair commit `49677be` | [desktop-browser-check.md](desktop-browser-check.md); [known-limitations.md](known-limitations.md) C7; [issue #102](https://github.com/kwitykwity/L3-CS-QCH/issues/102) |
+| Help & Guidance and Referral Confirmation (Task 229) | Keyboard, focus, S/M/L/XL and actual 200%/400% zoom checks **passed**, Christina Ruiz, Edge 156.0.4314.58 on Windows, `main` at `bf56801`. Actual screen-reader announcements and separate accessible-name inspection were **not tested** | [known-limitations.md](known-limitations.md) C6 |
 | Other manual browser coverage | No additional manual browser coverage is established by the records cited here. Mobile-device use is outside the project lead's intended production scope; desktop narrow-width checks do not establish mobile support | [browser-verification.md](browser-verification.md); [desktop-browser-check.md](desktop-browser-check.md) |
 
 No result on this page covers QCH's production environment
@@ -158,8 +181,8 @@ No result on this page covers QCH's production environment
 
 ## 7. Suggested release tag
 
-Suggested name: **`v1.0.0-capstone-handoff`**, on the commit Task V
-establishes.
+Suggested name: **`v1.0.0-capstone-handoff`**, on the frozen commit
+`a5ccc5e`.
 
 **No tag has been created.** Whether to tag, which commit, and the final name
 are the project lead's decision.
