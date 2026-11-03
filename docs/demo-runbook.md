@@ -1,5 +1,26 @@
 # Nov. 9 demo runbook (Task T)
 
+## Current demo route — Task V closeout
+
+For the main presentation in `npm run dev:demo`, use the 16-step script
+recorded on [Task 244](https://trello.com/c/gmyZP1Ni), including interpretation
+review, both referral paths, Confirmation, receiving decisions/outcome,
+Referrals I sent, Reporting Center and Help. Its scripted pass is on bf56801;
+it is not a completed human timed rehearsal or a new candidate test.
+
+The three demo personas have no Program-management assignments. Omit the
+older runbook's Program Director edits from this main demo; demonstrate
+Program Management separately in `dev:synthetic` if needed, clearly identifying
+the separate reset/session. Do not use production or real participant data.
+Return to the top with Ctrl+Home for Switch person. Keep the existing Reporting
+Center; exclude the deferred dashboard, Review & Submit, dedicated history
+and dedicated location screens. Human timing and recording remain outstanding.
+This presentation route does not defer any underlying product capability.
+
+The dated script below is retained as earlier verification evidence; role,
+Program affiliation and navigation assumptions must not override the Task 244 route.
+
+
 One page for whoever presents. Follow it top to bottom; nothing else
 needs to be known. About **15 minutes** for the main journey, plus
 optional extras. Every person, Program and referral in the demo is
