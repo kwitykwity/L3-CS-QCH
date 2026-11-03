@@ -26,16 +26,17 @@ GitHub comparison from f35c754 to the reviewed main above lists only
 documentation changes (PRs #113, #114 and #115). Application and automated
 test files are unchanged. These earlier results remain applicable evidence
 for that unchanged implementation; **no new full-suite execution on the
-reviewed main is claimed**. If Task V requires an exact final-main run,
-run it once after this evidence PR merges and record its SHA and results;
-do not continually rerun suites for intermediate wording edits.
+reviewed main is claimed**. After this evidence PR merges, run the Node
+and Chromium suites once on the final integrated main SHA. Record that SHA
+and the results before completing Task V. Do not continually rerun suites
+for intermediate wording edits.
 
 ### Task V checklist
 
 | Check | Assessment and evidence |
 | --- | --- |
 | Required P0 browser journeys | Implemented journeys exist: directReferral, gpme, interpretationReview, mvpJourney, receivingLifecycle, permissions, programManagement and reportingKnownAnswers in e2e/. Specific verification limits below remain open. |
-| Current tests pass | 1,752 Node / 237 Chromium on the unchanged application/test implementation, with revision boundaries above. Exact final-main execution pending if required for the final gate. |
+| Current tests pass | 1,752 Node / 237 Chromium on the unchanged application/test implementation, with revision boundaries above. Required exact final-main execution remains pending; record its SHA and results before completing Task V. |
 | No known P0 defect undocumented | Known limitations and remaining evidence gaps are recorded below and in known-limitations.md. No assertion that absence of open issues establishes readiness. |
 | No secrets or real participant data committed | Limited scan at f35c754: 1,144 reachable history blobs, no high-signal private-key/GitHub/AWS/Slack token matches. demoVerification checks selected SSN patterns, Directory filenames, reserved seed email domains and sample labels. This is limited evidence, not comprehensive historical data certification. Later reviewed changes are documentation only. |
 | No demo-auth production fallback | src/server.js and securityPass, securityRegression, demoSignIn tests establish fail-closed guards in the delivered synthetic implementation; production Entra integration is outstanding. |
@@ -72,7 +73,8 @@ The approximately 11-minute presenter estimate is not a human timed run.
 
 ### Required closeout record
 
-After evidence review and any required final execution, Christina records:
+After evidence review and the required final-main Node and Chromium execution,
+Christina records:
 **FREEZE APPROVED WITH THE NAMED LIMITATIONS** or **HOLD**, the exact commit,
 accepted findings, follow-up ownership and date. Task V stays In Review
 until that decision is recorded. Task 230 then records release/handoff
