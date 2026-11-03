@@ -1,15 +1,95 @@
 # Freeze candidate audit (Task V)
 
+## Task V closeout review — November 2, 2026
+
+**Decision: PENDING CHRISTINA.** This is a review of integrated main at
+`640cd84f3c8a9fb6b7bc6275fc899f4d709727fa`, not approval of a freeze, a release tag, WCAG conformance,
+MVP completion without limitations, or production deployment.
+
+Authority: the October 28 Frozen Handoff PRD supplied and confirmed by
+Christina (37 sections), followed by the Handoff MVP (34 sections).
+The older practice audit below remains dated historical evidence.
+
+### Candidate and verification evidence
+
+The full-suite evidence is attached to application candidate
+`f35c75449a7780de185a42edff6046e95e6cff12`: Christina supplied Windows output
+with 1,752 Node passes and 237 Chromium passes. Her pasted output did not
+itself print HEAD; attribution follows the preceding checkout instructions.
+An independent review recorded on [Task V](https://trello.com/c/6KBxus4K)
+also reports 1,752 Node / 237 Chromium passes on PR #112 head
+`073cc50df12786a1ddf60ef3d8ca6218d6113691`, whose tree was reported identical
+to the merge candidate, using Ubuntu 24.04.5, Node 24.15.0, Playwright
+1.63.0 and Chromium 153.0.8010.12.
+
+GitHub comparison from f35c754 to the reviewed main above lists only
+documentation changes (PRs #113, #114 and #115). Application and automated
+test files are unchanged. These earlier results remain applicable evidence
+for that unchanged implementation; **no new full-suite execution on the
+reviewed main is claimed**. If Task V requires an exact final-main run,
+run it once after this evidence PR merges and record its SHA and results;
+do not continually rerun suites for intermediate wording edits.
+
+### Task V checklist
+
+| Check | Assessment and evidence |
+| --- | --- |
+| Required P0 browser journeys | Implemented journeys exist: directReferral, gpme, interpretationReview, mvpJourney, receivingLifecycle, permissions, programManagement and reportingKnownAnswers in e2e/. Specific verification limits below remain open. |
+| Current tests pass | 1,752 Node / 237 Chromium on the unchanged application/test implementation, with revision boundaries above. Exact final-main execution pending if required for the final gate. |
+| No known P0 defect undocumented | Known limitations and remaining evidence gaps are recorded below and in known-limitations.md. No assertion that absence of open issues establishes readiness. |
+| No secrets or real participant data committed | Limited scan at f35c754: 1,144 reachable history blobs, no high-signal private-key/GitHub/AWS/Slack token matches. demoVerification checks selected SSN patterns, Directory filenames, reserved seed email domains and sample labels. This is limited evidence, not comprehensive historical data certification. Later reviewed changes are documentation only. |
+| No demo-auth production fallback | src/server.js and securityPass, securityRegression, demoSignIn tests establish fail-closed guards in the delivered synthetic implementation; production Entra integration is outstanding. |
+| Demo reset fails closed in production | demoEnvironment, demoSignIn and demoVerification tests cover environment refusal and reset/session boundaries. |
+| Notification failure preserves referral | notificationWiring and regression/notificationFailure tests; persistence precedes notification. Delivery-record retry limitation remains disclosed. |
+| Reporting remains aggregate | reportingKnownAnswers and privacy/security regression evidence; production store not verified. |
+| GPME remains advisory | gpme, gpmeReferral, interpretation and agePrivacy coverage; no external AI is delivered. |
+| Staff remains decision-maker | receivingLifecycle, referralResponse and correctionHistory coverage; no automatic reroute. |
+| Production architecture documented | PRD §§21–22, 27–31, 37: Functions, private SharePoint Lists, Entra/MFA, managed identity and restricted Graph/mailbox controls are confirmed plans; provisioning and production verification remain outstanding. |
+| Handoff docs reflect delivered code | Citation corrections merged in #113/#114; permissions status and exact 2,500 archival threshold corrected in #115. This closeout update records newer manual evidence and corrects the stale demo-sign-in row. Dated earlier records remain historical. |
+
+### Findings and proposed freeze dispositions
+
+These are proposals for Christina's decision, not automatic waivers or
+new QCH requirements. Accepting a freeze limitation does not convert an
+unverified item into a pass or establish full MVP completion.
+
+| Finding | Proposed class / disposition | Follow-up |
+| --- | --- | --- |
+| Help and Confirmation keyboard, focus, text sizing and actual zoom checks passed on bf56801; actual screen-reader and separate accessible-name inspection were not performed | Verification limitation: explicitly accept for this freeze or hold for verification; no blanket accessibility pass | Task 229 / accessibility owners; Christina records acceptance or hold |
+| Older Narrator scan-mode Program-dropdown finding lacks closing retest; Safari Run 2 is partial | Verification limitation requiring explicit disposition, not a newly reproduced candidate defect | Card 17 and browser-verification owners |
+| Program age matching/privacy verified; dedicated browser age-display evidence incomplete | MERGED, NEEDS VERIFICATION; accept limited evidence or verify before freeze | Task 243 owner review |
+| Shared/separate location API behavior covered; dedicated shared-location browser evidence incomplete | MERGED, NEEDS VERIFICATION; dedicated Page 18 remains deferred | Existing multiLocation regression; Christina dispositions evidence gap |
+| New Programs have no notification-recipient maintenance screen; failed delivery-record persistence has no automatic later retry | Known application limitations requiring explicit acceptance, not merely infrastructure dependencies | B4/B5; QCH/QCH IT recipient configuration decision and team handoff |
+| Production provisioning, Entra, SharePoint/Functions, real Graph delivery, browser baseline and hosting | HANDOFF / QCH IT DEPENDENCY; document, do not claim completed | PRD §37; production architecture and handoff questions |
+| Archival not implemented; implementation ownership remains open | HANDOFF / QCH IT DEPENDENCY / unassigned production implementation; rules are confirmed, ownership is not | Q9; 2,500-record threshold, 500 oldest eligible, protect open referrals |
+| Dashboard, Review & Submit, dedicated history and dedicated location screens | Recorded release deferrals; preserve existing lifecycle/history/location capability | Task 231 recorded decisions; no new development for this audit |
+| Reporting invalid-input API wording mentions referrals; staff UI supplies its own wording | POST-CAPSTONE / P1 recommendation | Existing documented practice finding |
+| Demo script assumes a management role unavailable to demo personas | Documentation / presentation mismatch; keep main demo on Task 244's successful path, show management separately in synthetic mode if needed | Presenters; human timing and Loom remain outstanding, not reported complete |
+
+Task 244 reports a successful 16-step **scripted** demo on bf56801,
+15.6 seconds at machine speed, with no product defect reported.
+The approximately 11-minute presenter estimate is not a human timed run.
+
+### Required closeout record
+
+After evidence review and any required final execution, Christina records:
+**FREEZE APPROVED WITH THE NAMED LIMITATIONS** or **HOLD**, the exact commit,
+accepted findings, follow-up ownership and date. Task V stays In Review
+until that decision is recorded. Task 230 then records release/handoff
+details; no release tag is authorized by this audit text.
+
+## Historical practice audit and earlier reconciliation
+
 > **Dated practice audit. Not the current freeze status.** The
 > [Findings](#findings) and [Checks](#checks) below record a practice run on
 > `main` at `36f6e82` on October 26, 2026, and are kept unchanged as that
 > record. Their test counts, "next steps" and references to open pull
 > requests describe that day only.
 >
-> **Current status:** each practice finding is re-checked against `main` at
+> **Earlier reconciliation status:** each practice finding is re-checked against `main` at
 > `2746c83` (October 31, 2026) in
 > [Status of the practice findings on current `main`](#status-of-the-practice-findings-on-current-main).
-> **The final Task V audit of the freeze candidate has not been run.** The
+> **At the time of that earlier reconciliation, the final Task V audit had not been run.** The
 > freeze candidate commit, its test results and the freeze decision are
 > **PENDING TASK V**; see [Re-run on the freeze candidate](#re-run-on-the-freeze-candidate).
 >
