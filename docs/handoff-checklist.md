@@ -1,6 +1,9 @@
 # Handoff checklist
 
-Every handoff item in PRD 19, where it lives, and what it still waits on.
+Every handoff item, where it lives, and what it still waits on: the production
+dependencies in Frozen Handoff PRD §37 and Handoff MVP §31, and the handoff
+deliverables first listed in the October 14 Final Technical PRD section 19
+(historical; the frozen documents do not restate that list).
 
 **Status: draft.** Production deployment, the operational documentation,
 restore verification and handoff acceptance are all unfinished. Writing
@@ -11,11 +14,14 @@ QCH IT provisioning and production verification. See
 [pending-qch-it-decisions.md](pending-qch-it-decisions.md).
 
 Handoff is complete when each deliverable is delivered and any remaining
-gap has an agreed resolution or acceptance plan (PRD 19.6). **An agreed gap
-plan does not waive an explicit requirement.** In particular, the backup and
-restore procedure must be exercised successfully at least once in an
-isolated, QCH-approved environment before handoff acceptance (PRD 19.5); a
-plan to do it later does not satisfy that.
+gap has an agreed resolution or acceptance plan (October 14 Final Technical PRD 19.6,
+historical). **An agreed gap plan does not waive an explicit requirement of
+the Frozen Handoff PRD or Handoff MVP.** The October 14 Final Technical PRD (19.5)
+also asked for the backup and restore procedure to be exercised
+successfully at least once in an isolated, QCH-approved environment before
+handoff acceptance. The frozen documents do not restate that condition, so
+whether it is required for acceptance is for QCH to confirm. It stays on
+this checklist until QCH decides.
 
 Status key: **Done**, **Draft** (written, not final), **In review** (open
 pull request), **Not started**.
@@ -72,11 +78,11 @@ section 3.
 The archival process itself is not built, and the frozen documents do not
 say who builds it (question Q9 in [handoff-questions.md](handoff-questions.md)).
 
-## Deliverables (PRD 19.2)
+## Deliverables (October 14 Final Technical PRD 19.2, historical)
 
 | Deliverable | Where it lives | Status | Waiting on |
 | --- | --- | --- | --- |
-| Authoritative source code | This repository during development; a QCH-owned repository at handoff. How it is built: [architecture.md](architecture.md) | Draft | QCH IT repository location (19.3) |
+| Authoritative source code | This repository during development; a QCH-owned repository at handoff. How it is built: [architecture.md](architecture.md) | Draft | QCH IT repository location (October 14 Final Technical PRD 19.3, historical) |
 | Deployment documentation | `docs/deployment.md` | Draft | Azure Functions provisioning (dependency 1) and QCH IT deployment details; parts still describe the earlier App Service plan |
 | Environment and configuration documentation | `docs/qch-it-requirements.md`, README Configuration table | Draft | QCH IT values and confirmations (dependencies 3 to 6) |
 | Database schema and migrations | `db/migrations/`, `db/README.md` | Draft (earlier-plan record) | Not the production store: there is no separate production database (PRD 27). The production Lists design is not written |
@@ -89,14 +95,14 @@ say who builds it (question Q9 in [handoff-questions.md](handoff-questions.md)).
 | Operational and monitoring guidance | [operations.md](operations.md) (expectations and verification); README Notifications section | Draft | Frontend hosting (dependency 12) and QCH IT's monitoring approach; readiness check not built |
 | App registration, shared mailbox and environment guidance | `docs/qch-it-requirements.md` | Draft | QCH IT setup (dependencies 3 to 6). Key Vault is not part of the confirmed design; QCH IT decides what configuration production needs |
 
-## Ownership and access (PRD 19.4)
+## Ownership and access (October 14 Final Technical PRD 19.4, historical)
 
 - [ ] Every production credential, secret, and service identity is owned by
       QCH or QCH IT.
 - [ ] Production does not depend on any team member's personal account.
 - [ ] QCH IT has confirmed it can rotate credentials and remove team access.
 
-## Knowledge transfer (PRD 19.5)
+## Knowledge transfer (October 14 Final Technical PRD 19.5, historical)
 
 - [ ] QCH IT can find and understand the source and architecture.
 - [ ] QCH IT can configure the environment, deploy, and apply migrations.
@@ -106,13 +112,15 @@ say who builds it (question Q9 in [handoff-questions.md](handoff-questions.md)).
 - [ ] One backup restore has been tested in an isolated, QCH-approved
       environment, with the result and any limits written down.
 
-## Acceptance (PRD 19.6)
+## Acceptance (October 14 Final Technical PRD 19.6, historical)
 
 - [ ] Agreed source, documentation, and configuration guidance delivered.
 - [ ] Ownership and access arrangements in place.
 - [ ] Knowledge-transfer activities complete.
 - [ ] Backup and restore exercised successfully in an isolated, QCH-approved
-      environment, with the result documented (PRD 19.5). Required; a gap
-      plan cannot replace it.
+      environment, with the result documented (October 14 Final Technical PRD
+      19.5, historical). Not restated in the frozen documents; QCH to confirm
+      whether it is an acceptance condition.
 - [ ] Remaining gaps written down with an agreed resolution or acceptance
-      plan. A gap plan never waives an explicit PRD requirement.
+      plan. A gap plan never waives an explicit requirement of the Frozen
+      Handoff PRD or Handoff MVP.

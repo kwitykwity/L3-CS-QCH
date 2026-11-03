@@ -68,5 +68,6 @@ What the server writes today (to standard output and error):
 Ordinary requests and expected refusals (400, 401, 403, 404, 409) are not
 logged; there is no request log yet. Nothing logged ever contains
 participant names, contact details, referral context, notes, Not
-Appropriate explanations, or text from outside services (PRD 15.3). Each
+Appropriate explanations, or text from outside services (Frozen Handoff PRD
+§34, no participant information in application logs). Each
 change's correlation ID is stored on its audit event.

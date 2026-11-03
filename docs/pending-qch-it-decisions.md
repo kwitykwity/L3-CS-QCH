@@ -64,5 +64,5 @@ If SharePoint Lists cannot provide a guarantee directly, the Azure Functions lay
 | Describe-the-need step | Requirement | Frozen Handoff PRD 5.1 to 5.3 and 7; Handoff MVP 5, 6 and 26 |
 | Language of service, availability, Program information, contact guidance, multiple locations | Requirement | Frozen Handoff PRD 6.3, 6.4 and 8 to 14; Handoff MVP 8 to 14 |
 | Hosting, monitoring and alerts | External | Azure provisioning (dependency 1) and frontend hosting (dependency 12); the frozen documents do not specify a monitoring approach |
-| Backup, restore, and one restore test in an isolated environment (PRD 19.5) | External | Provisioned SharePoint and Azure (dependencies 1, 2), then QCH IT's backup approach |
+| Backup, restore, and one restore test in an isolated environment (October 14 Final Technical PRD 19.5, historical; not restated in the frozen documents) | External | Provisioned SharePoint and Azure (dependencies 1, 2), then QCH IT's backup approach |
 | Archival process | External or engineering (unassigned) | Question Q9; retention policy (dependency 10) for what happens to archived records |

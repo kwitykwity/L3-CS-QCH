@@ -90,6 +90,8 @@ under the confirmed design.
 ## Credentials and ownership
 
 QCH or authorized QCH IT administrators own every production credential,
-secret, and service identity (PRD 19.4). Production must never depend on a
+secret, and service identity (October 14 Final Technical PRD 19.4, historical). The
+Frozen Handoff PRD §29 adds that production secrets and long-lived service
+keys are never embedded in source or browser code. Production must never depend on a
 team member's personal account. QCH IT can rotate credentials and remove
 team access at any time.

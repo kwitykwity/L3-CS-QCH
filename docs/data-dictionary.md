@@ -23,10 +23,10 @@ Conventions used in every table:
 - `lifecycle_status` is `ACTIVE`, `DISCONTINUED` or `RETIRED`. Records are
   discontinued or retired, not deleted, so history stays readable.
 - `row_version` (`ROWVERSION`) changes on every update. The application
-  sends it back as `version` to detect "someone else changed this" (PRD
-  9.4).
+  sends it back as `version` to detect "someone else changed this" (October 14 Final Technical PRD
+  9.4, historical).
 - "Sensitive" columns are never logged, reported or put in notifications
-  (PRD 5.4).
+  (Frozen Handoff PRD §34).
 
 ## Organization
 
@@ -46,7 +46,8 @@ still need QCH's confirmation.
 ### programs
 
 One row per Program (and site). Programs are loaded from QCH's internal
-Program Directory, which is never committed to this repository (PRD 4.5).
+Program Directory, which is never committed to this repository (Frozen
+Handoff PRD §8, §35).
 
 | Column | Type | Meaning |
 | --- | --- | --- |
@@ -58,8 +59,8 @@ Program Directory, which is never committed to this repository (PRD 4.5).
 | `age_min`, `age_max` | TINYINT | Age limit used by guided matching when `age_limit_state` is `SET` (`age_min` ≤ `age_max`) |
 | `grades` | NVARCHAR(50) | Grades served. Not used by the application yet |
 | `enrollment_type`, `referral_path` | NVARCHAR | Team classifications with no allowed-value list until QCH confirms its vocabulary. Not used by the application yet |
-| `notification_email` | NVARCHAR(320) | Where new-referral emails go. Read on the server only; never sent to a browser (PRD 11.3). No screen sets it yet |
-| `age_limit_state` | NVARCHAR(20) (003) | `SET`, `NO_RESTRICTION`, `NOT_ON_FILE` (default) or `OTHER_LIMIT`. Missing information is never treated as "no limit" (PRD 8.10) |
+| `notification_email` | NVARCHAR(320) | Where new-referral emails go. Read on the server only; never sent to a browser (October 14 Final Technical PRD 11.3, historical). No screen sets it yet |
+| `age_limit_state` | NVARCHAR(20) (003) | `SET`, `NO_RESTRICTION`, `NOT_ON_FILE` (default) or `OTHER_LIMIT`. Missing information is never treated as "no limit" (October 14 Final Technical PRD 8.10, historical; the Frozen Handoff PRD states the same rule for language only, §6.3) |
 | `service_area_state` | NVARCHAR(20) (003) | Same four values, for where participants must live |
 | `lifecycle_status` | NVARCHAR(20) | A discontinued Program drops out of new referral choices; past referrals keep it |
 | `created_at`, `updated_at`, `row_version` | | As above |
@@ -103,8 +104,9 @@ application enforces that rule, because SQL cannot check it across tables.
 
 ## Configurable Program fields
 
-Extra information a Program can carry beyond the common columns (PRD 4.2,
-4.3). A field's identity follows its **meaning**: a wording change keeps
+Extra information a Program can carry beyond the common columns (Frozen
+Handoff PRD §9, §10; the field-identity rule is from the October 14 Final Technical PRD
+4.2, 4.3, historical). A field's identity follows its **meaning**: a wording change keeps
 `field_id`; a meaning change discontinues the field and creates a new one.
 
 ### field_definitions
@@ -183,8 +185,8 @@ keyed by `referral_id`. **Not used by the application yet.**
 
 ### user_grants
 
-What each person may do (PRD 3.6). Granted and removed inside QCH Connect
-by designated administrators (PRD 3.8). The Permissions screen and server-side
+What each person may do (Frozen Handoff PRD §23). Granted and removed inside QCH Connect
+by designated administrators (Frozen Handoff PRD §24). The Permissions screen and server-side
 permission-administration API are implemented; see `src/permissions/`,
 `test/permissionAdministration.test.js` and `e2e/permissions.spec.js`.
 Production permission configuration remains a QCH/QCH IT dependency.
@@ -193,7 +195,7 @@ Production permission configuration remains a QCH/QCH IT dependency.
 | --- | --- | --- |
 | `grant_id` | INT, key | Identifier |
 | `user_id` | INT → users | Who |
-| `permission` | NVARCHAR(40) | One of the PRD 3.6 capabilities; see [architecture.md](architecture.md#who-may-do-what) |
+| `permission` | NVARCHAR(40) | One of the application's capabilities (Frozen Handoff PRD §23); see [architecture.md](architecture.md#who-may-do-what) |
 | `scope_type` | NVARCHAR(20) | `ORG`, `DEPARTMENT` (with `department_id`) or `PROGRAM` (with `program_id`) |
 | `department_id`, `program_id` | INT | The scope's Department or Program |
 | `grant_source` | NVARCHAR(20) | `IN_APP` (real) or `DEMO` (non-production only) |
@@ -230,7 +232,7 @@ deleted (a trigger blocks it); mistakes are fixed with audited corrections.
 | Column | Type | Meaning |
 | --- | --- | --- |
 | `referral_id` | BIGINT, key | Identifier |
-| `submission_id` | UNIQUEIDENTIFIER, unique | Random ID the browser makes, so a retried send never creates a second referral (PRD 7.3) |
+| `submission_id` | UNIQUEIDENTIFIER, unique | Random ID the browser makes, so a retried send never creates a second referral (Frozen Handoff PRD §20) |
 | `source` | NVARCHAR(20) | `DIRECT` or `GPME_ASSISTED` |
 | `gpme_evaluation_id` | BIGINT → gpme_evaluations | The matching result it came from (`GPME_ASSISTED` only) |
 | `created_by_user_id` | INT → users | Who sent it |
@@ -249,7 +251,7 @@ deleted (a trigger blocks it); mistakes are fixed with audited corrections.
 | `not_appropriate_explanation` | NVARCHAR(1000) | Sensitive, optional; only with Not Appropriate |
 | `responded_by_user_id`, `outcome_recorded_by_user_id` | INT → users | Who responded and who recorded the outcome |
 | `created_at` | DATETIME2 | When sent |
-| `first_responded_at`, `first_resulted_in_service_at` | DATETIME2 | Set once; corrections never rewrite them, so timing reports stay honest (PRD 12.4) |
+| `first_responded_at`, `first_resulted_in_service_at` | DATETIME2 | Set once; corrections never rewrite them, so timing reports stay honest (October 14 Final Technical PRD 12.4, historical) |
 | `outcome_recorded_at` | DATETIME2 | When the current outcome was recorded |
 | `updated_at`, `row_version` | | Change detection |
 
@@ -259,7 +261,8 @@ Accepted; times never come before `created_at`.
 
 ## Guided Program Matching
 
-Matching **inputs** (age, ZIP, needs) are never stored (PRD 5.3).
+Matching **inputs** (age, ZIP, needs) are never stored (Frozen Handoff PRD
+§3.2, §5.4, §15).
 Explanations are written from Program facts, never from participant
 answers.
 
@@ -289,7 +292,7 @@ participant data is stored.
 
 ### audit_events
 
-Append-only history of every change (PRD 6.5, 9.6), written in the same
+History of every change (Frozen Handoff PRD §19, §26), kept append-only and written in the same
 transaction as the change. A trigger blocks updates and deletes.
 
 | Column | Type | Meaning |
