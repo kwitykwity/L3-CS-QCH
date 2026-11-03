@@ -57,11 +57,12 @@ stops it afterwards. To use a Chromium that is already installed, set
 | `e2e/screenReader.spec.js` | What a screen reader is given on New Referral (Direct and guided matching) and Program Management: landmarks and headings, control names and groups, required and invalid state, hints and errors as descriptions, toggle state, dialog names and descriptions, focus moves, and every live-region announcement in order |
 | `e2e/mvpJourney.spec.js` | Task G: one referral across every feature. A Program Management matching change alters Find a Program's results; Find a Program, then send by keyboard (saved as GPME-assisted); the receiving Program accepts and records the outcome; the Reporting Center's numbers for that Program move by exactly that referral. Reporting Center by keyboard alone with error recovery, visible focus, S to XL kept after reload, no sideways scroll at XL on a phone, axe in both themes. Evidence: [verification-evidence.md](verification-evidence.md) |
 
-The journeys use the in-memory store. The October 14 Final Technical PRD
-(historical only) asked for the same journeys against Azure SQL; that waits
-on the Azure SQL store. The Handoff PRD plans SharePoint Lists and no
-separate production database (27); the production store is a QCH IT
-dependency (37).
+The journeys use the in-memory store. The earlier Azure SQL verification
+plan from the October 14 Final Technical PRD is historical and superseded.
+Production journeys must be verified against the approved Azure Functions
+and SharePoint Lists implementation once available (Handoff PRD §§27, 29,
+36–37). That production verification is outstanding; no separate production
+database or Azure SQL store is planned.
 
 ## Coverage by area
 
@@ -98,7 +99,7 @@ until they have a journey.
 
 | Area | Pull request | Then |
 | --- | --- | --- |
-| Any journey against Azure SQL (Oct. 14 Final Technical PRD 17.2, historical; Handoff PRD 27 plans SharePoint Lists) | No Azure SQL store yet | Run these journeys against it |
+| Production journeys against Azure Functions and SharePoint Lists (Handoff PRD §§27, 29, 36–37) | Production implementation and QCH IT provisioning outstanding | Run these journeys against the approved production implementation once available |
 
 ## Fixed in this pass
 
