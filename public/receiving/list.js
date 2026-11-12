@@ -4,7 +4,7 @@
 
 import {
   call, decisionText, element, formatDate, outcomeText, responseText,
-  setupTextSize, showStatus, STAGE_LABELS, summaryRow,
+  setupTextSize, showStatus, STAGE_LABELS, stagePill, summaryRow,
 } from './common.js';
 
 const $ = (id) => document.getElementById(id);
@@ -35,6 +35,8 @@ function item(referral) {
   const link = element('a', `Referral ${referral.referralId}: ${referral.participantName}`);
   link.href = `referral.html?id=${encodeURIComponent(referral.referralId)}`;
   heading.append(link);
+  const head = element('div', undefined, 'queue-item__head');
+  head.append(heading, stagePill(referral));
 
   const meta = element('p', undefined, 'muted');
   meta.textContent = `${STAGE_LABELS[referral.stage] ?? 'Unknown'}. Sent ${formatDate(referral.createdAt)} from ${referral.referringProgram?.name ?? 'an unknown Program'} to ${referral.receivingProgram?.name ?? 'an unknown Program'}.`;
@@ -48,7 +50,7 @@ function item(referral) {
     summaryRow('Service outcome', outcomeText(referral)),
   );
 
-  li.append(heading, meta, trio);
+  li.append(head, meta, trio);
   if (referral.referralContext) {
     const need = element('p', undefined, 'need');
     need.append(element('span', 'Need: ', 'muted'), document.createTextNode(preview(referral.referralContext)));
