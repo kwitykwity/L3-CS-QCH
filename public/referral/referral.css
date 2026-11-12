@@ -2,19 +2,27 @@
    preference (PRD 14.5) scales labels, inputs, errors and controls. */
 
 :root {
-  --bg: #f6f7f9;
+  --bg: #f3f4f6;
   --card: #ffffff;
   --text: #1a1d21;
   --muted: #545e68;
-  --border: #c9cfd6;        /* panels and dividers (decorative) */
+  --border: #dde1e6;        /* panels and dividers (decorative) */
   --control-border: #78828b; /* edges of inputs and controls: 3:1 or more on card, page and focus backgrounds (WCAG 1.4.11) */
-  --primary: #1f4f99;
+  --primary: #1d5bb8;
   --primary-text: #ffffff;
   --error: #a4231b;
   --success: #17683f;
-  --info: #1f4f99;
+  --info: #1d5bb8;
   --focus-ring: #1a1d21;
   --focus-bg: #e9ecef;
+  /* Shared by all stylesheets: same names, same values (Task 247). */
+  --warn: #7a4a00;
+  --info-bg: #ebf1fb;
+  --success-bg: #e8f4ec;
+  --warn-bg: #fbf1e2;
+  --neutral-bg: #eef0f2;
+  --radius: 0.5rem;
+  --radius-sm: 0.375rem;
   color-scheme: light dark; /* native checkboxes and radios follow the theme */
   font-size: 14px; /* M: default (PRD 14.5); app.js sets the chosen size */
 }
@@ -34,6 +42,11 @@
     --info: #8fb4f2;
     --focus-ring: #e8eaed;
     --focus-bg: #2c3238;
+    --warn: #f0c36d;
+    --info-bg: #1b2638;
+    --success-bg: #16291f;
+    --warn-bg: #2e2512;
+    --neutral-bg: #2a2f35;
   }
 }
 
@@ -99,7 +112,7 @@ h2 { font-size: 1.25rem; margin: 0 0 0.75rem; }
 .panel {
   background: var(--card);
   border: 1px solid var(--border);
-  border-radius: 0.75rem;
+  border-radius: var(--radius);
   padding: 1.25rem;
   margin-bottom: 1rem;
 }
@@ -171,7 +184,7 @@ fieldset.plain:disabled { opacity: 0.75; }
 .btn {
   font: inherit;
   padding: 0.5rem 1rem;
-  border-radius: 0.375rem;
+  border-radius: var(--radius-sm);
   border: 1px solid var(--primary);
   cursor: pointer;
 }
@@ -207,14 +220,15 @@ h2:focus-visible, .status:focus-visible { outline: 3px solid var(--focus-ring); 
   gap: 0.5rem;
   padding: 0.75rem 1rem;
   margin-bottom: 0.75rem;
-  border-radius: 0.5rem;
-  border: 2px solid currentColor;
+  border-radius: var(--radius);
+  border: 1px solid currentColor;
+  border-left-width: 0.25rem;
   background: var(--card);
   font-weight: 600;
 }
-.status--success { color: var(--success); }
-.status--error { color: var(--error); }
-.status--info { color: var(--info); }
+.status--success { color: var(--success); background: var(--success-bg); }
+.status--error { color: var(--error); background: var(--card); }
+.status--info { color: var(--info); background: var(--info-bg); }
 .status__badge { white-space: nowrap; }
 .status--success .status__badge::before { content: "✔ Done:"; }
 .status--error .status__badge::before { content: "⚠ Attention:"; }
@@ -282,6 +296,35 @@ dialog {
 dialog::backdrop { background: rgb(0 0 0 / 0.4); }
 
 [hidden] { display: none !important; }
+
+/* Shared pieces for the wireframe look (Task 247). Later screen tasks use
+   these classes; nothing here changes page structure or visible text.
+
+   Status pill: a short status in words, inside a rounded outline. The words
+   carry the meaning; the color only repeats it (never color alone). Wraps
+   instead of overflowing at XL on a 320px screen. */
+.pill {
+  display: inline-block;
+  padding: 0.125rem 0.625rem;
+  border: 1px solid currentColor;
+  border-radius: 999px;
+  font-size: 0.875rem;
+  font-weight: 600;
+  line-height: 1.4;
+  overflow-wrap: anywhere;
+}
+.pill--neutral { color: var(--text); background: var(--neutral-bg); }
+.pill--info { color: var(--info); background: var(--info-bg); }
+.pill--success { color: var(--success); background: var(--success-bg); }
+.pill--warning { color: var(--warn); background: var(--warn-bg); }
+
+/* Simple data table: small headers on a light band, thin row lines. The
+   wrapper scrolls inside itself, so the page never scrolls sideways. */
+.table-wrap { overflow-x: auto; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); }
+.data-table { width: 100%; border-collapse: collapse; text-align: left; }
+.data-table caption { text-align: left; padding: 0.75rem; color: var(--muted); font-size: 0.875rem; }
+.data-table th, .data-table td { padding: 0.625rem 0.75rem; border-top: 1px solid var(--border); vertical-align: top; overflow-wrap: anywhere; }
+.data-table thead th { background: var(--neutral-bg); font-size: 0.875rem; font-weight: 600; }
 
 /* Received referrals (Task A): list items and the three separate steps
    (Response, Decision, Service outcome). Long text wraps at any width. */

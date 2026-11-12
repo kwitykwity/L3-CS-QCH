@@ -183,6 +183,9 @@ const PAIRS = [
   ['link', 'card', TEXT], ['link', 'bg', TEXT],
   ['focus-ring', 'card', NON_TEXT], ['focus-ring', 'bg', NON_TEXT],
   ['control-border', 'card', NON_TEXT], ['control-border', 'bg', NON_TEXT], ['control-border', 'focus-bg', NON_TEXT],
+  // Task 247: status pills, tinted banners and table header bands.
+  ['warn', 'card', TEXT], ['info', 'info-bg', TEXT], ['success', 'success-bg', TEXT], ['warn', 'warn-bg', TEXT],
+  ['text', 'neutral-bg', TEXT], ['muted', 'neutral-bg', TEXT], ['text', 'info-bg', TEXT], ['text', 'success-bg', TEXT],
 ];
 
 describe('color contrast in both themes', () => {
@@ -200,6 +203,23 @@ describe('color contrast in both themes', () => {
       });
     }
   }
+
+  // Task 247: each stylesheet keeps its own color list (the checks above read
+  // them one by one), so a color shared by name must have the same value in
+  // every stylesheet, in both themes. Otherwise pages drift apart again.
+  test('a color token has the same value in every stylesheet that defines it, in both themes', () => {
+    const seen = {};
+    for (const { name, css } of stylesheets) {
+      for (const [theme, colors] of Object.entries(themes(css))) {
+        for (const [token, value] of Object.entries(colors)) {
+          const key = `${theme} --${token}`;
+          seen[key] ??= { value: value.toLowerCase(), from: name };
+          assert.equal(value.toLowerCase(), seen[key].value, `${key}: ${name} differs from ${seen[key].from}`);
+        }
+      }
+    }
+    assert.ok(Object.keys(seen).length >= 20, 'expected the shared color tokens');
+  });
 
   test('every stylesheet colors its own links, so they follow the theme (the browser default fails on dark)', () => {
     for (const { name, css } of stylesheets) {
