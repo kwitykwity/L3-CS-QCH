@@ -12,6 +12,8 @@ const NAV = [
   { name: 'New referral', href: '/referral/' },
   { name: 'Referrals I sent', href: '/sent/' },
   { name: 'Received referrals', href: '/receiving/' },
+  { name: 'Program Management', href: '/program-management/' },  // Task 248
+  { name: 'Reporting', href: '/reporting/' },  // Task 248
   { name: 'Help', href: '/help/' },  // Task 225
 ];
 

@@ -81,6 +81,15 @@ a { color: var(--primary); }
 
 .brand { font-weight: 700; color: var(--text); text-decoration: none; }
 
+/* Main navigation (Task 248): the same links in the same order on every
+   page. The current page has a light blue highlight, bold text and
+   aria-current, so it is never shown by color alone. Links wrap at large
+   text sizes instead of scrolling sideways. */
+.main-nav { display: flex; flex-wrap: wrap; gap: 0.25rem; min-width: 0; max-width: 100%; margin-right: auto; }
+.main-nav a { padding: 0.375rem 0.75rem; border-radius: var(--radius-sm); color: var(--text); text-decoration: none; }
+.main-nav a:hover { text-decoration: underline; }
+.main-nav a[aria-current] { background: var(--info-bg); color: var(--primary); font-weight: 600; }
+
 .text-size { display: inline-flex; flex-wrap: wrap; min-width: 0; max-width: 100%; align-items: center; gap: 0.25rem; }
 .text-size__label { color: var(--muted); margin-right: 0.25rem; }
 .text-size__btn {
