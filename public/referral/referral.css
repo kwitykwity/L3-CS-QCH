@@ -278,6 +278,27 @@ h3:focus-visible { outline: 3px solid var(--focus-ring); }
 .range input { width: 5rem; }
 input[type="checkbox"]:focus-visible { outline-offset: 3px; }
 
+/* Find a Program, wireframe 1 (Task 249). Layout only: the same fields,
+   ids, labels and tab order. Each group of questions sits in its own card. */
+.guided-head { display: flex; flex-wrap: wrap; gap: 0.75rem; align-items: center; justify-content: space-between; margin-bottom: 0.75rem; }
+.guided-head h3 { margin: 0; }
+.guided-card { border: 1px solid var(--border); border-radius: var(--radius); padding: 1rem; margin-bottom: 1rem; background: var(--card); }
+.guided-card > .field:last-child, .guided-card > fieldset:last-child { margin-bottom: 0; }
+/* On a phone the cards sit inside the step panel; less inner padding keeps
+   lines readable at XL. */
+@media (max-width: 480px) { .guided-card { padding: 0.5rem; border-width: 0 0 1px; border-radius: 0; } }
+/* Age and ZIP side by side; they stack on a narrow screen or at large text. */
+.guided-details { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(16rem, 100%), 1fr)); gap: 0 1.5rem; }
+.guided-footer { display: flex; flex-wrap: wrap; align-items: center; justify-content: space-between; gap: 0.75rem 1.5rem; }
+.guided-footer > p { margin: 0; flex: 1 1 20rem; min-width: 0; }
+.guided-footer > .actions { margin-top: 0; }
+/* Need chips: each need is still a real checkbox with its label (keyboard,
+   screen readers and the S/M/L/XL box sizes are unchanged). The chosen chip
+   also shows a ticked box and bold text, so it is never color alone. */
+.checks--chips { gap: 0.5rem; }
+.checks--chips label { padding: 0.375rem 0.875rem; border: 1px solid var(--control-border); border-radius: 999px; background: var(--card); }
+.checks--chips label:has(input:checked) { border-color: var(--primary); background: var(--info-bg); color: var(--primary); font-weight: 600; }
+
 .match-list { list-style: none; margin: 0; padding: 0; }
 .match {
   border: 1px solid var(--border); border-radius: 0.5rem;
