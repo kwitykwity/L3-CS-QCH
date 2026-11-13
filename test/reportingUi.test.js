@@ -18,9 +18,14 @@ test('the Reporting Center page is served with the backend period values', async
   const res = await supertest(createApp()).get('/reporting/').expect(200);
   assert.match(res.text, /<title>QCH Connect - Reporting Center<\/title>/);
   assert.match(res.text, /<h1>Reporting Center<\/h1>/);
+  // Task 254: the period type is a row of radio buttons (wireframe 8) that
+  // sends the same four values the dropdown sent. Monthly is still the default.
   for (const period of ['WEEKLY', 'MONTHLY', 'QUARTERLY', 'YEARLY']) {
-    assert.match(res.text, new RegExp(`<option value="${period}"`));
+    assert.match(res.text, new RegExp(`<input type="radio" id="period-${period.toLowerCase()}" name="period" value="${period}"`));
   }
+  assert.equal((res.text.match(/name="period"/g) ?? []).length, 4);
+  assert.match(res.text, /value="MONTHLY" checked/);
+  assert.match(res.text, /<fieldset class="field period-choice"[^>]*>\s*<legend>Period<\/legend>/);
   assert.doesNotMatch(res.text, /CUSTOM|THIS_MONTH|LAST_MONTH/);
 });
 
@@ -29,7 +34,7 @@ test('the page has the text-size control, labelled controls, and accessible tabl
   for (const size of ['S', 'M', 'L', 'XL']) assert.match(html, new RegExp(`data-size="${size}"`));
   assert.equal((html.match(/<caption>/g) ?? []).length, 2);
   assert.ok((html.match(/scope="col"/g) ?? []).length >= 18);
-  for (const id of ['period', 'date', 'scope-type', 'scope-target']) {
+  for (const id of ['period-weekly', 'period-monthly', 'period-quarterly', 'period-yearly', 'date', 'scope-type', 'scope-target']) {
     assert.match(html, new RegExp(`<label[^>]*for="${id}"`));
   }
   assert.match(html, /role="alert"/);
