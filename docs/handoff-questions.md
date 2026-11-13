@@ -51,13 +51,38 @@ These are the decisions that remain.
 | # | Question | Why it is open (frozen text) | Evidence in the repository | Who decides |
 | --- | --- | --- | --- | --- |
 | Q8 | How is each receiving Program's notification address held and maintained: seed data, a setting in QCH Connect, a SharePoint List column, or only the shared mailbox? | PRD §21 and MVP §21 require notification after the referral is saved and traceable failure and retry, and name the shared mailbox for sending. They do not say where the receiving address comes from | No screen sets it; a Program created in the application has no recipient, so its notification fails as `NO_RECIPIENT` while the referral stands (`test/regression/notificationFailure.test.js`); U-1 in merged PR #71 | QCH and QCH IT; the team for scope |
-| Q9 | Who builds and runs the archival process: QCH IT as a production process, or the team as application code? | PRD §31 and MVP §30 describe the planned process and its rules; MVP §28 lists it among production requirements; it is not an MVP §32 acceptance gate | No archive logic in `src/`; U-2 in merged PR #71 | QCH IT, with the team |
+| Q9 | Who builds and runs the archival process: QCH IT as a production process, or the team as application code? | PRD §31 and MVP §30 describe the planned process and its rules; MVP §28 lists it among production requirements; it is not an MVP §32 acceptance gate | No archive logic in `src/`; U-2 in merged PR #71. QCH IT's November 11, 2026 requirements ([production-architecture.md](production-architecture.md) section 2.1) add in-app search and open, access parity, and a separate Archive view. Proposed steps and owners: [Q9 implementation plan](#q9-archive-implementation-plan-proposals-pending-qch-confirmation) below | QCH IT, with the team |
+| Q9a | **Corrections and restore.** Can an archived referral's Decision or Service Outcome still be corrected, or must it be restored to the active list first? Who can restore? **OPEN QCH DECISION** | QCH IT's November 11, 2026 email makes archived referrals read-only. The PRD's correction rules (§17, §19) do not mention archived referrals | Corrections live in `src/referrals/outcomeService.js`, which has no archived case; nothing in `src/` archives | QCH, with QCH IT |
+| Q9b | **Accepted, outcome not recorded.** Confirm that an accepted referral with no recorded service outcome counts as open and is never archived. **OPEN QCH DECISION** | PRD §31 and the November 11 email protect "open" referrals but do not define open. The team's reading is that it is open (`ACCEPTED_OUTCOME_PENDING`) | `src/referrals/stage.js`; [production-architecture.md](production-architecture.md) section 2.2 | QCH |
+| Q9c | **Reporting counts.** Confirm that archived referrals keep counting in Reporting, so historical numbers do not drop after a batch. **OPEN QCH DECISION** | PRD §31 keeps archived records available for authorized reporting; it does not say whether they stay in the counts | `src/reporting/` has no archived filter; nothing in `src/` archives | QCH |
+| Q9d | **Archive view search fields.** Which search fields and filters does the Archive view need (for example referral ID, participant name, Program, date range, outcome)? A participant name search must follow the same access rules. **OPEN QCH DECISION** | The November 11 email requires search and filters but does not list them | No Archive view exists | QCH, with QCH IT |
 | Q10 | What is the formal retention and deletion policy after archival? | PRD §31 (archived records stay read-only until QCH sets one); PRD §37 item 9; MVP §31 item 10 | Nothing in the application deletes a referral | QCH |
 | Q11 | What is the authoritative production Department taxonomy? | PRD §11 (the four demo Departments are seed values, not a production taxonomy); PRD §37 item 8; MVP §31 item 9 | `scripts/syntheticSeed.js` | QCH |
 | Q12 | How is the production Program Directory configured, and by whom? | PRD §37 item 7; MVP §31 item 8. The internal Program Directory must never be committed to a public repository (PRD §8, §35) | The repository holds synthetic Programs only | QCH, with QCH IT |
 | Q13 | Which browsers and versions must production support? | PRD §37 item 10; MVP §31 item 11 | The team tests Edge, Chromium, Firefox and Playwright WebKit as its own baseline, not QCH policy (`docs/browser-verification.md`) | QCH IT |
 | Q14 | Where is the frontend hosted in production? | PRD §32 (the frontend is presentation only); PRD §37 item 11; MVP §31 item 12 | — | QCH IT |
 | Q15 | Who are the first production users, groups and permission administrators, and how are they set up? | PRD §24; PRD §37 item 6; MVP §31 item 7 | Synthetic users and grants only (`scripts/syntheticSeed.js`, `scripts/demoPersonas.js`) | QCH and QCH IT |
+
+### Q9 archive implementation plan (proposals pending QCH confirmation)
+
+QCH IT asked that the handoff list the remaining archive implementation
+steps and proposed ownership. **Every owner below is a proposal, not an
+agreement.** "Development team" is unassigned until QCH decides who builds
+QCH Connect in production. Nothing here is built, and nothing here is
+production-ready.
+
+| # | Step | Proposed owner |
+| --- | --- | --- |
+| 1 | Answer Q9a to Q9d and confirm the 2,500 / 500 rule | QCH, with QCH IT |
+| 2 | Choose how archived records are stored on the private QCH Connect SharePoint site (an archived flag column, or separate archive Lists) so audit and supporting records follow their parent referral | QCH IT, with the development team |
+| 3 | Build the archive process as an Azure Functions timer job with the managed identity and `Sites.Selected`: count active referrals, pick the 500 oldest `COMPLETE` referrals, move each with its supporting records, write an audit entry, stay safe to re-run after a failure, and never touch an open referral | Development team; QCH IT approves the function list, triggers and outbound dependencies |
+| 4 | Enforce read-only and the existing access rules on the server for archived referrals | Development team |
+| 5 | Add archived-referral search and detail endpoints for the sent and received scopes | Development team |
+| 6 | Add the Archive view: a link from Referrals I sent and Received referrals, search, filters, and a read-only detail page clearly labeled Archived, under the same accessibility rules as the rest of the application | Development team |
+| 7 | Keep archived referrals in Reporting counts (subject to Q9c) | Development team |
+| 8 | Tests: eligibility, open referrals never archived, access parity, read-only, audit kept, report totals the same before and after a batch, accessibility | Development team |
+| 9 | Run and monitor the process in production, with a failure and recovery runbook | QCH IT |
+| 10 | Formal retention and deletion policy (Q10) | QCH |
 
 The provisioning steps that follow from these decisions (Azure Functions,
 SharePoint site and Lists, Entra ID, Graph permissions, Exchange RBAC, the
@@ -69,6 +94,6 @@ not open questions: the frozen PRD already decides them.
 
 These are settled by the frozen documents and are not asked again here:
 the production architecture (PRD §27 to §30), the archival rules themselves
-(PRD §31), Entra ID with MFA (PRD §22), the shared-mailbox design (PRD §21),
+(PRD §31, with QCH IT's November 11, 2026 additions; only Q9a to Q9d stay open), Entra ID with MFA (PRD §22), the shared-mailbox design (PRD §21),
 age as a temporary matching input that is never saved (PRD §5.4), and no
 external AI in the MVP (PRD §7).
