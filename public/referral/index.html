@@ -92,12 +92,17 @@
         <!-- Guided matching (GPME, card 11). Answers are used only to find
              Programs; they are sent in a POST body and are not saved. -->
         <div id="guided" class="path-panel" hidden>
-          <h3 id="guided-heading" tabindex="-1">Guided matching</h3>
+          <!-- Wireframe 1 (Task 249): a shortcut to Direct Referral beside the heading.
+               It uses the same path switch as "I know the Program" above. -->
+          <div class="guided-head">
+            <h3 id="guided-heading" tabindex="-1">Guided matching</h3>
+            <button type="button" id="guided-to-direct" class="btn btn--secondary">I already know the Program <span aria-hidden="true">&rarr;</span> Direct Referral</button>
+          </div>
           <form id="guided-form" novalidate>
             <!-- Describe the need (Task D). Proposes answers for the fields
                  below; the worker checks and corrects them. The text is
                  held in memory only and is not saved or sent with the referral. -->
-            <div class="field" id="describe-field">
+            <div class="field guided-card" id="describe-field">
               <label for="describe">Describe what the participant needs (optional)</label>
               <p id="describe-hint" class="muted">For example: &ldquo;17 year old who needs help finding a job, ZIP 11101.&rdquo;
                 Do not enter a name or contact details here. The application suggests answers below for you to check. It is not saved. Up to 500 characters.</p>
@@ -117,14 +122,17 @@
               </div>
             </div>
 
+            <div class="guided-card">
             <fieldset class="field" id="needs" aria-describedby="needs-hint needs-error">
               <legend>What does the participant need? <span class="req" aria-hidden="true">*</span></legend>
               <p id="needs-hint" class="muted">Choose all that apply.</p>
               <p id="needs-loading" class="muted">Loading need categories&hellip;</p>
-              <div id="needs-options" class="checks"></div>
+              <div id="needs-options" class="checks checks--chips"></div>
               <p id="needs-error" class="field__error" hidden></p>
             </fieldset>
+            </div>
 
+            <div class="guided-card guided-details">
             <fieldset class="field" id="ageRange" aria-describedby="ageRange-hint ageRange-error">
               <legend>Participant age (optional)</legend>
               <p id="ageRange-hint" class="muted">Enter an exact age, or a range if you do not know the exact age, for example 18 to 24. Age is used only to find Programs and is not saved with the referral.</p>
@@ -152,10 +160,13 @@
               <p id="matchZip-hint" class="muted">Leaving age or ZIP blank never blocks matching.</p>
               <p id="matchZip-error" class="field__error" hidden></p>
             </div>
+            </div>
 
+            <div class="guided-card guided-footer">
             <p class="muted">These answers are used only to find Programs. They are not saved with the referral.</p>
             <div class="actions">
               <button type="submit" id="find-programs" class="btn btn--primary">Find Programs</button>
+            </div>
             </div>
           </form>
 

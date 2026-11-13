@@ -1092,6 +1092,7 @@ function init() {
 
   $('path-guided').addEventListener('click', () => choosePath('GUIDED'));
   $('path-direct').addEventListener('click', () => choosePath('DIRECT'));
+  $('guided-to-direct').addEventListener('click', () => choosePath('DIRECT'));
   $('guided-form').addEventListener('submit', findPrograms);
   $('guided-form').addEventListener('keydown', blockImplicitSubmit);
   for (const id of GUIDED_INPUTS) $(id).addEventListener('input', guidedAnswersChanged);
