@@ -340,6 +340,30 @@ input[type="checkbox"]:focus-visible { outline-offset: 3px; }
 /* Information box (wireframe 2): words on a light blue band. */
 .callout { padding: 0.75rem 1rem; margin: 0.75rem 0; border: 1px solid var(--info); border-left-width: 0.25rem; border-radius: var(--radius); background: var(--info-bg); color: var(--text); }
 
+/* Send referral, wireframe 3 (Task 251). Layout only: the same fields,
+   ids, labels, tab order and send behavior. */
+.summary--strip { grid-template-columns: repeat(auto-fit, minmax(min(12rem, 100%), 1fr)); gap: 0.75rem 1.5rem; padding: 0.75rem 1rem; background: var(--neutral-bg); border-radius: var(--radius); }
+/* The step panel is the container, so the layout inside it can respond
+   to the panel's width (a container cannot restyle itself). */
+.details-host { container-type: inline-size; }
+.side-note { margin-top: 1rem; padding: 0.875rem 1rem; border: 1px solid var(--border); border-radius: var(--radius); background: var(--card); color: var(--text); }
+.side-note h3 { font-size: 1rem; margin: 0 0 0.5rem; }
+.side-note p { margin: 0 0 0.5rem; font-size: 0.875rem; }
+.side-note p:last-child { margin-bottom: 0; }
+@container (min-width: 34rem) {
+  .details-layout { display: grid; grid-template-columns: minmax(0, 1fr) 13rem; gap: 1.5rem; align-items: start; }
+  .details-layout > .side-note { margin-top: 0; }
+}
+/* ZIP and Notes side by side; they stack on a narrow screen or at large text. */
+.field-pair { display: grid; grid-template-columns: repeat(auto-fit, minmax(min(14rem, 100%), 1fr)); gap: 0 1.25rem; }
+
+/* Direct Referral list, wireframe 1b: one bordered box, a row per
+   Program. Rows stay real radio buttons with their labels. */
+.program-options--boxed { border: 1px solid var(--border); border-radius: var(--radius); }
+.program-options--boxed label { padding: 0.625rem 0.75rem; }
+.program-options--boxed li:has(input:checked) { background: var(--info-bg); }
+.program-options--boxed li:has(input:checked) label { font-weight: 600; }
+
 dialog {
   max-width: 28rem;
   border: 1px solid var(--border);

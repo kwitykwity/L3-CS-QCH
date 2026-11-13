@@ -212,7 +212,7 @@
           <fieldset class="program-list" aria-describedby="program-error">
             <legend>Programs <span class="req" aria-hidden="true">*</span></legend>
             <p id="programs-loading" class="muted">Loading Programs&hellip;</p>
-            <ul id="program-options" class="program-options"></ul>
+            <ul id="program-options" class="program-options program-options--boxed"></ul>
           </fieldset>
           <p id="program-error" class="field__error" hidden></p>
           <div class="actions">
@@ -222,9 +222,9 @@
       </section>
 
       <!-- Step 2: referral details and submission -->
-      <section id="step-details" class="panel" aria-labelledby="step-details-heading" hidden>
+      <section id="step-details" class="panel details-host" aria-labelledby="step-details-heading" hidden>
         <h2 id="step-details-heading" tabindex="-1">2. Referral details</h2>
-        <dl class="summary">
+        <dl class="summary summary--strip">
           <div>
             <dt>Sending to</dt>
             <dd><span id="summary-receiving"></span>
@@ -240,6 +240,9 @@
           </div>
         </dl>
 
+        <!-- Wireframe 3 (Task 251): the form on the left and "What happens
+             next" on the right when there is room; stacked otherwise. -->
+        <div class="details-layout">
         <form id="referral-form" novalidate>
           <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p>
 
@@ -272,6 +275,7 @@
               <p id="referralContext-error" class="field__error" hidden></p>
             </div>
 
+            <div class="field-pair">
             <div class="field field--narrow">
               <label for="participantZip">ZIP code (optional)</label>
               <input id="participantZip" name="participantZip" type="text" inputmode="numeric" autocomplete="off"
@@ -285,6 +289,7 @@
               <p id="notes-hint" class="muted">Visible to you and to staff authorized for the receiving Program.</p>
               <p id="notes-error" class="field__error" hidden></p>
             </div>
+            </div>
           </fieldset>
 
           <div class="actions">
@@ -293,6 +298,12 @@
             <button type="button" id="cancel" class="btn btn--secondary">Cancel</button>
           </div>
         </form>
+        <aside class="side-note" aria-labelledby="next-heading">
+          <h3 id="next-heading">What happens next</h3>
+          <p>QCH Connect notifies the receiving Program that a new referral is waiting. The notification has no participant details.</p>
+          <p>The Program responds in QCH Connect. You can follow the referral under Referrals I sent.</p>
+        </aside>
+        </div>
       </section>
 
       <dialog id="discard-dialog" aria-labelledby="discard-title" aria-describedby="discard-desc">
