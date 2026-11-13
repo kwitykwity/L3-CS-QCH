@@ -55,12 +55,49 @@ From PRD §31 and MVP §30:
    those, and never an open or Awaiting Response referral to reach 500. (The
    PRD records this last safeguard as a protective implementation
    interpretation, not a separate QCH policy statement.)
-4. Archived records stay **read-only**, **available for authorized
-   reporting**, and **subject to audit requirements**, until QCH sets a formal
+4. Archived records stay **read-only**, **available to authorized staff in
+   QCH Connect (search, open and reporting, under the same access rules)**,
+   and **subject to audit requirements**, until QCH sets a formal
    retention/deletion policy (section 3, item 10).
 
-In this repository today: there is no archival process. The in-memory stores
-hold synthetic data that is reset on every start.
+### 2.1 QCH IT requirements received November 11, 2026
+
+QCH IT confirmed these in an email to the team on November 11, 2026, after
+the frozen PRD. They add to section 2 and do not change the 2,500 / 500 rule
+or the protection of open referrals. QCH IT asked that they be documented for
+production implementation **without changing the frozen capstone build**.
+
+| # | Requirement | Confirmed by |
+| --- | --- | --- |
+| R1 | Authorized staff can **search for and open** an individual archived referral inside QCH Connect. Access through reporting or audit alone is not enough. | QCH IT, Nov 11, 2026 |
+| R2 | **Access parity.** Archiving keeps the existing access rules. Staff keep access to archived referrals they could already see, and gain no new access because a referral was archived. | QCH IT, Nov 11, 2026 |
+| R3 | A **separate, clearly labeled Archive view**, reachable from both Referrals I sent and Received referrals, with search and filters. The active views stay focused on current work. | QCH IT, Nov 11, 2026 |
+| R4 | Archived referrals are **read-only**, keep their supporting records and audit history, and are kept until QCH sets a formal retention policy. | QCH IT, Nov 11, 2026 (repeats PRD §31) |
+| R5 | Only **closed or completed** referrals can be archived. Open and Awaiting Response referrals stay active. | QCH IT, Nov 11, 2026 (repeats PRD §31) |
+
+### 2.2 How "closed or completed" maps to this build
+
+`src/referrals/stage.js` derives one of three stages for every referral. The
+application has no separate "closed" state, and none should be added for
+archiving.
+
+| Stage in `src/referrals/stage.js` | Meaning | Archive eligibility |
+| --- | --- | --- |
+| `COMPLETE` | A decision was recorded as Not appropriate, or the referral was accepted and its service outcome was recorded | **Eligible** ("closed or completed") |
+| `AWAITING_RESPONSE` | No decision recorded yet | **Never archived** (open) |
+| `ACCEPTED_OUTCOME_PENDING` | Accepted, service outcome not recorded yet | **Never archived** (open). **OPEN QCH DECISION:** QCH to confirm this counts as open ([handoff-questions.md](handoff-questions.md) Q9b) |
+
+### 2.3 Still open
+
+The decisions QCH has not made yet (corrections and restore, the
+Accepted-outcome-pending case, reporting counts, Archive view search fields)
+and the proposed implementation steps and owners are listed in
+[handoff-questions.md](handoff-questions.md) under Q9. Every proposed owner
+there is a **proposal pending QCH confirmation**.
+
+In this repository today: there is no archival process, no archived-referral
+search and no Archive view. The in-memory stores hold synthetic data that is
+reset on every start.
 
 ## 3. Production dependency checklist
 
