@@ -14,7 +14,7 @@
 
 import { CONTACT_METHODS } from '/referral/validation.js';
 import {
-  call, decisionText, formatDate, outcomeText, responseText, setupTextSize, showStatus, summaryRow,
+  call, decisionText, formatDate, outcomeText, responseText, setupTextSize, showStatus, stagePill, summaryRow,
 } from '/receiving/common.js';
 
 const $ = (id) => document.getElementById(id);
@@ -33,6 +33,8 @@ setupTextSize();
 function clearReferral({ keepReload = false } = {}) {
   $('referral-heading').textContent = 'Referral status';
   document.title = 'Referral status · QCH Connect';
+  $('stage-line').replaceChildren();
+  $('stage-line').hidden = true;
   for (const id of ['response-value', 'decision-value', 'reason-value', 'explanation-value', 'outcome-value', 'outcome-note']) {
     $(id).textContent = '';
   }
@@ -47,6 +49,9 @@ function clearReferral({ keepReload = false } = {}) {
 function render(referral, access) {
   $('referral-heading').textContent = `Referral ${referral.referralId}: ${referral.participantName}`;
   document.title = `Referral ${referral.referralId} status · QCH Connect`;
+  // Task 253: the stage pill beside the heading, in words (same as the lists).
+  $('stage-line').replaceChildren(stagePill(referral));
+  $('stage-line').hidden = false;
 
   $('awaiting-note').hidden = referral.responseStatus !== 'AWAITING_RESPONSE';
   $('response-value').textContent = referral.firstRespondedAt
