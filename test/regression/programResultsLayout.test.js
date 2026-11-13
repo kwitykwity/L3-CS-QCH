@@ -38,6 +38,11 @@ describe('Program results layout (Task 250)', () => {
 
   test('the matching facts are still a list for screen readers; the separator dot is not read out', () => {
     assert.match(app, /why\.className = 'match__why';/);
-    assert.match(css, /\.match__why > li \+ li::before\s*\{[^}]*content:\s*" · " \/ ""/);
+    // Safari/VoiceOver drops list semantics from a ul styled list-style: none
+    // unless it has role="list". Chromium keeps them, so the browser tests
+    // cannot catch this; the source check does.
+    assert.match(css, /\.match__why\s*\{[^}]*list-style:\s*none/);
+    assert.match(app, /why\.setAttribute\('role', 'list'\);/);
+    assert.match(css,/\.match__why > li \+ li::before\s*\{[^}]*content:\s*" · " \/ ""/);
   });
 });

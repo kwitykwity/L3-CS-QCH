@@ -16,6 +16,15 @@ const css = readFileSync(path.join(PUBLIC, 'referral.css'), 'utf8').replace(/\/\
 const details = html.slice(html.indexOf('<section id="step-details"'), html.indexOf('<dialog id="discard-dialog"'));
 const direct = html.slice(html.indexOf('<div id="direct"'), html.indexOf('<section id="step-details"'));
 
+// Finds the wide-screen @container rule for .details-layout with any
+// whitespace or line ending (a Windows checkout has CRLF), fails clearly
+// if it is missing, and checks that it turns the layout into a grid.
+function assertWideLayout(source) {
+  const query = /@container\s*\(\s*min-width:\s*34rem\s*\)\s*\{\s*\.details-layout\s*\{([^}]*)\}/.exec(source);
+  assert.ok(query, 'expected an @container (min-width: 34rem) rule that styles .details-layout');
+  assert.match(query[1], /display:\s*grid/);
+}
+
 describe('Send referral layout (Task 251)', () => {
   test('the fields keep their order, so the keyboard meets them in the same order as before', () => {
     const ids = ['change-program', 'participantName', 'contactMethod-options', 'contactValue', 'referralContext', 'participantZip', 'notes', 'send', 'send-direct', 'cancel'];
@@ -37,8 +46,12 @@ describe('Send referral layout (Task 251)', () => {
     assert.match(details, /<section id="step-details" class="panel details-host"/);
     assert.match(css, /\.details-host\s*\{[^}]*container-type:\s*inline-size/);
     assert.doesNotMatch(css, /\.details-layout\s*\{[^}]*container-type/);
-    const wide = css.slice(css.indexOf('@container (min-width: 34rem) {\n  .details-layout'));
-    assert.match(wide, /\.details-layout\s*\{[^}]*display:\s*grid/);
+    assertWideLayout(css);
+  });
+
+  test('the layout check does not depend on line endings (Windows CRLF checkouts)', () => {
+    assertWideLayout(css.replace(/\r?\n/g, '\r\n'));
+    assertWideLayout(css.replace(/\r\n/g, '\n'));
   });
 
   test('the summary is a strip; ZIP and Notes share a row that stacks when narrow', () => {

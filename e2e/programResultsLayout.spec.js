@@ -34,6 +34,17 @@ test.describe('Program results layout (Task 250)', () => {
     expect(new Set(items.map((i) => i.buttonClass))).toEqual(new Set(['btn btn--secondary']));
   });
 
+  test('every "What matching found" list keeps role="list" and its items (Safari/VoiceOver)', async ({ page }) => {
+    await showResults(page);
+    const lists = page.locator('li.match .match__why');
+    const count = await lists.count();
+    expect(count).toBeGreaterThan(1);
+    for (let i = 0; i < count; i += 1) {
+      await expect(lists.nth(i)).toHaveAttribute('role', 'list');
+      await expect(lists.nth(i).getByRole('listitem').first()).toBeVisible();
+    }
+  });
+
   test('phone at XL: the button drops below the details and nothing scrolls sideways', async ({ page }) => {
     await page.setViewportSize({ width: 320, height: 800 });
     await page.goto('/referral/');

@@ -579,6 +579,10 @@ function renderMatchItem(item) {
   whyLabel.textContent = 'What matching found:';
   const why = document.createElement('ul');
   why.className = 'match__why';
+  // The facts are shown inline with no bullets (list-style: none), and
+  // Safari/VoiceOver then stops announcing the ul as a list. role="list"
+  // keeps the list and its item count for screen reader users.
+  why.setAttribute('role', 'list');
   why.setAttribute('aria-labelledby', whyId);
   for (const text of item.explanations) {
     const point = document.createElement('li');
