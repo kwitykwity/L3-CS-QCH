@@ -423,6 +423,20 @@ dialog::backdrop { background: rgb(0 0 0 / 0.4); }
 .awaiting { font-weight: 700; border-left: 0.25rem solid currentColor; padding-left: 0.5rem; margin: 0.25rem 0; }
 #referral-heading { overflow-wrap: anywhere; }
 
+/* Referral lists, wireframes 4 and 6 (Task 252). Layout only: each
+   referral keeps its link, its "where it stands" line and its Response,
+   Decision and Service outcome, which several tests and screen reader
+   users rely on. A status pill repeats the stage in words. */
+.queue-item { background: var(--card); border-radius: var(--radius); padding: 0.875rem 1rem; }
+.queue-item__head { display: flex; flex-wrap: wrap; gap: 0.25rem 0.75rem; align-items: baseline; justify-content: space-between; }
+.queue-item__head h3 { margin: 0; }
+.queue-item .trio { background: var(--neutral-bg); border-radius: var(--radius-sm); padding: 0.5rem 0.75rem; }
+/* The filter sits on one line when there is room. */
+.filters-inline { display: flex; flex-wrap: wrap; gap: 0.5rem 1rem; align-items: flex-end; }
+.filters-inline > .required-note { flex-basis: 100%; margin: 0; }
+.filters-inline > .field { margin: 0; flex: 1 1 14rem; min-width: 0; }
+@media (max-width: 480px) { .queue-item { padding: 0.5rem 0.625rem; } }
+
 /* Program fields layout only. Preserve shared themes and text sizing. */
 body.program-fields-page .page {
   max-width: 76rem;

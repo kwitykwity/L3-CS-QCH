@@ -6,7 +6,7 @@
 
 import {
   call, decisionText, element, formatDate, outcomeText, responseText,
-  setupTextSize, showStatus, STAGE_LABELS, summaryRow,
+  setupTextSize, showStatus, STAGE_LABELS, stagePill, summaryRow,
 } from '/receiving/common.js';
 
 const $ = (id) => document.getElementById(id);
@@ -30,6 +30,8 @@ function item(referral) {
   const link = element('a', `Referral ${referral.referralId}: ${referral.participantName}`);
   link.href = `referral.html?id=${encodeURIComponent(referral.referralId)}`;
   heading.append(link);
+  const head = element('div', undefined, 'queue-item__head');
+  head.append(heading, stagePill(referral));
 
   // Awaiting response stays awaiting until the receiving Program responds;
   // time passing never changes it (PRD 6.2). Said in words, not color.
@@ -46,7 +48,7 @@ function item(referral) {
       : decisionText(referral)),
     summaryRow('Service outcome', outcomeText(referral)),
   );
-  li.append(heading, where, trio);
+  li.append(head, where, trio);
   return li;
 }
 

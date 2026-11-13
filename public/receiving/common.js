@@ -12,6 +12,7 @@
 //   preference is stored.
 
 import { SIZES, loadSize, saveSize } from '/referral/textSize.js';
+import { pillTone } from './pill.js';
 
 const TIMEOUT_MS = 15000;
 
@@ -96,6 +97,12 @@ export function outcomeText(referral) {
   if (referral.decision === 'NOT_APPROPRIATE') return 'Not applicable (the decision is Not appropriate)';
   if (referral.responseStatus === 'AWAITING_RESPONSE') return 'Not recorded (no decision yet)';
   return OUTCOME_LABELS[referral.serviceOutcome] ?? 'Unknown';
+}
+
+// Status pill for the referral lists (Task 252). The tone rule lives in
+// pill.js so it can be tested without a browser.
+export function stagePill(referral) {
+  return element('span', STAGE_LABELS[referral.stage] ?? 'Unknown', `pill pill--${pillTone(referral)}`);
 }
 
 export function element(tag, text, className) {
