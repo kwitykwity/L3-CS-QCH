@@ -33,15 +33,20 @@
       <p class="help">Fields marked <span aria-hidden="true">*</span> are required.</p>
 
       <form id="filters" class="card filters" novalidate>
-        <div class="field">
-          <label for="period">Period</label>
-          <select id="period" name="period">
-            <option value="WEEKLY">Weekly (Sunday to Saturday)</option>
-            <option value="MONTHLY" selected>Monthly (calendar month)</option>
-            <option value="QUARTERLY">Quarterly (fiscal quarter, year starts July 1)</option>
-            <option value="YEARLY">Yearly (fiscal year, July 1 to June 30)</option>
-          </select>
-        </div>
+        <!-- Task 254 (wireframe 8): the period type is a row of buttons. Each
+             is a real radio button with its own label, so it sends the same
+             value the dropdown sent, keeps one Tab stop with arrow keys, and
+             shows the choice with a filled circle and bold text, not color alone. -->
+        <fieldset class="field period-choice" aria-describedby="period-help">
+          <legend>Period</legend>
+          <div class="segmented">
+            <label for="period-weekly"><input type="radio" id="period-weekly" name="period" value="WEEKLY" /> Weekly</label>
+            <label for="period-monthly"><input type="radio" id="period-monthly" name="period" value="MONTHLY" checked /> Monthly</label>
+            <label for="period-quarterly"><input type="radio" id="period-quarterly" name="period" value="QUARTERLY" /> Quarterly</label>
+            <label for="period-yearly"><input type="radio" id="period-yearly" name="period" value="YEARLY" /> Yearly</label>
+          </div>
+          <span id="period-help" class="help">Weekly runs Sunday to Saturday. Monthly is the calendar month. Quarterly and Yearly follow the QCH fiscal year, July 1 to June 30.</span>
+        </fieldset>
 
         <div class="field">
           <label for="date">Show the period containing (optional)</label>
@@ -85,7 +90,7 @@
           <p id="scope-note" class="help" hidden>
             A Program or Department scope includes referrals it made or received.
           </p>
-          <p id="partial-note" class="message message--info" hidden>
+          <p id="partial-note" class="message message--warn" hidden>
             Incomplete period: this period has not ended yet, so numbers can still change.
           </p>
           <p id="mismatch-note" class="message message--info" hidden>
@@ -118,7 +123,7 @@
           <div id="timing" class="grid"></div>
         </section>
 
-        <section aria-labelledby="programs-heading">
+        <section class="card table-card" aria-labelledby="programs-heading">
           <h2 id="programs-heading">By Program</h2>
           <div class="table-wrap" role="region" aria-labelledby="programs-heading" tabindex="0">
             <table>
@@ -141,7 +146,7 @@
           </div>
         </section>
 
-        <section aria-labelledby="departments-heading">
+        <section class="card table-card" aria-labelledby="departments-heading">
           <h2 id="departments-heading">By Department</h2>
           <p class="help">A referral counts under the Department its Program had when the referral was created.</p>
           <div class="table-wrap" role="region" aria-labelledby="departments-heading" tabindex="0">

@@ -13,7 +13,6 @@ const $ = (id) => document.getElementById(id);
 const els = {
   error: $('error'),
   filters: $('filters'),
-  period: $('period'),
   date: $('date'),
   scopeType: $('scope-type'),
   scopeTargetGroup: $('scope-target-group'),
@@ -190,7 +189,8 @@ function clearError() {
 }
 
 function readParams() {
-  const params = { period: els.period.value };
+  // The checked Period radio button (Task 254). Same values as the old dropdown.
+  const params = { period: els.filters.elements.namedItem('period').value };
   if (els.date.value) params.date = els.date.value;
   const type = els.scopeType.value;
   if (type !== 'ORGANIZATION') {

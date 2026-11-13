@@ -124,7 +124,7 @@ async function openAs(browser, userId) {
 // waits until the screen shows THIS period's dates and THIS scope (no two
 // reports in a row here share both).
 async function showReport(page, { query, period }, scope = null) {
-  await page.locator('#period').selectOption(query.period);
+  await page.locator(`input[name="period"][value="${query.period}"]`).check(); // Task 254: radio buttons
   await page.locator('#date').fill(query.date);
   await page.locator('#scope-type').selectOption(scope ? scope.type : 'ORGANIZATION');
   if (scope) await page.locator('#scope-target').selectOption({ label: scope.label });
@@ -324,7 +324,7 @@ test.describe('Reporting Center shows the known answers (Task M)', () => {
     const page = await openAs(browser, USERS.NO_GRANTS);
     await expect(page.locator('#status')).toHaveText(/^Report loaded for /);
     // AS_OF is Oct 24 in New York, so Oct 25 is in the future for the server.
-    await page.locator('#period').selectOption('MONTHLY');
+    await page.getByRole('radio', { name: 'Monthly', exact: true }).check();
     await page.locator('#date').fill('2026-10-25');
     await page.getByRole('button', { name: 'Show report', exact: true }).click();
     await expect(page.locator('#error')).toHaveText('That date is not allowed. Use a date from 2000-01-01 up to today.');
