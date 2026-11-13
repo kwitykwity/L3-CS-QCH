@@ -78,7 +78,7 @@ test.describe('Help and Guidance page (Task 225)', () => {
     await expect(page.getByRole('heading', { level: 1 })).toHaveCount(1);
     await expect(page.getByRole('main')).toHaveCount(1);
     await expect(page.getByRole('banner')).toHaveCount(1);
-    await expect(mainNav(page).getByRole('link')).toHaveText(['New referral', 'Referrals I sent', 'Received referrals', 'Help']);
+    await expect(mainNav(page).getByRole('link')).toHaveText(['New referral', 'Referrals I sent', 'Received referrals', 'Program Management', 'Reporting', 'Help']);
     await expect(mainNav(page).getByRole('link', { name: 'Help', exact: true })).toHaveAttribute('aria-current', 'page');
     await expect(page.getByRole('heading', { level: 2 })).toHaveText(TOPICS);
     await expectNoAxeViolations(page, 'Help and Guidance at M');
