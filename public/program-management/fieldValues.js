@@ -1,4 +1,5 @@
 import { SIZES, loadSize, saveSize } from '/referral/textSize.js';
+import { lifecyclePill } from './lifecycle.js';
 
 const $ = (id) => document.getElementById(id);
 const idText = new URL(location.href).searchParams.get('programId');
@@ -207,8 +208,11 @@ function buildEntry(field, writable) {
     fieldset: element('fieldset', undefined, 'plain'),
     save: element('button', 'Save field value', 'btn btn--primary'),
   };
-  entry.panel.append(element('h2', field.label));
-  entry.panel.append(element('p', `${field.dataType} - ${field.lifecycleStatus}`, 'muted'));
+  // Task 255 (wireframe 9): the field's name with its status pill beside it.
+  const head = element('div', undefined, 'field-card__head');
+  head.append(element('h2', field.label), lifecyclePill(field.lifecycleStatus));
+  entry.panel.append(head);
+  entry.panel.append(element('p', `Type: ${field.dataType}`, 'muted'));
   const form = element('form');
   form.noValidate = true;
   valueControl(field, entry);

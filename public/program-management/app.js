@@ -1,4 +1,5 @@
 import { SIZES, loadSize, saveSize } from '/referral/textSize.js';
+import { lifecyclePill } from './lifecycle.js';
 
 const $ = (id) => document.getElementById(id);
 const fields = ['site', 'description', 'eligibilityNotes', 'scheduleNotes', 'costNotes'];
@@ -111,7 +112,8 @@ function render(row) {
   $('editor').hidden = false;
   $('editor-heading').textContent = row.name;
   $('department-name').textContent = row.departmentName ?? 'Department unavailable';
-  $('program-status').textContent = row.lifecycleStatus;
+  // Task 255: the status as a pill, same words as before.
+  $('program-status').replaceChildren(lifecyclePill(row.lifecycleStatus));
   $('retired-note').hidden = row.lifecycleStatus !== 'RETIRED';
   $('conflict').hidden = true;
   for (const field of fields) $(field).value = row[field] ?? '';

@@ -32,7 +32,7 @@
     <section class="panel" aria-labelledby="chooser-heading">
       <h2 id="chooser-heading">Your Programs</h2>
       <p id="programs-loading" class="muted">Loading your Programs…</p>
-      <p id="programs-empty" hidden>No Programs are currently assigned to you for management.</p>
+      <p id="programs-empty" class="callout" hidden>No Programs are currently assigned to you for management.</p>
       <form id="chooser-form" novalidate hidden>
         <div class="field">
           <p class="required-note">Fields marked <span aria-hidden="true">*</span> are required.</p><label for="program-select">Program <span class="req" aria-hidden="true">*</span></label>
@@ -48,7 +48,8 @@
 
     <section id="editor" class="panel" aria-labelledby="editor-heading" hidden>
       <h2 id="editor-heading" tabindex="-1"></h2>
-      <dl class="summary">
+      <p class="muted">Program information staff see when they choose a Program. Only people with Program permission for this Program can edit it.</p>
+      <dl class="summary summary--strip">
         <div><dt>Department</dt><dd id="department-name"></dd></div>
         <div><dt>Status</dt><dd id="program-status"></dd></div>
       </dl>
@@ -65,12 +66,15 @@
         <fieldset id="details-fields" class="plain">
           <legend>Common Program information</legend>
           <p class="muted">These fields are optional. Clearing a field removes its saved value.</p>
+          <!-- Task 255 (wireframe 9): the common fields in a grid that stacks
+               on a phone. Same fields, labels and order as before. -->
+          <div class="field-grid">
           <div class="field">
             <label for="site">Site</label>
             <input id="site" type="text" maxlength="200" autocomplete="off" aria-describedby="site-error" />
             <p id="site-error" class="field__error" hidden></p>
           </div>
-          <div class="field">
+          <div class="field field--wide">
             <label for="description">Description</label>
             <textarea id="description" rows="4" maxlength="4000" aria-describedby="description-error"></textarea>
             <p id="description-error" class="field__error" hidden></p>
@@ -89,6 +93,7 @@
             <label for="costNotes">Cost notes</label>
             <textarea id="costNotes" rows="3" maxlength="1000" aria-describedby="costNotes-error"></textarea>
             <p id="costNotes-error" class="field__error" hidden></p>
+          </div>
           </div>
         </fieldset>
         <div class="actions">

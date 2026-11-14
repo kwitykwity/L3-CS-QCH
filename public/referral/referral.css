@@ -437,6 +437,18 @@ dialog::backdrop { background: rgb(0 0 0 / 0.4); }
 .filters-inline > .field { margin: 0; flex: 1 1 14rem; min-width: 0; }
 @media (max-width: 480px) { .queue-item { padding: 0.5rem 0.625rem; } }
 
+/* Program Management (Task 255, wireframe 9). The common Program fields sit
+   in a grid that stacks on a phone; Description spans the full width. Each
+   field card has its name with an ACTIVE / DISCONTINUED / RETIRED pill (the
+   same words as before, never color alone). Same fields, order and
+   behavior: this only places them. */
+.field-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(min(18em, 100%), 1fr)); gap: 0 1rem; }
+.field-grid > .field--wide { grid-column: 1 / -1; }
+.field-grid > .field { min-width: 0; }
+.field-card__head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.25rem 0.75rem; }
+.field-card__head h2 { margin: 0; overflow-wrap: anywhere; }
+#field-list .panel > .muted:first-of-type { margin-top: 0.25rem; }
+
 /* Program fields layout only. Preserve shared themes and text sizing. */
 body.program-fields-page .page {
   max-width: 76rem;
