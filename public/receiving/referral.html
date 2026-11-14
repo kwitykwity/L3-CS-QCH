@@ -20,17 +20,29 @@
       <button type="button" class="text-size__btn" data-size="XL" aria-pressed="false">XL</button>
     </div>
   </header>
-  <main id="main" class="page" tabindex="-1">
-    <p><a href="/receiving/">Back to received referrals</a></p>
-    <h1 id="referral-heading" tabindex="-1">Referral details</h1>
+  <main id="main" class="page page--wide" tabindex="-1">
+    <p class="back-link"><a href="/receiving/">Back to received referrals</a></p>
+    <!-- Task 253 (wireframes 7 and 7b): the heading with the referral's
+         stage pill beside it. The pill uses the same words as the lists. -->
+    <div class="detail-head">
+      <h1 id="referral-heading" tabindex="-1">Referral details</h1>
+      <p id="stage-line" class="detail-head__stage" hidden></p>
+    </div>
     <div id="status" class="status status--info" role="status" aria-live="polite" tabindex="-1" hidden>
       <span class="status__badge" aria-hidden="true"></span>
       <span class="status__text"></span>
     </div>
 
+    <!-- Two columns when the page is wide: the referral on the left, what
+         this person can do on the right. Reading and Tab order stay details
+         first, actions second. Which action box shows still comes from the
+         server (viewerAccess); this only places them. -->
+    <div class="detail-host">
+    <div class="detail-layout">
+    <div class="detail-main">
     <section id="info" class="panel" aria-labelledby="info-heading" hidden>
       <h2 id="info-heading">Referral information</h2>
-      <dl id="info-list" class="summary"></dl>
+      <dl id="info-list" class="summary summary--grid"></dl>
     </section>
 
     <section id="progress" class="panel" aria-labelledby="progress-heading" hidden>
@@ -55,6 +67,8 @@
       </ol>
     </section>
 
+    </div>
+    <div class="detail-actions">
     <section id="conflict" class="panel" aria-labelledby="conflict-heading" hidden>
       <h2 id="conflict-heading" tabindex="-1">Review before you continue</h2>
       <p id="conflict-message"></p>
@@ -166,6 +180,10 @@
         </fieldset>
       </form>
     </section>
+
+    </div>
+    </div>
+    </div>
 
     <p><button type="button" id="reload" class="btn btn--secondary" hidden>Reload this referral</button></p>
   </main>

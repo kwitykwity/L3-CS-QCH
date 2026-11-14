@@ -594,3 +594,26 @@ body.program-fields-page #field-list label,
 body.program-fields-page #field-list legend {
   overflow-wrap: anywhere;
 }
+
+/* Referral detail (Task 253, wireframes 7 and 7b). The referral sits on the
+   left and the action box ("Respond to this referral", "Record the service
+   outcome", corrections) on the right when there is room. The query uses em,
+   which follows the chosen text size, so at XL the page stacks to one column
+   sooner. The container is the wrapper, never the grid it lays out. Which
+   action box shows still comes from the server; this only places it. */
+.page--wide { max-width: 72rem; }
+.back-link { margin: 0 0 0.75rem; }
+.detail-head { display: flex; flex-wrap: wrap; align-items: center; gap: 0.5rem 0.75rem; margin: 0 0 1rem; }
+.detail-head h1 { margin: 0; overflow-wrap: anywhere; }
+.detail-head__stage { margin: 0; }
+.detail-host { container-type: inline-size; }
+.detail-layout { display: grid; gap: 0 1.25rem; }
+.detail-layout > div { min-width: 0; }
+@container (min-width: 52em) {
+  .detail-layout { grid-template-columns: minmax(0, 1fr) minmax(min(17rem, 100%), 24rem); align-items: start; }
+}
+.detail-actions .panel form > fieldset > .btn--primary { width: 100%; }
+/* Referral information as a two-column grid of label and value (wireframe 7);
+   one column on a phone or at large text. */
+.summary--grid { grid-template-columns: repeat(auto-fill, minmax(min(13rem, 100%), 1fr)); gap: 0.75rem 1.5rem; }
+.summary--grid > div { align-content: start; }

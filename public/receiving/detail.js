@@ -26,7 +26,7 @@
 import { CONTACT_METHODS } from '/referral/validation.js';
 import {
   call, decisionText, formatDate, OUTCOME_LABELS, DECISION_LABELS, outcomeText,
-  responseText, setupTextSize, showStatus, summaryRow,
+  responseText, setupTextSize, showStatus, stagePill, summaryRow,
 } from './common.js';
 
 const $ = (id) => document.getElementById(id);
@@ -88,6 +88,9 @@ function renderInfo() {
     summaryRow('From', referral.referringProgram?.name ?? 'Unknown Program'),
     summaryRow('To', referral.receivingProgram?.name ?? 'Unknown Program'),
     summaryRow('Sent', formatDate(referral.createdAt)),
+    // Task 253 (wireframe 7): the sender's name, already in this view's
+    // response (createdBy.displayName). Staff name only, never an ID.
+    ...(referral.createdBy?.displayName ? [summaryRow('Sent by', referral.createdBy.displayName)] : []),
   );
   for (const dd of list.querySelectorAll('dd')) dd.classList.add('need');
 }
@@ -164,6 +167,9 @@ function render() {
   document.title = `Referral ${referral.referralId} · QCH Connect`;
   renderInfo();
   renderProgress();
+  // Task 253: the stage pill beside the heading, in words (same as the lists).
+  $('stage-line').replaceChildren(stagePill(referral));
+  $('stage-line').hidden = false;
   $('info').hidden = false;
   $('progress').hidden = false;
 
@@ -184,6 +190,8 @@ function render() {
 }
 
 function hideReferral() {
+  $('stage-line').replaceChildren();
+  $('stage-line').hidden = true;
   for (const id of ['info', 'progress', 'conflict', 'readonly-note', ...ACTION_PANELS]) $(id).hidden = true;
 }
 
